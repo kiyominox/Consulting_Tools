@@ -12,6 +12,8 @@ I lean on OpenAI's Codex-powered assistants (like ChatGPT's **Code Interpreter**
 
 The workflow is conversational: describe the behavior you want, paste relevant context, and let Codex draft or refine the code. When the assistant proposes a useful snippet, I copy it into this repo so it is versioned and easy to reuse later. Keeping Codex-assisted code here prevents it from getting lost in a chat log.
 
+=======
+
 ## What's Inside
 
 The contents of the repository will evolve over time, but it typically includes:
@@ -78,6 +80,8 @@ Even if you are new to Git, you only need a handful of commands to make this rep
    ```
 
 Over time you will build a searchable history of everything Codex helped you create. If you ever make a mistake, Git makes it easy to revert to a previous version.
+
+=======
 
 ## Getting Started
 
