@@ -1,0 +1,1461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parts Inventory Reconciliation</title>
+<script src="xlsx.full.min.js"></script>
+<style>
+/* ────────────────────────────────────────────────────────────
+   Parts Rec — dashboard CSS (same look as Flask version)
+   ──────────────────────────────────────────────────────────── */
+:root {
+  --bg:#f5f7fa; --surface:#fff; --border:#dde3ec; --border-soft:#eef1f6;
+  --text:#1e2533; --text-soft:#5a6478; --muted:#8c95a8;
+  --primary:#1f4e79; --primary-2:#2e74b5; --accent:#375623;
+  --warn:#c47200; --danger:#b03030; --ok:#2f7d3a;
+  --auto:#fffacd; --auto-bd:#e6d870; --row-hi:#f1f6fb;
+  --var-zero-bg:#e2efda; --var-small-bg:#fff5e0;
+  --var-med-bg:#ffe4d6; --var-large-bg:#ffcccc;
+  --radius:6px;
+  --shadow:0 1px 2px rgba(20,30,50,.05), 0 0 0 1px var(--border);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px; line-height:1.45;
+}
+a{color:var(--primary-2); text-decoration:none; cursor:pointer;}
+a:hover{text-decoration:underline;}
+code,.mono{font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.92em;}
+
+/* Top nav */
+.topnav{background:var(--primary); color:#fff; border-bottom:3px solid var(--primary-2);}
+.topnav-inner{
+  max-width:1500px; margin:0 auto; padding:10px 20px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.brand{display:flex; align-items:center; gap:10px; color:#fff !important; font-weight:600; font-size:15px; text-decoration:none !important;}
+.brand-mark{background:#fff; color:var(--primary); font-weight:700; font-size:11px; padding:4px 7px; border-radius:4px; letter-spacing:.5px;}
+.topnav-links{display:flex; gap:14px; align-items:center;}
+.topnav-links a{color:#cfdbed !important; font-size:13px; padding:4px 8px; border-radius:4px;}
+.topnav-links a:hover{background:rgba(255,255,255,.1); color:#fff !important; text-decoration:none;}
+.topnav-links a.active{background:rgba(255,255,255,.15); color:#fff !important;}
+
+.container{max-width:1500px; margin:0 auto; padding:20px;}
+
+.page-header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; gap:16px;}
+.page-header h1{margin:0 0 4px 0; font-size:22px; font-weight:600;}
+.page-sub{margin:0; color:var(--text-soft); font-size:13px;}
+.ph-left{flex:1;}
+.ph-right{display:flex; gap:8px; align-items:center;}
+
+/* Flash */
+#toast-area{position:fixed; top:70px; right:20px; z-index:1000; display:flex; flex-direction:column; gap:6px; max-width:380px;}
+.toast{
+  padding:10px 14px; border-radius:var(--radius); font-size:13px;
+  border:1px solid; box-shadow:0 4px 10px rgba(0,0,0,.06);
+  animation:slideIn .25s ease-out;
+}
+.toast.success{background:#eaf5e8; color:var(--ok); border-color:#b9dfb3;}
+.toast.error  {background:#fbe9e9; color:var(--danger); border-color:#ebbcbc;}
+.toast.info   {background:#e8f0fb; color:var(--primary); border-color:#b9cdeb;}
+@keyframes slideIn{from{transform:translateX(20px); opacity:0;} to{transform:translateX(0); opacity:1;}}
+
+/* Cards */
+.card{background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:18px; overflow:hidden;}
+.card-quiet{box-shadow:0 0 0 1px var(--border);}
+.card-header{background:#f8fafc; border-bottom:1px solid var(--border-soft); padding:10px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+.card-header h2{margin:0; font-size:14px; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:.4px;}
+.card-body{padding:16px;}
+
+/* Buttons & badges */
+.btn{display:inline-block; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; border:1px solid transparent; cursor:pointer; text-decoration:none !important; font-family:inherit;}
+.btn-sm{padding:4px 9px; font-size:12px;}
+.btn-primary{background:var(--primary); color:#fff !important;}
+.btn-primary:hover{background:var(--primary-2);}
+.btn-link{background:transparent; color:var(--primary-2) !important;}
+.btn-link:hover{background:#eef3fa; text-decoration:none;}
+.btn-warn{background:var(--warn); color:#fff !important;}
+.btn-warn:hover{background:#b06800;}
+.btn-danger{background:var(--danger); color:#fff !important;}
+.btn-danger:hover{background:#952626;}
+
+.badge{display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.3px;}
+.badge-ok{background:#e2efda; color:var(--ok); border:1px solid #b9dfb3;}
+.badge-warn{background:#fff3e0; color:var(--warn); border:1px solid #f1c98c;}
+.badge-review{background:#fff3e0; color:var(--warn); border:1px solid #f1c98c; cursor:pointer;}
+.badge-review:hover{background:#ffeacc;}
+.badge-ok-small{background:#f0f4f0; color:var(--muted); padding:2px 6px; font-size:10px; border-radius:10px;}
+
+.auto-tag{background:var(--auto); border:1px solid var(--auto-bd); color:#6b5800; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700; margin-left:6px; vertical-align:1px;}
+.ytd-tag{background:#e8f0fb; color:var(--primary); border:1px solid #b9cdeb; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; margin-left:6px; vertical-align:1px;}
+
+/* Tables */
+.data-table{width:100%; border-collapse:collapse; font-size:13px;}
+.data-table th,.data-table td{padding:8px 10px; border-bottom:1px solid var(--border-soft); text-align:left; vertical-align:top;}
+.data-table thead th{background:#f3f6fa; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-soft); font-weight:600; border-bottom:1px solid var(--border);}
+.data-table tfoot th{background:#f3f6fa; font-weight:600; border-top:2px solid var(--border); border-bottom:0;}
+.data-table tbody tr:hover{background:var(--row-hi);}
+.data-table .r{text-align:right; font-variant-numeric:tabular-nums;}
+.data-table .c{text-align:center;}
+.data-table .muted{color:var(--muted); font-size:12px;}
+.data-table .actions a{padding:3px 6px; color:var(--text-soft); font-size:14px;}
+.data-table.compact th,.data-table.compact td{padding:5px 8px; font-size:12px;}
+.summary tbody tr td:first-child a{font-weight:600;}
+
+.var-zero{background:var(--var-zero-bg);}
+.var-small{background:var(--var-small-bg);}
+.var-medium{background:var(--var-med-bg);}
+.var-large{background:var(--var-large-bg);}
+
+/* GL upload */
+.gl-row{display:grid; grid-template-columns:1fr 1.5fr; gap:24px; align-items:start;}
+.gl-form{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.gl-form input[type=file]{font-size:12px;}
+.gl-info{font-size:12px; line-height:1.7; color:var(--text-soft); padding:8px 12px; background:#f8fafc; border-radius:var(--radius);}
+.gl-info strong{color:var(--text);}
+.hint{font-size:12px; color:var(--text-soft); margin:0;}
+.empty{color:var(--muted); padding:14px; text-align:center; font-style:italic;}
+
+/* Inputs form */
+.form-grid{display:grid; gap:10px 14px; margin-bottom:12px;}
+.form-grid.two{grid-template-columns:repeat(2,1fr);}
+.form-grid.three{grid-template-columns:repeat(3,1fr);}
+.form-grid.four{grid-template-columns:repeat(4,1fr);}
+.form-grid label{display:block;}
+.form-grid label > span{display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:3px; text-transform:uppercase; letter-spacing:.3px;}
+.form-grid label > span em{color:var(--muted); font-weight:400; text-transform:none;}
+.form-grid input,.form-grid select{width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;}
+.form-grid input:focus,.form-grid select:focus{outline:none; border-color:var(--primary-2); box-shadow:0 0 0 2px rgba(46,116,181,.15);}
+.form-grid input[type=number]{font-variant-numeric:tabular-nums;}
+
+h3.grp{margin:18px 0 8px 0; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--primary); padding-bottom:4px; border-bottom:1px solid var(--border-soft);}
+h3.grp:first-child{margin-top:0;}
+
+.auto-note{background:#fffbe5; border:1px solid var(--auto-bd); padding:8px 12px; border-radius:var(--radius); font-size:12px; color:#6b5800; margin:8px 0 12px 0;}
+.hint-block{font-size:12px; color:var(--text-soft); padding:6px 0;}
+
+.form-actions{display:flex; gap:10px; align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border-soft);}
+.inline-form{display:inline-flex; gap:8px; align-items:center; margin-left:auto;}
+
+/* Variance banner */
+.variance-banner{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:18px;}
+.vb-item{background:#fff; padding:12px 16px;}
+.vb-label{font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-soft); font-weight:600;}
+.vb-value{font-size:18px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums;}
+.variance-banner.var-zero .vb-primary{background:var(--var-zero-bg);}
+.variance-banner.var-small .vb-primary{background:var(--var-small-bg);}
+.variance-banner.var-medium .vb-primary{background:var(--var-med-bg);}
+.variance-banner.var-large .vb-primary{background:var(--var-large-bg);}
+
+/* Two-col layout */
+.two-col{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+@media(max-width:1100px){.two-col{grid-template-columns:1fr;}}
+
+.side.parts-side .card-header{background:#eaf2fb;}
+.side.gl-side .card-header{background:#eaf3e3;}
+
+.rec-table{width:100%; border-collapse:collapse; font-size:13px;}
+.rec-table td{padding:5px 8px; border-bottom:1px solid var(--border-soft); vertical-align:top;}
+.rec-table td.step{width:32px; font-size:11px; color:var(--muted); font-weight:600;}
+.rec-table td.r{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+.rec-table td.ind{padding-left:22px; color:var(--text-soft);}
+.rec-table tr.sub td{background:#f6f9fc; font-size:12px;}
+.rec-table tr.total td{background:#e6eef8; border-top:2px solid var(--primary-2); border-bottom:0; font-size:13px; padding-top:8px; padding-bottom:8px;}
+.side.gl-side .rec-table tr.total td{background:#e3eed7; border-top-color:var(--accent);}
+.rec-table .auto-row td{background:#fffbe5;}
+.rec-table .drill{font-size:11px; margin-left:6px; color:var(--primary-2);}
+
+/* Chart */
+.chart-wrap{display:flex; gap:8px; align-items:flex-end; padding:20px 4px 4px; height:220px; border-bottom:1px solid var(--border);}
+.chart-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end;}
+.chart-amt{font-size:10px; color:var(--text-soft); font-variant-numeric:tabular-nums;}
+.chart-bar-wrap{flex:1; display:flex; align-items:flex-end; width:70%; max-width:60px;}
+.chart-bar{width:100%; border-radius:3px 3px 0 0; transition:height .2s;}
+.chart-bar.pos{background:linear-gradient(180deg,#d36e6e,#b03030);}
+.chart-bar.neg{background:linear-gradient(180deg,#6ec07d,#2f7d3a);}
+.chart-label{font-size:11px; color:var(--text-soft); white-space:nowrap;}
+
+/* Review */
+.legend{display:flex; gap:10px; font-size:11px; align-items:center;}
+.lg{padding:2px 8px; border-radius:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px;}
+.lg-step11{background:#e2efda; color:var(--ok);}
+.lg-step13{background:#ffe4d6; color:#b04200;}
+.lg-ignore{background:#ececec; color:var(--muted);}
+.lg-review{background:#fff3e0; color:var(--warn);}
+.review-table .dec-select{font-size:12px; padding:3px 6px; border:1px solid var(--border); border-radius:4px; background:#fff;}
+.review-table tr.dec-step11 td{background:#f3f9ed;}
+.review-table tr.dec-step13 td{background:#fdf0e8;}
+.review-table tr.dec-ignore td{background:#f7f7f7; color:var(--muted);}
+.review-table tr.dec-review td{background:#fffbe5;}
+
+/* RAD */
+.rad-input{width:130px; text-align:right;}
+.rad-table{max-width:600px;}
+.rad-table td,.rad-table th{padding:6px 12px;}
+
+/* Footer */
+.site-footer{text-align:center; padding:24px; color:var(--muted); font-size:12px;}
+.site-footer .dot{margin:0 6px;}
+
+.hidden{display:none !important;}
+
+/* Loading spinner */
+.spinner{display:inline-block; width:14px; height:14px; border:2px solid rgba(46,116,181,.3); border-top-color:var(--primary-2); border-radius:50%; animation:spin .8s linear infinite; vertical-align:middle; margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="#/" class="brand">
+      <span class="brand-mark">P/R</span>
+      Parts Inventory Reconciliation
+    </a>
+    <div class="topnav-links">
+      <a href="#/" data-nav="dashboard">Dashboard</a>
+      <a href="#/inputs" data-nav="inputs">Monthly Inputs</a>
+      <a href="#/rad" data-nav="rad">RAD (App/Dep)</a>
+      <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+  </div>
+</nav>
+
+<div id="toast-area"></div>
+
+<main class="container" id="app"></main>
+
+<footer class="site-footer">
+  <span>Parts Inventory / GL Reconciliation</span>
+  <span class="dot">·</span>
+  <span>All data stays in your browser (localStorage) — nothing uploaded</span>
+</footer>
+
+<script>
+/* =============================================================
+   PARTS REC — pure browser app
+   No backend, no install.  All data in localStorage.
+   ============================================================= */
+
+'use strict';
+
+// ── State management ──────────────────────────────────────────
+const STATE_KEY = 'partsRecState_v1';
+const GL_KEY    = 'partsRecGL_v1';   // separate because it can be large
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return {
+    inputs:           {},   // {'YYYY-MM': {dealership, inventory, ...}}
+    rad:              {},   // {'YYYY-MM': number}
+    reviewDecisions:  {},   // {'YYYY-MM': {rowId: 'step11'|'step13'|'ignore'}}
+    glFilename:       null,
+    glUploadedAt:     null,
+  };
+}
+
+function saveState(state) {
+  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+}
+
+function loadGL() {
+  try {
+    const raw = localStorage.getItem(GL_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return null;
+}
+
+function saveGL(rows) {
+  try {
+    localStorage.setItem(GL_KEY, JSON.stringify(rows));
+    return true;
+  } catch (e) {
+    toast('GL too large for browser storage. Try a narrower date range.', 'error');
+    return false;
+  }
+}
+
+// ── Formatting ────────────────────────────────────────────────
+function fmtMoney(v) {
+  if (v == null || v === '' || isNaN(v)) return '';
+  const n = Number(v);
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function fmtPct(v) {
+  if (v == null || v === '' || isNaN(v)) return '';
+  return (Number(v) * 100).toFixed(2) + '%';
+}
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt)) return '';
+  return dt.toLocaleString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+}
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function monthLabel(year, month) { return MONTH_NAMES[month-1] + ' ' + year; }
+function monthKey(year, month) { return String(year).padStart(4,'0') + '-' + String(month).padStart(2,'0'); }
+function parseMonthKey(s) {
+  const m = /^(\d{4})-(\d{1,2})/.exec(String(s).trim());
+  if (!m) throw new Error('Bad month key: ' + s);
+  return {year: +m[1], month: +m[2]};
+}
+function varClass(v) {
+  if (v == null) return '';
+  const a = Math.abs(Number(v));
+  if (a < 1)    return 'var-zero';
+  if (a < 100)  return 'var-small';
+  if (a < 1000) return 'var-medium';
+  return 'var-large';
+}
+function lastDay(year, month) { return new Date(year, month, 0).getDate(); }
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, type) {
+  type = type || 'info';
+  const area = document.getElementById('toast-area');
+  const div = document.createElement('div');
+  div.className = 'toast ' + type;
+  div.textContent = msg;
+  area.appendChild(div);
+  setTimeout(() => div.remove(), 4000);
+}
+
+// ── Month parsing for Control field ───────────────────────────
+const MONTH_MAP = {
+  JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8,
+  SEP:9, SEPT:9, OCT:10, NOV:11, DEC:12,
+  JANUARY:1, FEBRUARY:2, MARCH:3, APRIL:4, JUNE:6, JULY:7,
+  AUGUST:8, SEPTEMBER:9, OCTOBER:10, NOVEMBER:11, DECEMBER:12,
+};
+const ABBR_LIST = Object.keys(MONTH_MAP).sort((a,b) => b.length - a.length);
+
+function inferYear(controlMonth, acctgDate) {
+  const refDays = acctgDate.getTime() / 86400000;
+  let bestYr = null, bestDiff = Infinity;
+  for (let off = -1; off <= 1; off++) {
+    const yr = acctgDate.getFullYear() + off;
+    const cand = new Date(yr, controlMonth - 1, 1);
+    const days = cand.getTime() / 86400000;
+    const delta = days - refDays;
+    if (delta >= -550 && delta <= 62) {
+      if (Math.abs(delta) < bestDiff) {
+        bestDiff = Math.abs(delta);
+        bestYr = yr;
+      }
+    }
+  }
+  return bestYr;
+}
+
+function parseControlMonth(controlVal, acctgDate) {
+  if (controlVal == null) return null;
+  let s = String(controlVal).trim().toUpperCase();
+  if (s === '' || s === 'NONE' || s === '0' || s === 'N/A' || s === 'NAN') return null;
+  for (const abbr of ABBR_LIST) {
+    if (!s.startsWith(abbr)) continue;
+    const rest = s.slice(abbr.length);
+    const monthNum = MONTH_MAP[abbr];
+    if (rest === '') {
+      const yr = inferYear(monthNum, acctgDate);
+      return yr ? {year: yr, month: monthNum} : null;
+    }
+    if (/^\d+$/.test(rest)) {
+      if (rest.length === 2) return {year: 2000 + parseInt(rest, 10), month: monthNum};
+      if (rest.length === 4) return {year: parseInt(rest, 10),         month: monthNum};
+    }
+    break;
+  }
+  return null;
+}
+
+function getControlYm(row, acctgDate) {
+  return parseControlMonth(row.Control, acctgDate) ||
+         parseControlMonth(row.Control2, acctgDate);
+}
+
+function hasNontrivialControl(row) {
+  for (const f of ['Control', 'Control2']) {
+    const v = row[f];
+    if (v == null) continue;
+    const s = String(v).trim().toUpperCase();
+    if (s !== '' && s !== 'NONE' && s !== '0' && s !== 'N/A' && s !== 'NAN') return true;
+  }
+  return false;
+}
+
+// ── GL classification ─────────────────────────────────────────
+const SALES_JOURNALS = new Set(['60', '61', '62']);
+
+function rowId(row) {
+  const ref = String(row.Reference || '');
+  let dtS = '';
+  if (row['Acctg. Date']) {
+    const d = new Date(row['Acctg. Date']);
+    if (!isNaN(d)) dtS = d.toISOString().slice(0, 10);
+  }
+  const amt = Number(row['Amount $'] || 0).toFixed(2);
+  const ctrl = String(row.Control || '');
+  return ref + '|' + dtS + '|' + amt + '|' + ctrl;
+}
+
+function classifyGL(rows, recYear, recMonth) {
+  const recStart = new Date(recYear, recMonth - 1, 1);
+  const recEnd   = new Date(recYear, recMonth - 1, lastDay(recYear, recMonth));
+  const s1 = [], s2 = [], rv = [];
+
+  for (const r of rows) {
+    if (!r['Acctg. Date']) continue;
+    const journal = String(r.Journal || '').trim();
+    if (SALES_JOURNALS.has(journal)) continue;
+
+    const acctgDate = new Date(r['Acctg. Date']);
+    if (isNaN(acctgDate)) continue;
+
+    const ym = getControlYm(r, acctgDate);
+    const rec = Object.assign({}, r, {_row_id: rowId(r)});
+
+    if (acctgDate >= recStart && acctgDate <= recEnd) {
+      if (ym && (ym.year > recYear || (ym.year === recYear && ym.month > recMonth))) {
+        s1.push(rec);
+      }
+    } else if (acctgDate > recEnd) {
+      if (ym && (ym.year < recYear || (ym.year === recYear && ym.month <= recMonth))) {
+        s2.push(rec);
+      } else if (!ym && hasNontrivialControl(r)) {
+        rv.push(rec);
+      }
+    }
+  }
+  return {s1, s2, rv};
+}
+
+function applyReviewDecisions(s1, s2, rv, decisions) {
+  if (!rv.length || !decisions) return {s1, s2, rv};
+  const newS1 = s1.slice(), newS2 = s2.slice(), newRv = [];
+  for (const r of rv) {
+    const d = decisions[r._row_id];
+    if (d === 'step11')      newS2.push(r);
+    else if (d === 'step13') newS1.push(r);
+    else if (d === 'ignore') { /* drop */ }
+    else                     newRv.push(r);
+  }
+  return {s1: newS1, s2: newS2, rv: newRv};
+}
+
+// ── Reconciliation calculation ────────────────────────────────
+function safe(v) {
+  if (v == null || v === '') return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function ytdRad(radMap, recYear, recMonth) {
+  let tot = 0;
+  for (let m = 1; m <= recMonth; m++) tot += safe(radMap[monthKey(recYear, m)]);
+  return tot;
+}
+
+const INPUT_FIELDS = [
+  'inventory', 'tires', 'oil', 'paint', 'cores_new', 'cores_used',
+  'npn', 'bowman', 'returns_11933', 'claims',
+  'open_ros_service', 'counter_tickets_parts',
+  'mfg_packing_slips', 'prepaid_special_orders',
+  'inv_adjustments_rpm', 'oil_shop_supply_adj',
+  'gl_24200', 'gl_24300', 'gl_24401', 'gl_other',
+];
+
+function calculateRec(inputs, s1Total, s2Total, ytdRadValue) {
+  const I = (k) => safe(inputs[k]);
+  const inventory = I('inventory'), tires = I('tires'), oil = I('oil');
+  const totalInv  = inventory + tires + oil;
+  const paint     = I('paint'),    coresNew = I('cores_new'), coresUsed = I('cores_used');
+  const npn       = I('npn'),      bowman   = I('bowman');
+  const returns_  = I('returns_11933'), claims = I('claims');
+  const roSvc     = I('open_ros_service'), roCtr = I('counter_tickets_parts');
+  const openROs   = roSvc + roCtr;
+  const step8     = totalInv + paint + coresNew + coresUsed + npn + bowman
+                  + returns_ + claims + openROs;
+  const gl24200 = I('gl_24200'), gl24300 = I('gl_24300'),
+        gl24401 = I('gl_24401'), glOther = I('gl_other');
+  const glTotal = gl24200 + gl24300 + gl24401 + glOther;
+  const mfgSlips = I('mfg_packing_slips'), prepaid = I('prepaid_special_orders');
+  const invAdj   = I('inv_adjustments_rpm'), oilAdj = I('oil_shop_supply_adj');
+  const step17 = glTotal + mfgSlips + s2Total + prepaid - s1Total
+               + invAdj + oilAdj + ytdRadValue;
+  const step19 = step17 - step8;
+  const step19Pct = glTotal ? step19 / glTotal : null;
+  return {
+    inventory, tires, oil, totalInv, paint, coresNew, coresUsed, npn, bowman,
+    returns_, claims, roSvc, roCtr, openROs, step8,
+    gl24200, gl24300, gl24401, glOther, glTotal,
+    mfgSlips, s2Total, prepaid, s1Total, invAdj, oilAdj, radYTD: ytdRadValue,
+    step17, step19, step19Pct,
+  };
+}
+
+function buildRec(state, glRows, mkey) {
+  const inputs = state.inputs[mkey];
+  if (!inputs) return null;
+  const {year, month} = parseMonthKey(mkey);
+  let s1 = [], s2 = [], rv = [];
+  if (glRows) {
+    const c = classifyGL(glRows, year, month);
+    const decisions = (state.reviewDecisions || {})[mkey] || {};
+    const a = applyReviewDecisions(c.s1, c.s2, c.rv, decisions);
+    s1 = a.s1; s2 = a.s2; rv = a.rv;
+  }
+  const s1Total = s1.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
+  const s2Total = s2.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
+  const radY    = ytdRad(state.rad || {}, year, month);
+  const calc    = calculateRec(inputs, s1Total, s2Total, radY);
+  return {
+    year, month, label: monthLabel(year, month), calc, inputs,
+    s1, s2, rv, reviewCount: rv.length, radYTD: radY,
+  };
+}
+
+function buildAllRecs(state, glRows) {
+  const keys = Object.keys(state.inputs).sort();
+  return keys.map(k => buildRec(state, glRows, k)).filter(Boolean);
+}
+
+// ── GL upload (SheetJS) ───────────────────────────────────────
+function readExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb   = XLSX.read(data, {type: 'array', cellDates: true});
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        // raw:true keeps numbers as numbers and Dates as Date objects.
+        const rows = XLSX.utils.sheet_to_json(ws, {defval: null, raw: true});
+        // Normalize column names (strip whitespace) and serialize dates for localStorage.
+        const cleaned = rows.map(r => {
+          const out = {};
+          for (const k in r) out[k.trim()] = r[k];
+          if (!('Control2' in out)) out.Control2 = '';
+          // Numbers come back as numbers.  Dates come back as Date objects;
+          // JSON.stringify turns them into ISO strings for storage.
+          // Force string for textual columns that might come back as numbers (Account, Journal, Control).
+          for (const k of ['Account', 'Journal', 'Control', 'Control2']) {
+            if (out[k] != null && typeof out[k] !== 'string') out[k] = String(out[k]);
+          }
+          if (out['Acctg. Date'] instanceof Date) {
+            out['Acctg. Date'] = out['Acctg. Date'].toISOString();
+          }
+          // Coerce Amount $ to a number defensively
+          if (out['Amount $'] != null) {
+            const n = Number(out['Amount $']);
+            out['Amount $'] = isNaN(n) ? 0 : n;
+          }
+          return out;
+        });
+        resolve(cleaned);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── Renderers ─────────────────────────────────────────────────
+const app = document.getElementById('app');
+
+function setActiveNav(name) {
+  document.querySelectorAll('.topnav-links a[data-nav]').forEach(a => {
+    a.classList.toggle('active', a.dataset.nav === name);
+  });
+}
+
+function escapeHTML(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderDashboard() {
+  setActiveNav('dashboard');
+  const state = loadState();
+  const glRows = loadGL();
+  const recs = buildAllRecs(state, glRows);
+  let glInfo = null;
+  if (glRows) {
+    const dates = glRows.map(r => new Date(r['Acctg. Date'])).filter(d => !isNaN(d));
+    const accts = [...new Set(glRows.map(r => r.Account).filter(Boolean))].sort();
+    glInfo = {
+      filename:  state.glFilename || 'gl_uploaded.xlsx',
+      uploaded:  state.glUploadedAt || '',
+      rowCount:  glRows.length,
+      dateMin:   dates.length ? fmtDate(new Date(Math.min(...dates))) : 'n/a',
+      dateMax:   dates.length ? fmtDate(new Date(Math.max(...dates))) : 'n/a',
+      accounts:  accts,
+    };
+  }
+
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Reconciliation Dashboard</h1>
+      <p class="page-sub">Multi-month parts inventory to GL reconciliation overview</p>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>1.  GL Detail Export</h2>
+      ${glInfo
+        ? '<span class="badge badge-ok">Loaded</span>'
+        : '<span class="badge badge-warn">Not loaded</span>'}
+    </div>
+    <div class="card-body">
+      <div class="gl-row">
+        <div>
+          <form class="gl-form" onsubmit="return handleGLUpload(event)">
+            <input type="file" id="gl-file" accept=".xlsx,.xls" required>
+            <button type="submit" class="btn btn-primary" id="gl-upload-btn">Upload GL Detail (.xlsx)</button>
+          </form>
+          ${glInfo
+            ? `<p class="hint" style="margin-top:10px;">
+                 <a onclick="clearGL()" style="color:var(--danger)">Clear loaded GL file</a>
+               </p>` : ''}
+        </div>
+        ${glInfo
+          ? `<div class="gl-info">
+              <div><strong>File:</strong> ${escapeHTML(glInfo.filename)}</div>
+              <div><strong>Uploaded:</strong> ${escapeHTML(glInfo.uploaded)}</div>
+              <div><strong>Rows:</strong> ${glInfo.rowCount.toLocaleString()}</div>
+              <div><strong>Date range:</strong> ${glInfo.dateMin} → ${glInfo.dateMax}</div>
+              <div><strong>Accounts:</strong> ${glInfo.accounts.map(escapeHTML).join(', ')}</div>
+             </div>`
+          : `<p class="hint">
+              Export the GL Detail from Drive for all inventory accounts (24200, 24300, 24401)
+              from the start of your earliest rec month through today.
+             </p>`}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>2.  Monthly Reconciliations</h2>
+      <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+    <div class="card-body">`;
+
+  if (!recs.length) {
+    html += `<p class="empty">No reconciliations yet.  <a href="#/inputs/new">Add your first month →</a></p>`;
+  } else {
+    html += `
+      <table class="data-table summary">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="r">Parts Adj.<br>(Step 8)</th>
+            <th class="r">GL Balance<br>(Raw)</th>
+            <th class="r">GL Adjusted<br>(Step 17)</th>
+            <th class="r">Variance $</th>
+            <th class="r">Variance %</th>
+            <th class="r">Posted Not<br>Received (13)</th>
+            <th class="r">In Phys.<br>Not GL (11)</th>
+            <th class="r">RAD YTD</th>
+            <th class="c">Review</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>`;
+    let tStep8 = 0, tGL = 0, tStep17 = 0, tVar = 0, tS1 = 0, tS2 = 0, sumPct = 0, pctCount = 0;
+    for (const r of recs) {
+      const mk = monthKey(r.year, r.month);
+      const vc = varClass(r.calc.step19);
+      tStep8  += r.calc.step8;
+      tGL     += r.calc.glTotal;
+      tStep17 += r.calc.step17;
+      tVar    += r.calc.step19;
+      tS1     += r.calc.s1Total;
+      tS2     += r.calc.s2Total;
+      if (r.calc.step19Pct != null) { sumPct += r.calc.step19Pct; pctCount++; }
+      html += `
+        <tr>
+          <td><a href="#/month/${mk}"><strong>${r.label}</strong></a></td>
+          <td class="r">${fmtMoney(r.calc.step8)}</td>
+          <td class="r">${fmtMoney(r.calc.glTotal)}</td>
+          <td class="r">${fmtMoney(r.calc.step17)}</td>
+          <td class="r ${vc}"><strong>${fmtMoney(r.calc.step19)}</strong></td>
+          <td class="r ${vc}">${fmtPct(r.calc.step19Pct)}</td>
+          <td class="r mono">${fmtMoney(r.calc.s1Total)}</td>
+          <td class="r mono">${fmtMoney(r.calc.s2Total)}</td>
+          <td class="r">${fmtMoney(r.calc.radYTD)}</td>
+          <td class="c">
+            ${r.reviewCount > 0
+              ? `<a href="#/review/${mk}" class="badge badge-review">${r.reviewCount}</a>`
+              : `<span class="badge badge-ok-small">0</span>`}
+          </td>
+          <td class="actions">
+            <a href="#/inputs/${mk}" title="Edit inputs">✎</a>
+          </td>
+        </tr>`;
+    }
+    const avgPct = pctCount ? sumPct / pctCount : null;
+    html += `
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>Totals / Avg</th>
+            <th class="r">${fmtMoney(tStep8)}</th>
+            <th class="r">${fmtMoney(tGL)}</th>
+            <th class="r">${fmtMoney(tStep17)}</th>
+            <th class="r">${fmtMoney(tVar)}</th>
+            <th class="r">${fmtPct(avgPct)}</th>
+            <th class="r">${fmtMoney(tS1)}</th>
+            <th class="r">${fmtMoney(tS2)}</th>
+            <th></th><th></th><th></th>
+          </tr>
+        </tfoot>
+      </table>`;
+  }
+  html += `</div></section>`;
+
+  // Variance trend chart
+  if (recs.length > 1) {
+    const maxAbs = Math.max(...recs.map(r => Math.abs(r.calc.step19))) || 1;
+    let chartHTML = `
+    <section class="card">
+      <div class="card-header"><h2>3.  Variance Trend</h2></div>
+      <div class="card-body">
+        <div class="chart-wrap">`;
+    for (const r of recs) {
+      const h = Math.max(4, Math.round(Math.abs(r.calc.step19) / maxAbs * 140));
+      const cls = r.calc.step19 >= 0 ? 'pos' : 'neg';
+      chartHTML += `
+          <div class="chart-col">
+            <div class="chart-amt">${fmtMoney(r.calc.step19)}</div>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar ${cls}" style="height: ${h}px"></div>
+            </div>
+            <div class="chart-label">${r.label}</div>
+          </div>`;
+    }
+    chartHTML += `
+        </div>
+        <p class="hint" style="margin-top:8px;">
+          Bars show variance $ (Step 17 − Step 8).  Look for a consistent direction or growing magnitude — those usually indicate a missing adjustment.
+        </p>
+      </div>
+    </section>`;
+    html += chartHTML;
+  }
+
+  // Reset
+  html += `
+  <section class="card card-quiet">
+    <div class="card-header"><h2>Reset</h2></div>
+    <div class="card-body">
+      <p class="hint">Clears all saved inputs, RAD values, review decisions, and the uploaded GL file from this browser.</p>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+        <button class="btn btn-danger" onclick="confirmReset()">Reset all data</button>
+        <button class="btn btn-link" onclick="exportData()">Export data (JSON)</button>
+        <label class="btn btn-link" style="cursor:pointer; margin:0;">
+          Import data (JSON)
+          <input type="file" accept=".json" onchange="importData(event)" style="display:none">
+        </label>
+      </div>
+    </div>
+  </section>`;
+
+  app.innerHTML = html;
+}
+
+window.handleGLUpload = async function(ev) {
+  ev.preventDefault();
+  const fileInput = document.getElementById('gl-file');
+  const btn = document.getElementById('gl-upload-btn');
+  const f = fileInput.files[0];
+  if (!f) return false;
+  btn.innerHTML = '<span class="spinner"></span>Reading…';
+  btn.disabled = true;
+  try {
+    const rows = await readExcelFile(f);
+    if (!rows.length) throw new Error('No rows found in file');
+    const need = ['Acctg. Date', 'Amount $', 'Control'];
+    const missing = need.filter(c => !(c in rows[0]));
+    if (missing.length) throw new Error('Missing columns: ' + missing.join(', '));
+    if (!saveGL(rows)) return false;
+    const state = loadState();
+    state.glFilename = f.name;
+    state.glUploadedAt = new Date().toLocaleString();
+    saveState(state);
+    toast(`GL Detail uploaded: ${rows.length.toLocaleString()} rows`, 'success');
+    renderDashboard();
+  } catch (err) {
+    toast('Could not parse GL file: ' + err.message, 'error');
+  } finally {
+    btn.innerHTML = 'Upload GL Detail (.xlsx)';
+    btn.disabled = false;
+  }
+  return false;
+};
+
+window.clearGL = function() {
+  if (!confirm('Remove the loaded GL file? Your inputs and RAD will stay.')) return;
+  localStorage.removeItem(GL_KEY);
+  const state = loadState();
+  state.glFilename = null;
+  state.glUploadedAt = null;
+  saveState(state);
+  toast('GL file cleared', 'success');
+  renderDashboard();
+};
+
+window.confirmReset = function() {
+  const c = prompt('Type "reset" to clear ALL data (inputs, RAD, review decisions, GL file). This cannot be undone.');
+  if (c !== 'reset') return;
+  localStorage.removeItem(STATE_KEY);
+  localStorage.removeItem(GL_KEY);
+  toast('All data cleared', 'success');
+  renderDashboard();
+};
+
+window.exportData = function() {
+  const blob = new Blob([JSON.stringify({
+    state: loadState(),
+    gl:    loadGL(),
+    exportedAt: new Date().toISOString(),
+  }, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'parts_rec_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+window.importData = function(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  if (!confirm('Overwrite all current data with imported file?')) { ev.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.state) saveState(data.state);
+      if (data.gl) saveGL(data.gl);
+      toast('Data imported', 'success');
+      route();
+    } catch (err) {
+      toast('Could not parse import file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(f);
+};
+
+// ── Inputs list ───────────────────────────────────────────────
+function renderInputsList() {
+  setActiveNav('inputs');
+  const state = loadState();
+  const keys = Object.keys(state.inputs).sort();
+  let html = `
+  <div class="page-header">
+    <h1>Monthly Inputs</h1>
+    <p class="page-sub">Saved input values for each rec month.</p>
+  </div>
+  <section class="card">
+    <div class="card-header">
+      <h2>Saved Months</h2>
+      <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+    <div class="card-body">`;
+  if (!keys.length) {
+    html += `<p class="empty">No saved inputs yet.  <a href="#/inputs/new">Add one →</a></p>`;
+  } else {
+    html += `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Month</th><th>Dealership</th>
+          <th class="r">Inventory</th><th class="r">Tires</th><th class="r">Oil</th>
+          <th class="r">Cores New</th><th class="r">Cores Used</th>
+          <th class="r">RAD (this month)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>`;
+    for (const mk of keys) {
+      const v = state.inputs[mk];
+      html += `
+        <tr>
+          <td><a href="#/month/${mk}"><strong>${escapeHTML(monthLabelForKey(mk))}</strong></a></td>
+          <td>${escapeHTML(v.dealership || '')}</td>
+          <td class="r">${fmtMoney(v.inventory)}</td>
+          <td class="r">${fmtMoney(v.tires)}</td>
+          <td class="r">${fmtMoney(v.oil)}</td>
+          <td class="r">${fmtMoney(v.cores_new)}</td>
+          <td class="r">${fmtMoney(v.cores_used)}</td>
+          <td class="r">${fmtMoney((state.rad||{})[mk])}</td>
+          <td class="actions"><a href="#/inputs/${mk}">Edit</a></td>
+        </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div></section>`;
+  app.innerHTML = html;
+}
+
+function monthLabelForKey(mk) {
+  try { const {year, month} = parseMonthKey(mk); return monthLabel(year, month); }
+  catch { return mk; }
+}
+
+// ── Inputs edit form ──────────────────────────────────────────
+function renderInputsEdit(mkey) {
+  setActiveNav('inputs');
+  const state = loadState();
+  const isNew = !mkey || mkey === 'new';
+  const existing = isNew ? {} : (state.inputs[mkey] || {});
+  const radVal = isNew ? '' : ((state.rad || {})[mkey] || '');
+  const titleLabel = isNew ? 'Add Reconciliation Month' : ('Edit Inputs – ' + monthLabelForKey(mkey));
+
+  const inputField = (name, label, sub) => {
+    const v = existing[name];
+    const vStr = (v != null && v !== 0) ? v : '';
+    const subHTML = sub ? ` <em>${sub}</em>` : '';
+    return `<label><span>${label}${subHTML}</span><input name="${name}" type="number" step="0.01" value="${vStr}"></label>`;
+  };
+
+  let html = `
+  <div class="page-header">
+    <h1>${escapeHTML(titleLabel)}</h1>
+    <p class="page-sub">
+      Values come from CDK PDF reports (MGR / Value by Source, physical recap, Fast Lane, GL balance inquiry).
+      Enter plain numbers (e.g. <code>131301.68</code>).
+    </p>
+  </div>
+
+  <form id="inputs-form" onsubmit="return saveInputs(event, ${isNew ? "''" : `'${mkey}'`})">
+
+    <section class="card">
+      <div class="card-header"><h2>Header</h2></div>
+      <div class="card-body">
+        <div class="form-grid two">
+          <label>
+            <span>Month  <em>(YYYY-MM)</em></span>
+            <input name="month" value="${escapeHTML(mkey || '')}" placeholder="2025-11" pattern="\\d{4}-\\d{2}" required ${isNew ? '' : 'readonly'}>
+          </label>
+          <label>
+            <span>Dealership</span>
+            <input name="dealership" value="${escapeHTML(existing.dealership || '')}" placeholder="HML Burin">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Parts Side  (Inventory System)</h2></div>
+      <div class="card-body">
+        <h3 class="grp">Step 1 – Month End Inventory  (MGR / Value by Source PDF)</h3>
+        <div class="form-grid three">
+          ${inputField('inventory', 'Inventory')}
+          ${inputField('tires',     'Tires')}
+          ${inputField('oil',       'Oil')}
+        </div>
+
+        <h3 class="grp">Steps 2 – 4  (Cores / Recap Sheet)</h3>
+        <div class="form-grid three">
+          ${inputField('paint',      'Paint on Mixer')}
+          ${inputField('cores_new',  'Cores in Stock (New) – MGR')}
+          ${inputField('cores_used', 'Cores in Stock (Used) – Recap')}
+          ${inputField('npn',        'NPN Parts – Recap')}
+          ${inputField('bowman',     'Bowman – Recap')}
+        </div>
+
+        <h3 class="grp">Steps 5 – 7  (Returns / Claims / Open ROs)</h3>
+        <div class="form-grid three">
+          ${inputField('returns_11933',         'Returns – Acct 11933')}
+          ${inputField('claims',                'Claims – MGR')}
+          ${inputField('open_ros_service',      'Open ROs – Service (Fast Lane)')}
+          ${inputField('counter_tickets_parts', 'Counter Tickets – Parts (Fast Lane)')}
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>GL Side</h2></div>
+      <div class="card-body">
+        <h3 class="grp">Step 9 – GL Account Balances  (as-of month end)</h3>
+        <div class="form-grid four">
+          ${inputField('gl_24200', 'Acct. 24200 – Inventory')}
+          ${inputField('gl_24300', 'Acct. 24300 – Tires')}
+          ${inputField('gl_24401', 'Acct. 24401 – Oil')}
+          ${inputField('gl_other', 'Other Account (optional)')}
+        </div>
+
+        <h3 class="grp">Steps 10 – 16  (GL Adjustments)</h3>
+        <div class="auto-note">
+          <strong>Auto-calculated from GL Detail:</strong> Step 11 (In Physical, Not in GL)
+          and Step 13 (Posted Not Received) are derived from the GL export and displayed on
+          the rec detail page.  Use the fields below for any manual additions.
+        </div>
+        <div class="form-grid three">
+          ${inputField('mfg_packing_slips',      'Step 10 – Mfg Packing Slips')}
+          ${inputField('prepaid_special_orders', 'Step 12 – Prepaid Special Orders')}
+          ${inputField('inv_adjustments_rpm',    'Step 14 – Inventory Adj. (RPM)')}
+          ${inputField('oil_shop_supply_adj',    'Step 15 – Oil &amp; Shop Supply Adj.')}
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Step 16 – RAD (Appreciation / Depreciation) for this month only</h2></div>
+      <div class="card-body">
+        <div class="form-grid two">
+          <label>
+            <span>RAD – ${isNew ? 'this month' : monthLabelForKey(mkey)}</span>
+            <input name="rad" type="number" step="0.01" value="${radVal || ''}">
+          </label>
+          <div class="hint-block">
+            The reconciliation uses the <strong>year-to-date sum</strong> of RAD
+            (Jan&nbsp;1 through the end of this month).  Each month's value is stored
+            separately and can also be edited on the <a href="#/rad">RAD page</a>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="#/" class="btn btn-link">Cancel</a>
+      ${isNew ? '' : `<button type="button" class="btn btn-danger" style="margin-left:auto" onclick="deleteMonth('${mkey}')">Delete this month</button>`}
+    </div>
+  </form>`;
+  app.innerHTML = html;
+}
+
+window.saveInputs = function(ev, currentMkey) {
+  ev.preventDefault();
+  const form = ev.target;
+  const fd = new FormData(form);
+  const newMkey = String(fd.get('month') || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(newMkey)) {
+    toast('Month must be in YYYY-MM format', 'error');
+    return false;
+  }
+  const data = {dealership: String(fd.get('dealership') || '').trim()};
+  for (const f of INPUT_FIELDS) {
+    const v = fd.get(f);
+    data[f] = (v == null || v === '') ? 0 : safe(v);
+  }
+  const state = loadState();
+  if (currentMkey && currentMkey !== newMkey && state.inputs[currentMkey]) {
+    delete state.inputs[currentMkey];
+  }
+  state.inputs[newMkey] = data;
+  const radV = String(fd.get('rad') || '').trim();
+  if (radV !== '') {
+    state.rad = state.rad || {};
+    state.rad[newMkey] = safe(radV);
+  }
+  saveState(state);
+  toast('Saved inputs for ' + monthLabelForKey(newMkey), 'success');
+  location.hash = '#/month/' + newMkey;
+  return false;
+};
+
+window.deleteMonth = function(mkey) {
+  if (!confirm('Delete inputs for ' + mkey + '?')) return;
+  const state = loadState();
+  delete state.inputs[mkey];
+  if (state.rad) delete state.rad[mkey];
+  if (state.reviewDecisions) delete state.reviewDecisions[mkey];
+  saveState(state);
+  toast('Deleted ' + mkey, 'success');
+  location.hash = '#/';
+};
+
+// ── Month detail ──────────────────────────────────────────────
+function renderMonthDetail(mkey) {
+  setActiveNav('dashboard');
+  const state = loadState();
+  const glRows = loadGL();
+  const rec = buildRec(state, glRows, mkey);
+  if (!rec) {
+    toast('No inputs saved for ' + mkey, 'error');
+    location.hash = '#/inputs/' + mkey;
+    return;
+  }
+  const vc = varClass(rec.calc.step19);
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Reconciliation – ${rec.label}</h1>
+      <p class="page-sub">${escapeHTML(rec.inputs.dealership || '')}</p>
+    </div>
+    <div class="ph-right">
+      <a href="#/inputs/${mkey}" class="btn btn-link">✎ Edit Inputs</a>
+      ${rec.reviewCount ? `<a href="#/review/${mkey}" class="btn btn-warn">Review ${rec.reviewCount} flagged GL entries</a>` : ''}
+    </div>
+  </div>
+
+  <section class="variance-banner ${vc}">
+    <div class="vb-item">
+      <div class="vb-label">Parts Adjusted (Step 8)</div>
+      <div class="vb-value">${fmtMoney(rec.calc.step8)}</div>
+    </div>
+    <div class="vb-item">
+      <div class="vb-label">GL Adjusted (Step 17)</div>
+      <div class="vb-value">${fmtMoney(rec.calc.step17)}</div>
+    </div>
+    <div class="vb-item vb-primary">
+      <div class="vb-label">Variance $</div>
+      <div class="vb-value">${fmtMoney(rec.calc.step19)}</div>
+    </div>
+    <div class="vb-item vb-primary">
+      <div class="vb-label">Variance %</div>
+      <div class="vb-value">${fmtPct(rec.calc.step19Pct)}</div>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <section class="card side parts-side">
+      <div class="card-header"><h2>Parts Side  (Inventory)</h2></div>
+      <div class="card-body">
+        <table class="rec-table"><tbody>
+          <tr><td class="step">1.</td><td>Inventory  (MGR)</td><td class="r">${fmtMoney(rec.calc.inventory)}</td></tr>
+          <tr><td></td><td class="ind">Tires</td><td class="r">${fmtMoney(rec.calc.tires)}</td></tr>
+          <tr><td></td><td class="ind">Oil</td><td class="r">${fmtMoney(rec.calc.oil)}</td></tr>
+          <tr class="sub"><td></td><td><strong>Total Inventory</strong></td><td class="r"><strong>${fmtMoney(rec.calc.totalInv)}</strong></td></tr>
+          <tr><td class="step">2.</td><td>Paint on Mixer</td><td class="r">${fmtMoney(rec.calc.paint)}</td></tr>
+          <tr><td class="step">2.</td><td>Cores in Stock (New) – MGR</td><td class="r">${fmtMoney(rec.calc.coresNew)}</td></tr>
+          <tr><td class="step">3.</td><td>Cores in Stock (Used) – Recap</td><td class="r">${fmtMoney(rec.calc.coresUsed)}</td></tr>
+          <tr><td></td><td>NPN Parts – Recap</td><td class="r">${fmtMoney(rec.calc.npn)}</td></tr>
+          <tr><td class="step">4.</td><td>Bowman – Recap</td><td class="r">${fmtMoney(rec.calc.bowman)}</td></tr>
+          <tr><td class="step">5.</td><td>Normal/Scheduled Returns (Acct 11933)</td><td class="r">${fmtMoney(rec.calc.returns_)}</td></tr>
+          <tr><td class="step">6.</td><td>Claims – MGR</td><td class="r">${fmtMoney(rec.calc.claims)}</td></tr>
+          <tr><td class="step">7.</td><td>Open ROs &amp; Invoices  (Fast Lane)</td><td></td></tr>
+          <tr><td></td><td class="ind">Service: Repair Orders</td><td class="r">${fmtMoney(rec.calc.roSvc)}</td></tr>
+          <tr><td></td><td class="ind">Parts: Counter Tickets</td><td class="r">${fmtMoney(rec.calc.roCtr)}</td></tr>
+          <tr class="sub"><td></td><td><strong>Subtotal Open</strong></td><td class="r"><strong>${fmtMoney(rec.calc.openROs)}</strong></td></tr>
+          <tr class="total"><td class="step">8.</td><td><strong>Total Parts Adjusted Inventory Value</strong></td><td class="r"><strong>${fmtMoney(rec.calc.step8)}</strong></td></tr>
+        </tbody></table>
+      </div>
+    </section>
+
+    <section class="card side gl-side">
+      <div class="card-header"><h2>GL Side  (Accounting)</h2></div>
+      <div class="card-body">
+        <table class="rec-table"><tbody>
+          <tr><td class="step">9.</td><td>GL Balances  (as of ${rec.label})</td><td></td></tr>
+          <tr><td></td><td class="ind">Acct. 24200 – Inventory</td><td class="r">${fmtMoney(rec.calc.gl24200)}</td></tr>
+          <tr><td></td><td class="ind">Acct. 24300 – Tires</td><td class="r">${fmtMoney(rec.calc.gl24300)}</td></tr>
+          <tr><td></td><td class="ind">Acct. 24401 – Oil</td><td class="r">${fmtMoney(rec.calc.gl24401)}</td></tr>
+          ${rec.calc.glOther ? `<tr><td></td><td class="ind">Other Account</td><td class="r">${fmtMoney(rec.calc.glOther)}</td></tr>` : ''}
+          <tr class="sub"><td></td><td><strong>Total GL Balance</strong></td><td class="r"><strong>${fmtMoney(rec.calc.glTotal)}</strong></td></tr>
+          <tr><td class="step">10.</td><td>Mfg. Packing Slips (In Phys., Not GL)</td><td class="r">${fmtMoney(rec.calc.mfgSlips)}</td></tr>
+          <tr class="auto-row">
+            <td class="step">11.</td>
+            <td>Misc. Vendor Purchases (In Phys., Not GL) <span class="auto-tag">AUTO</span>
+              ${rec.s2.length ? `<a class="drill" href="#sec-s2">${rec.s2.length} entries ↓</a>` : ''}
+            </td>
+            <td class="r"><strong>${fmtMoney(rec.calc.s2Total)}</strong></td>
+          </tr>
+          <tr><td class="step">12.</td><td>Prepaid Special Orders Not Received</td><td class="r">${fmtMoney(rec.calc.prepaid)}</td></tr>
+          <tr class="auto-row">
+            <td class="step">13.</td>
+            <td>Parts in Accounting, Not in Inventory (Posted Not Received) <span class="auto-tag">AUTO</span> (subtract)
+              ${rec.s1.length ? `<a class="drill" href="#sec-s1">${rec.s1.length} entries ↓</a>` : ''}
+            </td>
+            <td class="r"><strong>−${fmtMoney(rec.calc.s1Total)}</strong></td>
+          </tr>
+          <tr><td class="step">14.</td><td>Inventory Adjustments (RPM)</td><td class="r">${fmtMoney(rec.calc.invAdj)}</td></tr>
+          <tr><td class="step">15.</td><td>Oil &amp; Shop Supply Adj.</td><td class="r">${fmtMoney(rec.calc.oilAdj)}</td></tr>
+          <tr><td class="step">16.</td><td>Appreciation / Depreciation (RAD) <span class="ytd-tag">YTD Jan → ${rec.label}</span></td><td class="r">${fmtMoney(rec.calc.radYTD)}</td></tr>
+          <tr class="total"><td class="step">17.</td><td><strong>GL Adjusted Total</strong></td><td class="r"><strong>${fmtMoney(rec.calc.step17)}</strong></td></tr>
+        </tbody></table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><h2>Variance</h2></div>
+    <div class="card-body">
+      <table class="data-table"><tbody>
+        <tr><td>18.</td><td>Total Parts Adjusted Inventory Value (= Step 8)</td><td class="r">${fmtMoney(rec.calc.step8)}</td></tr>
+        <tr><td>17.</td><td>GL Adjusted Total</td><td class="r">${fmtMoney(rec.calc.step17)}</td></tr>
+        <tr><td>19.</td><td><strong>Difference (Step 17 − Step 8)</strong></td><td class="r ${vc}"><strong>${fmtMoney(rec.calc.step19)}</strong></td></tr>
+        <tr><td></td><td>Variance %  (÷ GL Balance)</td><td class="r">${fmtPct(rec.calc.step19Pct)}</td></tr>
+      </tbody></table>
+    </div>
+  </section>`;
+
+  // Detail tables
+  const renderGLDetailTable = (rows) => {
+    let h = `<table class="data-table compact"><thead><tr>
+      <th>Account</th><th>Reference</th><th>Acctg. Date</th><th class="r">Amount</th><th>Control</th><th>Control2</th><th>Description</th>
+    </tr></thead><tbody>`;
+    for (const r of rows) {
+      h += `<tr>
+        <td>${escapeHTML(r.Account || '')}</td>
+        <td class="mono">${escapeHTML(r.Reference || '')}</td>
+        <td>${fmtDate(r['Acctg. Date'])}</td>
+        <td class="r">${fmtMoney(r['Amount $'])}</td>
+        <td>${escapeHTML(r.Control || '')}</td>
+        <td>${escapeHTML(r.Control2 || '')}</td>
+        <td class="muted">${escapeHTML(r['Posting Description'] || '')}</td>
+      </tr>`;
+    }
+    h += `</tbody></table>`;
+    return h;
+  };
+
+  if (rec.s1.length) {
+    html += `
+    <section class="card" id="sec-s1">
+      <div class="card-header">
+        <h2>Step 13 Detail – Posted Not Received</h2>
+        <span class="badge badge-warn">${rec.s1.length} entries · subtract ${fmtMoney(rec.calc.s1Total)} from GL</span>
+      </div>
+      <div class="card-body">
+        <p class="hint">Posted in ${rec.label} but the inventory receipt belongs to a future month (per Control field).</p>
+        ${renderGLDetailTable(rec.s1)}
+      </div>
+    </section>`;
+  }
+  if (rec.s2.length) {
+    html += `
+    <section class="card" id="sec-s2">
+      <div class="card-header">
+        <h2>Step 11 Detail – Misc. Vendor Purchases (In Physical, Not in GL)</h2>
+        <span class="badge badge-ok">${rec.s2.length} entries · add ${fmtMoney(rec.calc.s2Total)} to GL</span>
+      </div>
+      <div class="card-body">
+        <p class="hint">Posted after ${rec.label} but the inventory receipt belongs to ${rec.label} or earlier (per Control field).</p>
+        ${renderGLDetailTable(rec.s2)}
+      </div>
+    </section>`;
+  }
+  app.innerHTML = html;
+}
+
+// ── Review page ───────────────────────────────────────────────
+function renderReview(mkey) {
+  setActiveNav('dashboard');
+  const glRows = loadGL();
+  if (!glRows) {
+    toast('Upload a GL Detail file first', 'error');
+    location.hash = '#/';
+    return;
+  }
+  const state = loadState();
+  const {year, month} = parseMonthKey(mkey);
+  const c = classifyGL(glRows, year, month);
+  const decisions = (state.reviewDecisions || {})[mkey] || {};
+
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Review GL Entries – ${monthLabel(year, month)}</h1>
+      <p class="page-sub">
+        These GL entries posted after ${monthLabel(year, month)} but have a non-month control value
+        (e.g.&nbsp;a JE reference or invoice number).  Decide whether each belongs in
+        Step&nbsp;11, Step&nbsp;13, or should be ignored.
+      </p>
+    </div>
+    <div class="ph-right">
+      <a href="#/month/${mkey}" class="btn btn-link">← Back to rec</a>
+    </div>
+  </div>`;
+
+  if (!c.rv.length) {
+    html += `<section class="card"><div class="card-body"><p class="empty">No entries to review for this month.</p></div></section>`;
+    app.innerHTML = html;
+    return;
+  }
+
+  c.rv.sort((a, b) => {
+    const da = new Date(a['Acctg. Date']).getTime();
+    const db = new Date(b['Acctg. Date']).getTime();
+    return da - db;
+  });
+
+  html += `
+  <form onsubmit="return saveReview(event, '${mkey}')">
+    <section class="card">
+      <div class="card-header">
+        <h2>${c.rv.length} flagged entries</h2>
+        <div class="legend">
+          <span class="lg lg-step11">Step 11 (add)</span>
+          <span class="lg lg-step13">Step 13 (subtract)</span>
+          <span class="lg lg-ignore">Ignore</span>
+          <span class="lg lg-review">Leave for review</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <table class="data-table compact review-table">
+          <thead><tr>
+            <th>Acctg. Date</th><th>Acct</th><th>Jrnl</th><th>Reference</th>
+            <th class="r">Amount</th><th>Control</th><th>Control2</th>
+            <th>Description</th><th>Decision</th>
+          </tr></thead>
+          <tbody>`;
+  for (const r of c.rv) {
+    const d = decisions[r._row_id] || 'review';
+    html += `
+            <tr class="dec-${d}">
+              <td>${fmtDate(r['Acctg. Date'])}</td>
+              <td>${escapeHTML(r.Account || '')}</td>
+              <td>${escapeHTML(r.Journal || '')}</td>
+              <td class="mono">${escapeHTML(r.Reference || '')}</td>
+              <td class="r">${fmtMoney(r['Amount $'])}</td>
+              <td>${escapeHTML(r.Control || '')}</td>
+              <td>${escapeHTML(r.Control2 || '')}</td>
+              <td class="muted">${escapeHTML(r['Posting Description'] || '')}</td>
+              <td>
+                <select name="row::${escapeHTML(r._row_id)}" class="dec-select" onchange="this.parentElement.parentElement.className='dec-'+this.value">
+                  <option value="review" ${d==='review'?'selected':''}>· review later</option>
+                  <option value="step11" ${d==='step11'?'selected':''}>+ Step 11 (add to GL)</option>
+                  <option value="step13" ${d==='step13'?'selected':''}>− Step 13 (subtract)</option>
+                  <option value="ignore" ${d==='ignore'?'selected':''}>✗ ignore</option>
+                </select>
+              </td>
+            </tr>`;
+  }
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save decisions</button>
+      <a href="#/month/${mkey}" class="btn btn-link">Cancel</a>
+    </div>
+  </form>`;
+  app.innerHTML = html;
+}
+
+window.saveReview = function(ev, mkey) {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const state = loadState();
+  state.reviewDecisions = state.reviewDecisions || {};
+  state.reviewDecisions[mkey] = {};
+  for (const [k, v] of fd.entries()) {
+    if (k.startsWith('row::')) {
+      const rid = k.slice(5);
+      if (v !== 'review') state.reviewDecisions[mkey][rid] = v;
+    }
+  }
+  saveState(state);
+  toast('Review decisions saved', 'success');
+  location.hash = '#/month/' + mkey;
+  return false;
+};
+
+// ── RAD page ──────────────────────────────────────────────────
+function renderRad() {
+  setActiveNav('rad');
+  const state = loadState();
+  const monthsSet = new Set([...Object.keys(state.rad || {}), ...Object.keys(state.inputs || {})]);
+  let monthsToShow = [];
+  if (monthsSet.size) {
+    const years = [...new Set([...monthsSet].map(m => parseInt(m.slice(0, 4), 10)))].sort();
+    for (const y of years) for (let m = 1; m <= 12; m++) monthsToShow.push(monthKey(y, m));
+  } else {
+    const today = new Date();
+    for (let m = 1; m <= 12; m++) monthsToShow.push(monthKey(today.getFullYear(), m));
+  }
+
+  let html = `
+  <div class="page-header">
+    <h1>Appreciation / Depreciation (RAD)</h1>
+    <p class="page-sub">
+      Enter the monthly RAD value once per month.  The reconciliation uses the
+      <strong>year-to-date sum</strong> (Jan&nbsp;1 through the rec month).  Year
+      resets every January.
+    </p>
+  </div>
+
+  <form onsubmit="return saveRad(event)">
+    <section class="card">
+      <div class="card-header"><h2>Monthly RAD</h2></div>
+      <div class="card-body">
+        <table class="data-table rad-table">
+          <thead><tr><th>Month</th><th class="r">RAD this month</th><th class="r">YTD running total</th></tr></thead>
+          <tbody>`;
+  let running = 0, currentYear = null;
+  for (const mk of monthsToShow) {
+    const y = parseInt(mk.slice(0, 4), 10);
+    if (y !== currentYear) { currentYear = y; running = 0; }
+    const v = safe((state.rad || {})[mk]);
+    running += v;
+    html += `<tr>
+      <td><strong>${monthLabelForKey(mk)}</strong></td>
+      <td class="r"><input name="rad_${mk}" type="number" step="0.01" value="${v || ''}" class="rad-input"></td>
+      <td class="r mono">${fmtMoney(running)}</td>
+    </tr>`;
+  }
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="#/" class="btn btn-link">Cancel</a>
+    </div>
+  </form>`;
+  app.innerHTML = html;
+}
+
+window.saveRad = function(ev) {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const state = loadState();
+  state.rad = {};
+  for (const [k, v] of fd.entries()) {
+    if (k.startsWith('rad_')) {
+      const mk = k.slice(4);
+      const trimmed = String(v).trim();
+      if (trimmed !== '') state.rad[mk] = safe(trimmed);
+    }
+  }
+  saveState(state);
+  toast('RAD values saved', 'success');
+  renderRad();
+  return false;
+};
+
+// ── Router ────────────────────────────────────────────────────
+function route() {
+  const h = location.hash || '#/';
+  if (h === '#/' || h === '') {
+    renderDashboard();
+  } else if (h === '#/inputs') {
+    renderInputsList();
+  } else if (h === '#/inputs/new') {
+    renderInputsEdit('');
+  } else if (h.startsWith('#/inputs/')) {
+    renderInputsEdit(h.slice('#/inputs/'.length));
+  } else if (h.startsWith('#/month/')) {
+    renderMonthDetail(h.slice('#/month/'.length));
+  } else if (h.startsWith('#/review/')) {
+    renderReview(h.slice('#/review/'.length));
+  } else if (h === '#/rad') {
+    renderRad();
+  } else {
+    renderDashboard();
+  }
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('DOMContentLoaded', route);
+</script>
+
+</body>
+</html>
