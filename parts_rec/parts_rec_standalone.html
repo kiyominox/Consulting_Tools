@@ -278,11 +278,13 @@ function loadState() {
     if (raw) return JSON.parse(raw);
   } catch (e) {}
   return {
-    inputs:           {},   // {'YYYY-MM': {dealership, inventory, ...}}
-    rad:              {},   // {'YYYY-MM': number}
-    reviewDecisions:  {},   // {'YYYY-MM': {rowId: 'step11'|'step13'|'ignore'}}
-    glFilename:       null,
-    glUploadedAt:     null,
+    inputs:              {},   // {'YYYY-MM': {dealership, inventory, ...}}
+    rad:                 {},   // {'YYYY-MM': number}
+    reviewDecisions:     {},   // {'YYYY-MM': {rowId: 'step11'|'step13'|'ignore'}}
+    glFilename:          null,
+    glUploadedAt:        null,
+    acctHistFilename:    null,
+    acctHistImportedAt:  null,
   };
 }
 
@@ -593,6 +595,49 @@ function readExcelFile(file) {
   });
 }
 
+// ── Account Balance History parser ───────────────────────────
+function parseAcctHist(data) {
+  const wb = XLSX.read(data, {type: 'array', cellDates: false});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  // Use raw row arrays so we can detect structure by column position, not header names.
+  const rawRows = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null});
+  const result = {}; // {accountNum: {'YYYY-MM': balance}}
+  let currentAccount = null;
+  let inDataSection  = false;
+  for (const row of rawRows) {
+    if (!Array.isArray(row)) continue;
+    const colB = row[1], colC = row[2], colD = row[3], colE = row[4];
+    // Account number row: col B is a 4-6 digit string or number (e.g. '24200' or 24200)
+    if (colB != null) {
+      const bStr = String(colB).trim();
+      if (/^\d{4,6}$/.test(bStr)) {
+        currentAccount = bStr;
+        inDataSection  = false;
+        continue;
+      }
+    }
+    // Period header row: col C = 'Period-Month'
+    if (colC != null && String(colC).trim() === 'Period-Month') {
+      inDataSection = true;
+      continue;
+    }
+    // Empty row resets the data section (each account block ends with an empty row)
+    if (colB == null && colC == null && colD == null && colE == null) {
+      inDataSection = false;
+      continue;
+    }
+    // Data row: col C = month int (1-12), col D = year int, col E = balance
+    if (inDataSection && currentAccount && colC != null && colD != null && colE != null) {
+      const m = Number(colC), y = Number(colD), b = Number(colE);
+      if (!isNaN(m) && m >= 1 && m <= 12 && !isNaN(y) && y >= 2000 && y <= 2100 && !isNaN(b)) {
+        if (!result[currentAccount]) result[currentAccount] = {};
+        result[currentAccount][monthKey(y, m)] = b;
+      }
+    }
+  }
+  return result;
+}
+
 // ── Renderers ─────────────────────────────────────────────────
 const app = document.getElementById('app');
 
@@ -671,7 +716,38 @@ function renderDashboard() {
 
   <section class="card">
     <div class="card-header">
-      <h2>2.  Monthly Reconciliations</h2>
+      <h2>2.  Account Balance History</h2>
+      ${state.acctHistImportedAt
+        ? '<span class="badge badge-ok">Imported</span>'
+        : '<span class="badge badge-warn">Not imported</span>'}
+    </div>
+    <div class="card-body">
+      <div class="gl-row">
+        <div>
+          <form class="gl-form" onsubmit="return handleAcctHistUpload(event)">
+            <input type="file" id="accthist-file" accept=".xlsx,.xls" required>
+            <button type="submit" class="btn btn-primary" id="accthist-upload-btn">Import GL Balances (.xlsx)</button>
+          </form>
+          ${state.acctHistImportedAt
+            ? `<p class="hint" style="margin-top:10px;">
+                 Last import: <strong>${escapeHTML(state.acctHistFilename || '')}</strong>
+                 on ${escapeHTML(state.acctHistImportedAt)}.
+               </p>` : ''}
+        </div>
+        <p class="hint">
+          Upload the <strong>Account Balance History</strong> export from Drive
+          (the <code>BUR_ACCTHIST.xlsx</code> export).  The tool reads month-end balances
+          for accounts 24200, 24300, and 24401 and fills in the GL balance fields for each
+          rec month automatically.  For months not yet entered, a new stub is created so you
+          just need to fill in the inventory-side values.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>3.  Monthly Reconciliations</h2>
       <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
     </div>
     <div class="card-body">`;
@@ -754,7 +830,7 @@ function renderDashboard() {
     const maxAbs = Math.max(...recs.map(r => Math.abs(r.calc.step19))) || 1;
     let chartHTML = `
     <section class="card">
-      <div class="card-header"><h2>3.  Variance Trend</h2></div>
+      <div class="card-header"><h2>4.  Variance Trend</h2></div>
       <div class="card-body">
         <div class="chart-wrap">`;
     for (const r of recs) {
@@ -838,6 +914,59 @@ window.clearGL = function() {
   saveState(state);
   toast('GL file cleared', 'success');
   renderDashboard();
+};
+
+window.handleAcctHistUpload = async function(ev) {
+  ev.preventDefault();
+  const fileInput = document.getElementById('accthist-file');
+  const btn = document.getElementById('accthist-upload-btn');
+  const f = fileInput.files[0];
+  if (!f) return false;
+  btn.innerHTML = '<span class="spinner"></span>Reading…';
+  btn.disabled = true;
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(new Uint8Array(e.target.result));
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(f);
+    });
+    const acctHist = parseAcctHist(data);
+    const ACCTS = ['24200', '24300', '24401'];
+    const found = ACCTS.filter(a => acctHist[a] && Object.keys(acctHist[a]).length > 0);
+    if (!found.length) throw new Error('No balances found for accounts 24200, 24300, or 24401');
+    const state = loadState();
+    const allMonths = new Set();
+    for (const a of found) Object.keys(acctHist[a]).forEach(mk => allMonths.add(mk));
+    let updated = 0, created = 0;
+    for (const mk of [...allMonths].sort()) {
+      const isNew = !state.inputs[mk];
+      if (isNew) {
+        state.inputs[mk] = {dealership: ''};
+        for (const field of INPUT_FIELDS) state.inputs[mk][field] = 0;
+        created++;
+      } else {
+        updated++;
+      }
+      if (acctHist['24200']?.[mk] != null) state.inputs[mk].gl_24200 = acctHist['24200'][mk];
+      if (acctHist['24300']?.[mk] != null) state.inputs[mk].gl_24300 = acctHist['24300'][mk];
+      if (acctHist['24401']?.[mk] != null) state.inputs[mk].gl_24401 = acctHist['24401'][mk];
+    }
+    state.acctHistFilename   = f.name;
+    state.acctHistImportedAt = new Date().toLocaleString();
+    saveState(state);
+    const parts = [];
+    if (updated) parts.push(`updated ${updated} existing month${updated > 1 ? 's' : ''}`);
+    if (created) parts.push(`created ${created} new month stub${created > 1 ? 's' : ''}`);
+    toast(`GL balances imported from ${f.name} — ${parts.join(', ')}.`, 'success');
+    renderDashboard();
+  } catch (err) {
+    toast('Could not parse Account Balance History: ' + err.message, 'error');
+  } finally {
+    btn.innerHTML = 'Import GL Balances (.xlsx)';
+    btn.disabled = false;
+  }
+  return false;
 };
 
 window.confirmReset = function() {
@@ -1015,6 +1144,11 @@ function renderInputsEdit(mkey) {
       <div class="card-header"><h2>GL Side</h2></div>
       <div class="card-body">
         <h3 class="grp">Step 9 – GL Account Balances  (as-of month end)</h3>
+        ${(state.acctHistImportedAt && !isNew && (existing.gl_24200 || existing.gl_24300 || existing.gl_24401))
+          ? `<p class="auto-note" style="margin-bottom:10px;">
+               Balances below were imported from <strong>${escapeHTML(state.acctHistFilename || 'Account Balance History')}</strong>.
+               Edit any value here to override.
+             </p>` : ''}
         <div class="form-grid four">
           ${inputField('gl_24200', 'Acct. 24200 – Inventory')}
           ${inputField('gl_24300', 'Acct. 24300 – Tires')}
