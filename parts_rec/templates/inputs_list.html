@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}Monthly Inputs{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Monthly Inputs</h1>
+  <p class="page-sub">Saved input values for each rec month.</p>
+</div>
+
+<section class="card">
+  <div class="card-header">
+    <h2>Saved Months</h2>
+    <a href="{{ url_for('inputs_new') }}" class="btn btn-primary btn-sm">+ Add Month</a>
+  </div>
+  <div class="card-body">
+    {% if not inputs %}
+      <p class="empty">No saved inputs yet. <a href="{{ url_for('inputs_new') }}">Add one →</a></p>
+    {% else %}
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Month</th><th>Dealership</th>
+            <th class="r">Inventory</th><th class="r">Tires</th><th class="r">Oil</th>
+            <th class="r">Cores New</th><th class="r">Cores Used</th>
+            <th class="r">RAD (this month)</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for mk, v in inputs.items() | sort %}
+          <tr>
+            <td><a href="{{ url_for('month_detail', mkey=mk) }}"><strong>{{ mk | mlabel }}</strong></a></td>
+            <td>{{ v.get('dealership', '') }}</td>
+            <td class="r">{{ v.get('inventory', 0) | money }}</td>
+            <td class="r">{{ v.get('tires', 0) | money }}</td>
+            <td class="r">{{ v.get('oil', 0) | money }}</td>
+            <td class="r">{{ v.get('cores_new', 0) | money }}</td>
+            <td class="r">{{ v.get('cores_used', 0) | money }}</td>
+            <td class="r">{{ rad.get(mk, 0) | money }}</td>
+            <td class="actions">
+              <a href="{{ url_for('inputs_edit', mkey=mk) }}">Edit</a>
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    {% endif %}
+  </div>
+</section>
+
+{% endblock %}

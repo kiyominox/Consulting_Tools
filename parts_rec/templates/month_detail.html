@@ -1,0 +1,207 @@
+{% extends 'base.html' %}
+{% block title %}{{ rec.label }}{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="ph-left">
+    <h1>Reconciliation – {{ rec.label }}</h1>
+    <p class="page-sub">{{ rec.inputs.get('dealership', '') }}</p>
+  </div>
+  <div class="ph-right">
+    <a href="{{ url_for('inputs_edit', mkey=mkey) }}" class="btn btn-link">✎ Edit Inputs</a>
+    {% if rec.review_count %}
+      <a href="{{ url_for('review', mkey=mkey) }}" class="btn btn-warn">
+        Review {{ rec.review_count }} flagged GL entries
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Top-level variance card -->
+<section class="variance-banner {% if rec.calc.step19 | abs > 100 %}var-large{% elif rec.calc.step19 | abs > 1 %}var-medium{% else %}var-zero{% endif %}">
+  <div class="vb-item">
+    <div class="vb-label">Parts Adjusted (Step 8)</div>
+    <div class="vb-value">{{ rec.calc.step8 | money }}</div>
+  </div>
+  <div class="vb-item">
+    <div class="vb-label">GL Adjusted (Step 17)</div>
+    <div class="vb-value">{{ rec.calc.step17 | money }}</div>
+  </div>
+  <div class="vb-item vb-primary">
+    <div class="vb-label">Variance $</div>
+    <div class="vb-value">{{ rec.calc.step19 | money }}</div>
+  </div>
+  <div class="vb-item vb-primary">
+    <div class="vb-label">Variance %</div>
+    <div class="vb-value">{{ rec.calc.step19_pct | pct }}</div>
+  </div>
+</section>
+
+<div class="two-col">
+
+  <!-- ── PARTS SIDE ──────────────────────────────────────── -->
+  <section class="card side parts-side">
+    <div class="card-header"><h2>Parts Side  (Inventory)</h2></div>
+    <div class="card-body">
+      <table class="rec-table">
+        <tbody>
+          <tr><td class="step">1.</td><td>Inventory  (MGR)</td><td class="r">{{ rec.calc.inventory | money }}</td></tr>
+          <tr><td></td><td class="ind">Tires</td><td class="r">{{ rec.calc.tires | money }}</td></tr>
+          <tr><td></td><td class="ind">Oil</td><td class="r">{{ rec.calc.oil | money }}</td></tr>
+          <tr class="sub"><td></td><td><strong>Total Inventory</strong></td><td class="r"><strong>{{ rec.calc.total_inv | money }}</strong></td></tr>
+
+          <tr><td class="step">2.</td><td>Paint on Mixer</td><td class="r">{{ rec.calc.paint | money }}</td></tr>
+          <tr><td class="step">2.</td><td>Cores in Stock (New) – MGR</td><td class="r">{{ rec.calc.cores_new | money }}</td></tr>
+          <tr><td class="step">3.</td><td>Cores in Stock (Used) – Recap</td><td class="r">{{ rec.calc.cores_used | money }}</td></tr>
+          <tr><td></td><td>NPN Parts – Recap</td><td class="r">{{ rec.calc.npn | money }}</td></tr>
+          <tr><td class="step">4.</td><td>Bowman – Recap</td><td class="r">{{ rec.calc.bowman | money }}</td></tr>
+
+          <tr><td class="step">5.</td><td>Normal/Scheduled Returns (Acct 11933)</td><td class="r">{{ rec.calc.returns | money }}</td></tr>
+          <tr><td class="step">6.</td><td>Claims – MGR</td><td class="r">{{ rec.calc.claims | money }}</td></tr>
+
+          <tr><td class="step">7.</td><td>Open ROs &amp; Invoices  (Fast Lane)</td><td></td></tr>
+          <tr><td></td><td class="ind">Service: Repair Orders</td><td class="r">{{ rec.calc.ro_svc | money }}</td></tr>
+          <tr><td></td><td class="ind">Parts: Counter Tickets</td><td class="r">{{ rec.calc.ro_ctr | money }}</td></tr>
+          <tr class="sub"><td></td><td><strong>Subtotal Open</strong></td><td class="r"><strong>{{ rec.calc.open_ros | money }}</strong></td></tr>
+
+          <tr class="total"><td class="step">8.</td><td><strong>Total Parts Adjusted Inventory Value</strong></td><td class="r"><strong>{{ rec.calc.step8 | money }}</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── GL SIDE ─────────────────────────────────────────── -->
+  <section class="card side gl-side">
+    <div class="card-header"><h2>GL Side  (Accounting)</h2></div>
+    <div class="card-body">
+      <table class="rec-table">
+        <tbody>
+          <tr><td class="step">9.</td><td>GL Balances  (as of {{ rec.label }})</td><td></td></tr>
+          <tr><td></td><td class="ind">Acct. 24200 – Inventory</td><td class="r">{{ rec.calc.gl_24200 | money }}</td></tr>
+          <tr><td></td><td class="ind">Acct. 24300 – Tires</td><td class="r">{{ rec.calc.gl_24300 | money }}</td></tr>
+          <tr><td></td><td class="ind">Acct. 24401 – Oil</td><td class="r">{{ rec.calc.gl_24401 | money }}</td></tr>
+          {% if rec.calc.gl_other %}
+          <tr><td></td><td class="ind">Other Account</td><td class="r">{{ rec.calc.gl_other | money }}</td></tr>
+          {% endif %}
+          <tr class="sub"><td></td><td><strong>Total GL Balance</strong></td><td class="r"><strong>{{ rec.calc.gl_total | money }}</strong></td></tr>
+
+          <tr><td class="step">10.</td><td>Mfg. Packing Slips (In Phys., Not GL)</td><td class="r">{{ rec.calc.mfg_slips | money }}</td></tr>
+
+          <tr class="auto-row">
+            <td class="step">11.</td>
+            <td>
+              Misc. Vendor Purchases  (In Phys., Not GL)
+              <span class="auto-tag">AUTO</span>
+              {% if rec.s2_df is defined and not rec.s2_df.empty %}
+                <a class="drill" href="#sec-s2">{{ rec.s2_df | length }} entries ↓</a>
+              {% endif %}
+            </td>
+            <td class="r"><strong>{{ rec.calc.s2_total | money }}</strong></td>
+          </tr>
+
+          <tr><td class="step">12.</td><td>Prepaid Special Orders Not Received</td><td class="r">{{ rec.calc.prepaid | money }}</td></tr>
+
+          <tr class="auto-row">
+            <td class="step">13.</td>
+            <td>
+              Parts in Accounting, Not in Inventory  (Posted Not Received)
+              <span class="auto-tag">AUTO</span>  (subtract)
+              {% if rec.s1_df is defined and not rec.s1_df.empty %}
+                <a class="drill" href="#sec-s1">{{ rec.s1_df | length }} entries ↓</a>
+              {% endif %}
+            </td>
+            <td class="r"><strong>−{{ rec.calc.s1_total | money }}</strong></td>
+          </tr>
+
+          <tr><td class="step">14.</td><td>Inventory Adjustments (RPM)</td><td class="r">{{ rec.calc.inv_adj | money }}</td></tr>
+          <tr><td class="step">15.</td><td>Oil &amp; Shop Supply Adj.</td><td class="r">{{ rec.calc.oil_adj | money }}</td></tr>
+
+          <tr><td class="step">16.</td>
+              <td>
+                Appreciation / Depreciation  (RAD)
+                <span class="ytd-tag">YTD Jan → {{ rec.label }}</span>
+              </td>
+              <td class="r">{{ rec.calc.rad_ytd | money }}</td></tr>
+
+          <tr class="total"><td class="step">17.</td><td><strong>GL Adjusted Total</strong></td><td class="r"><strong>{{ rec.calc.step17 | money }}</strong></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<!-- ── VARIANCE ─────────────────────────────────────────── -->
+<section class="card">
+  <div class="card-header"><h2>Variance</h2></div>
+  <div class="card-body">
+    <table class="data-table">
+      <tbody>
+        <tr><td class="step">18.</td><td>Total Parts Adjusted Inventory Value (= Step 8)</td><td class="r">{{ rec.calc.step8 | money }}</td></tr>
+        <tr><td class="step">17.</td><td>GL Adjusted Total</td><td class="r">{{ rec.calc.step17 | money }}</td></tr>
+        <tr class="total"><td class="step">19.</td><td><strong>Difference  (Step 17 − Step 8)</strong></td><td class="r {{ rec.calc.step19 | vrclass }}"><strong>{{ rec.calc.step19 | money }}</strong></td></tr>
+        <tr><td></td><td>Variance %  (÷ GL Balance)</td><td class="r">{{ rec.calc.step19_pct | pct }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── AUTO DETAIL ─────────────────────────────────────── -->
+{% if not rec.s1_df.empty %}
+<section class="card" id="sec-s1">
+  <div class="card-header">
+    <h2>Step 13 Detail – Posted Not Received</h2>
+    <span class="badge badge-warn">{{ rec.s1_df | length }} entries · subtract {{ rec.calc.s1_total | money }} from GL</span>
+  </div>
+  <div class="card-body">
+    <p class="hint">Posted in {{ rec.label }} but the inventory receipt belongs to a future month (per Control field).</p>
+    <table class="data-table compact">
+      <thead><tr><th>Account</th><th>Reference</th><th>Acctg. Date</th><th class="r">Amount</th><th>Control</th><th>Control2</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for _, r in rec.s1_df.iterrows() %}
+        <tr>
+          <td>{{ r['Account'] }}</td>
+          <td class="mono">{{ r['Reference'] }}</td>
+          <td>{{ r['Acctg. Date'].strftime('%b %d, %Y') if r['Acctg. Date'] else '' }}</td>
+          <td class="r">{{ r['Amount $'] | money }}</td>
+          <td>{{ r['Control'] if r['Control'] == r['Control'] else '' }}</td>
+          <td>{{ r['Control2'] if r['Control2'] == r['Control2'] else '' }}</td>
+          <td class="muted">{{ r['Posting Description'] if r['Posting Description'] == r['Posting Description'] else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if not rec.s2_df.empty %}
+<section class="card" id="sec-s2">
+  <div class="card-header">
+    <h2>Step 11 Detail – Misc. Vendor Purchases (In Physical, Not in GL)</h2>
+    <span class="badge badge-ok">{{ rec.s2_df | length }} entries · add {{ rec.calc.s2_total | money }} to GL</span>
+  </div>
+  <div class="card-body">
+    <p class="hint">Posted after {{ rec.label }} but the inventory receipt belongs to {{ rec.label }} or earlier (per Control field).</p>
+    <table class="data-table compact">
+      <thead><tr><th>Account</th><th>Reference</th><th>Acctg. Date</th><th class="r">Amount</th><th>Control</th><th>Control2</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for _, r in rec.s2_df.iterrows() %}
+        <tr>
+          <td>{{ r['Account'] }}</td>
+          <td class="mono">{{ r['Reference'] }}</td>
+          <td>{{ r['Acctg. Date'].strftime('%b %d, %Y') if r['Acctg. Date'] else '' }}</td>
+          <td class="r">{{ r['Amount $'] | money }}</td>
+          <td>{{ r['Control'] if r['Control'] == r['Control'] else '' }}</td>
+          <td>{{ r['Control2'] if r['Control2'] == r['Control2'] else '' }}</td>
+          <td class="muted">{{ r['Posting Description'] if r['Posting Description'] == r['Posting Description'] else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

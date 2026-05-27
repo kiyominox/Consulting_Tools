@@ -9,3 +9,6 @@ build/
 .env
 *.xlsx~
 .DS_Store
+
+# Parts Rec local data (uploaded GL, saved state)
+parts_rec/data/

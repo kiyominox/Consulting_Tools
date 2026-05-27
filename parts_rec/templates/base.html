@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Parts Rec{% endblock %} – Parts Inventory Reconciliation</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="{{ url_for('dashboard') }}" class="brand">
+      <span class="brand-mark">P/R</span>
+      Parts Inventory Reconciliation
+    </a>
+    <div class="topnav-links">
+      <a href="{{ url_for('dashboard') }}">Dashboard</a>
+      <a href="{{ url_for('inputs_list') }}">Monthly Inputs</a>
+      <a href="{{ url_for('rad_edit') }}">RAD (App/Dep)</a>
+      <a href="{{ url_for('inputs_new') }}" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+  </div>
+</nav>
+
+<main class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <div class="flash-area">
+        {% for category, msg in messages %}
+          <div class="flash flash-{{ category }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+  <span>Parts Inventory / GL Reconciliation</span>
+  <span class="dot">·</span>
+  <span>Data stored locally in <code>parts_rec/data/</code></span>
+</footer>
+
+</body>
+</html>
