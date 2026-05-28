@@ -127,7 +127,7 @@ code,.mono{font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.92em;}
 .form-grid label{display:block;}
 .form-grid label > span{display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:3px; text-transform:uppercase; letter-spacing:.3px;}
 .form-grid label > span em{color:var(--muted); font-weight:400; text-transform:none;}
-.form-grid input,.form-grid select{width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;}
+.form-grid input,.form-grid select,.form-select{width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;}
 .form-grid input:focus,.form-grid select:focus{outline:none; border-color:var(--primary-2); box-shadow:0 0 0 2px rgba(46,116,181,.15);}
 .form-grid input[type=number]{font-variant-numeric:tabular-nums;}
 
@@ -218,8 +218,24 @@ h3.grp:first-child{margin-top:0;}
 .bulk-table tbody tr:hover .mcol{background:var(--row-hi);}
 .bulk-table tbody tr:hover td{background:var(--row-hi);}
 
-/* Footer */
-.site-footer{text-align:center; padding:24px; color:var(--muted); font-size:12px;}
+/* Store switcher in top nav */
+.store-switcher{display:flex; align-items:center; gap:7px; background:rgba(255,255,255,.1); border-radius:var(--radius); padding:4px 10px; margin-right:6px;}
+.store-label{color:#cfdbed; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;}
+.store-select{background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:4px; font-size:13px; padding:3px 22px 3px 7px; cursor:pointer; font-family:inherit; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23cfdbed'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 7px center;}
+.store-select option{background:#1f4e79; color:#fff;}
+.store-select:focus{outline:none; border-color:rgba(255,255,255,.5);}
+.store-mgr-link{color:#cfdbed !important; font-size:11px; white-space:nowrap;}
+.store-mgr-link:hover{color:#fff !important;}
+
+/* Store management page */
+.store-list{display:flex; flex-direction:column; gap:8px; margin-bottom:20px;}
+.store-card{display:flex; align-items:center; gap:10px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);}
+.store-card.active-store{border-color:var(--primary-2); background:#f0f5fb;}
+.store-card .store-name-input{flex:1; padding:5px 8px; border:1px solid transparent; border-radius:4px; font-size:13px; font-weight:500; font-family:inherit; background:transparent; color:var(--text);}
+.store-card .store-name-input:hover{border-color:var(--border);}
+.store-card .store-name-input:focus{outline:none; border-color:var(--primary-2); background:#fff; box-shadow:0 0 0 2px rgba(46,116,181,.15);}
+.store-card .store-meta{font-size:11px; color:var(--muted); white-space:nowrap;}
+.store-card .active-badge{font-size:11px; font-weight:700; color:var(--primary); background:#d9e6f7; padding:2px 8px; border-radius:10px; white-space:nowrap;}
 .site-footer .dot{margin:0 6px;}
 
 .hidden{display:none !important;}
@@ -237,6 +253,7 @@ h3.grp:first-child{margin-top:0;}
       <span class="brand-mark">P/R</span>
       Parts Inventory Reconciliation
     </a>
+    <div id="store-nav"></div>
     <div class="topnav-links">
       <a href="#/" data-nav="dashboard">Dashboard</a>
       <a href="#/bulk" data-nav="bulk">Bulk Entry</a>
@@ -265,46 +282,105 @@ h3.grp:first-child{margin-top:0;}
 
 'use strict';
 
-// ── State management ──────────────────────────────────────────
-const STATE_KEY = 'partsRecState_v1';
-const GL_KEY    = 'partsRecGL_v1';   // separate because it can be large
+// ── State management (multi-store) ───────────────────────────
+// Meta key: store registry.  Per-store keys hold state & GL separately.
+const META_KEY   = 'partsRecMeta_v1';
+const LEGACY_STATE_KEY = 'partsRecState_v1';   // migration only
+const LEGACY_GL_KEY    = 'partsRecGL_v1';      // migration only
 
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STATE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
+let _activeStoreId = null;   // set by initStores() before first route()
+
+function stateKeyFor(id) { return 'partsRecStore_' + id; }
+function glKeyFor(id)    { return 'partsRecGL_' + id; }
+
+function _blankState() {
   return {
-    inputs:              {},   // {'YYYY-MM': {dealership, inventory, ...}}
-    rad:                 {},   // {'YYYY-MM': number}
-    reviewDecisions:     {},   // {'YYYY-MM': {rowId: 'step11'|'step13'|'ignore'}}
+    inputs:              {},
+    rad:                 {},
+    reviewDecisions:     {},
     glFilename:          null,
     glUploadedAt:        null,
     acctHistFilename:    null,
     acctHistImportedAt:  null,
+    radCycleStartMonth:  1,    // 1-12; RAD accumulates from this month forward each cycle
   };
 }
 
-function saveState(state) {
-  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+function _blankMeta(sid) {
+  return { activeStore: sid, stores: { [sid]: { id: sid, name: 'Store 1' } } };
 }
 
-function loadGL() {
-  try {
-    const raw = localStorage.getItem(GL_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
+function loadMeta() {
+  try { const r = localStorage.getItem(META_KEY); if (r) { const m = JSON.parse(r); if (m.stores) return m; } } catch(e) {}
   return null;
 }
+function saveMeta(meta) { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
 
-function saveGL(rows) {
-  try {
-    localStorage.setItem(GL_KEY, JSON.stringify(rows));
-    return true;
-  } catch (e) {
-    toast('GL too large for browser storage. Try a narrower date range.', 'error');
-    return false;
+function initStores() {
+  let meta = loadMeta();
+  if (!meta) {
+    const sid = 's1';
+    meta = _blankMeta(sid);
+    // Migrate legacy single-store data if it exists
+    const oldState = localStorage.getItem(LEGACY_STATE_KEY);
+    const oldGL    = localStorage.getItem(LEGACY_GL_KEY);
+    if (oldState) {
+      try {
+        const p = JSON.parse(oldState);
+        const dealer = Object.values(p.inputs || {})[0]?.dealership;
+        if (dealer) meta.stores[sid].name = dealer;
+      } catch(e) {}
+      localStorage.setItem(stateKeyFor(sid), oldState);
+    }
+    if (oldGL) localStorage.setItem(glKeyFor(sid), oldGL);
+    saveMeta(meta);
   }
+  _activeStoreId = meta.activeStore;
+}
+
+function updateStoreNav() {
+  const nav = document.getElementById('store-nav');
+  if (!nav) return;
+  const meta = loadMeta();
+  if (!meta) return;
+  const stores = Object.values(meta.stores).sort((a, b) => a.name.localeCompare(b.name));
+  const opts = stores.map(s =>
+    `<option value="${escapeHTML(s.id)}"${s.id === meta.activeStore ? ' selected' : ''}>${escapeHTML(s.name)}</option>`
+  ).join('');
+  nav.innerHTML = `
+    <div class="store-switcher">
+      <span class="store-label">Store:</span>
+      <select class="store-select" onchange="switchStore(this.value)">${opts}</select>
+      <a href="#/stores" class="store-mgr-link" title="Manage stores">manage</a>
+    </div>`;
+}
+
+window.switchStore = function(id) {
+  const meta = loadMeta();
+  if (!meta || !meta.stores[id]) return;
+  meta.activeStore = id;
+  _activeStoreId = id;
+  saveMeta(meta);
+  bulkExtraMonths = [];   // reset bulk grid for new store
+  updateStoreNav();
+  location.hash = '#/';
+  route();
+};
+
+function loadState() {
+  try { const r = localStorage.getItem(stateKeyFor(_activeStoreId)); if (r) return JSON.parse(r); } catch(e) {}
+  return _blankState();
+}
+function saveState(state) {
+  localStorage.setItem(stateKeyFor(_activeStoreId), JSON.stringify(state));
+}
+function loadGL() {
+  try { const r = localStorage.getItem(glKeyFor(_activeStoreId)); if (r) return JSON.parse(r); } catch(e) {}
+  return null;
+}
+function saveGL(rows) {
+  try { localStorage.setItem(glKeyFor(_activeStoreId), JSON.stringify(rows)); return true; }
+  catch(e) { toast('GL too large for browser storage. Try a narrower date range.', 'error'); return false; }
 }
 
 // ── Formatting ────────────────────────────────────────────────
@@ -482,9 +558,17 @@ function safe(v) {
   return isNaN(n) ? 0 : n;
 }
 
-function ytdRad(radMap, recYear, recMonth) {
+function ytdRad(radMap, recYear, recMonth, cycleStart) {
+  cycleStart = cycleStart || 1;
   let tot = 0;
-  for (let m = 1; m <= recMonth; m++) tot += safe(radMap[monthKey(recYear, m)]);
+  if (recMonth >= cycleStart) {
+    // Cycle is entirely within recYear: sum cycleStart..recMonth
+    for (let m = cycleStart; m <= recMonth; m++) tot += safe(radMap[monthKey(recYear, m)]);
+  } else {
+    // Cycle spans the year boundary: sum cycleStart..Dec of prior year, then Jan..recMonth of recYear
+    for (let m = cycleStart; m <= 12; m++) tot += safe(radMap[monthKey(recYear - 1, m)]);
+    for (let m = 1; m <= recMonth; m++) tot += safe(radMap[monthKey(recYear, m)]);
+  }
   return tot;
 }
 
@@ -539,11 +623,12 @@ function buildRec(state, glRows, mkey) {
   }
   const s1Total = s1.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
   const s2Total = s2.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
-  const radY    = ytdRad(state.rad || {}, year, month);
+  const cycleStart = state.radCycleStartMonth || 1;
+  const radY    = ytdRad(state.rad || {}, year, month, cycleStart);
   const calc    = calculateRec(inputs, s1Total, s2Total, radY);
   return {
     year, month, label: monthLabel(year, month), calc, inputs,
-    s1, s2, rv, reviewCount: rv.length, radYTD: radY,
+    s1, s2, rv, reviewCount: rv.length, radYTD: radY, cycleStart,
   };
 }
 
@@ -1156,7 +1241,7 @@ window.handleGLUpload = async function(ev) {
 
 window.clearGL = function() {
   if (!confirm('Remove the loaded GL file? Your inputs and RAD will stay.')) return;
-  localStorage.removeItem(GL_KEY);
+  localStorage.removeItem(glKeyFor(_activeStoreId));
   const state = loadState();
   state.glFilename = null;
   state.glUploadedAt = null;
@@ -1219,11 +1304,13 @@ window.handleAcctHistUpload = async function(ev) {
 };
 
 window.confirmReset = function() {
-  const c = prompt('Type "reset" to clear ALL data (inputs, RAD, review decisions, GL file). This cannot be undone.');
+  const meta = loadMeta();
+  const storeName = meta.stores[_activeStoreId]?.name || 'this store';
+  const c = prompt(`Type "reset" to clear ALL data for "${storeName}" (inputs, RAD, review decisions, GL file). Other stores are not affected. This cannot be undone.`);
   if (c !== 'reset') return;
-  localStorage.removeItem(STATE_KEY);
-  localStorage.removeItem(GL_KEY);
-  toast('All data cleared', 'success');
+  localStorage.removeItem(stateKeyFor(_activeStoreId));
+  localStorage.removeItem(glKeyFor(_activeStoreId));
+  toast('All data cleared for ' + storeName, 'success');
   renderDashboard();
 };
 
@@ -1583,7 +1670,7 @@ function renderMonthDetail(mkey) {
           </tr>
           <tr><td class="step">14.</td><td>Inventory Adjustments (RPM)</td><td class="r">${fmtMoney(rec.calc.invAdj)}</td></tr>
           <tr><td class="step">15.</td><td>Oil &amp; Shop Supply Adj.</td><td class="r">${fmtMoney(rec.calc.oilAdj)}</td></tr>
-          <tr><td class="step">16.</td><td>Appreciation / Depreciation (RAD) <span class="ytd-tag">YTD Jan → ${rec.label}</span></td><td class="r">${fmtMoney(rec.calc.radYTD)}</td></tr>
+          <tr><td class="step">16.</td><td>Appreciation / Depreciation (RAD) <span class="ytd-tag">YTD ${MONTH_NAMES[rec.cycleStart-1]} → ${rec.label}</span></td><td class="r">${fmtMoney(rec.calc.radYTD)}</td></tr>
           <tr class="total"><td class="step">17.</td><td><strong>GL Adjusted Total</strong></td><td class="r"><strong>${fmtMoney(rec.calc.step17)}</strong></td></tr>
         </tbody></table>
       </div>
@@ -1777,6 +1864,7 @@ window.saveReview = function(ev, mkey) {
 function renderRad() {
   setActiveNav('rad');
   const state = loadState();
+  const cycleStart = state.radCycleStartMonth || 1;
   const monthsSet = new Set([...Object.keys(state.rad || {}), ...Object.keys(state.inputs || {})]);
   let monthsToShow = [];
   if (monthsSet.size) {
@@ -1787,27 +1875,57 @@ function renderRad() {
     for (let m = 1; m <= 12; m++) monthsToShow.push(monthKey(today.getFullYear(), m));
   }
 
+  const cycleOpts = MONTH_NAMES.map((n, i) =>
+    `<option value="${i+1}"${(i+1)===cycleStart?' selected':''}>${n}</option>`
+  ).join('');
+
+  const cycleEndM = cycleStart === 1 ? 12 : cycleStart - 1;
+  const cycleDesc = cycleStart === 1
+    ? 'Jan → Dec (calendar year)'
+    : `${MONTH_NAMES[cycleStart-1]} → ${MONTH_NAMES[cycleEndM-1]} (spans the calendar year boundary)`;
+
   let html = `
   <div class="page-header">
     <h1>Appreciation / Depreciation (RAD)</h1>
     <p class="page-sub">
       Enter the monthly RAD value once per month.  The reconciliation uses the
-      <strong>year-to-date sum</strong> (Jan&nbsp;1 through the rec month).  Year
-      resets every January.
+      <strong>running total</strong> from the cycle start month through the rec month.
     </p>
   </div>
 
   <form onsubmit="return saveRad(event)">
     <section class="card">
-      <div class="card-header"><h2>Monthly RAD</h2></div>
+      <div class="card-header"><h2>RAD Cycle Settings</h2></div>
+      <div class="card-body">
+        <div class="form-grid two" style="max-width:600px;">
+          <label>
+            <span>Cycle starts in <em>(month after physical inventory)</em></span>
+            <select name="radCycleStartMonth" class="form-select" onchange="onRadCycleChange(this.value)">${cycleOpts}</select>
+          </label>
+          <div class="hint-block" style="padding-top:22px;">
+            Current cycle: <strong id="rad-cycle-desc">${cycleDesc}</strong>.
+            If your physical inventory is in November, set this to <strong>December</strong>
+            so RAD accumulates Dec → Nov.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Monthly RAD Values</h2></div>
       <div class="card-body">
         <table class="data-table rad-table">
-          <thead><tr><th>Month</th><th class="r">RAD this month</th><th class="r">YTD running total</th></tr></thead>
+          <thead><tr>
+            <th>Month</th>
+            <th class="r">RAD this month</th>
+            <th class="r" id="rad-running-hdr">Running total (${MONTH_NAMES[cycleStart-1]} cycle)</th>
+          </tr></thead>
           <tbody>`;
-  let running = 0, currentYear = null;
+
+  let running = 0;
   for (const mk of monthsToShow) {
-    const y = parseInt(mk.slice(0, 4), 10);
-    if (y !== currentYear) { currentYear = y; running = 0; }
+    const {month} = parseMonthKey(mk);
+    if (month === cycleStart) running = 0;   // reset at cycle start
     const v = safe((state.rad || {})[mk]);
     running += v;
     html += `<tr>
@@ -1829,10 +1947,23 @@ function renderRad() {
   app.innerHTML = html;
 }
 
+window.onRadCycleChange = function(v) {
+  const m = parseInt(v, 10);
+  if (m < 1 || m > 12) return;
+  const end = m === 1 ? 12 : m - 1;
+  const desc = m === 1
+    ? 'Jan → Dec (calendar year)'
+    : `${MONTH_NAMES[m-1]} → ${MONTH_NAMES[end-1]} (spans the calendar year boundary)`;
+  const d = document.getElementById('rad-cycle-desc'); if (d) d.textContent = desc;
+  const h = document.getElementById('rad-running-hdr'); if (h) h.textContent = `Running total (${MONTH_NAMES[m-1]} cycle)`;
+};
+
 window.saveRad = function(ev) {
   ev.preventDefault();
   const fd = new FormData(ev.target);
   const state = loadState();
+  const newCycle = parseInt(fd.get('radCycleStartMonth') || '1', 10);
+  state.radCycleStartMonth = (newCycle >= 1 && newCycle <= 12) ? newCycle : 1;
   state.rad = {};
   for (const [k, v] of fd.entries()) {
     if (k.startsWith('rad_')) {
@@ -1842,7 +1973,7 @@ window.saveRad = function(ev) {
     }
   }
   saveState(state);
-  toast('RAD values saved', 'success');
+  toast('RAD settings saved', 'success');
   renderRad();
   return false;
 };
@@ -2038,6 +2169,100 @@ window.saveBulk = function(ev) {
   return false;
 };
 
+// ── Store management ──────────────────────────────────────────
+function renderStores() {
+  setActiveNav('');
+  const meta = loadMeta();
+  const stores = Object.values(meta.stores).sort((a, b) => a.name.localeCompare(b.name));
+
+  let storeCards = '';
+  for (const s of stores) {
+    const isActive = s.id === meta.activeStore;
+    // Peek at the store's state without switching
+    let months = 0, hasGL = false;
+    try { const st = JSON.parse(localStorage.getItem(stateKeyFor(s.id)) || '{}'); months = Object.keys(st.inputs || {}).length; } catch(e) {}
+    hasGL = !!localStorage.getItem(glKeyFor(s.id));
+    storeCards += `
+      <div class="store-card${isActive ? ' active-store' : ''}">
+        <input class="store-name-input" value="${escapeHTML(s.name)}" onchange="renameStore('${s.id}', this.value)" title="Click to rename">
+        <span class="store-meta">${months} month${months !== 1 ? 's' : ''}${hasGL ? ' · GL loaded' : ''}</span>
+        ${isActive
+          ? '<span class="active-badge">Active</span>'
+          : `<button class="btn btn-primary btn-sm" onclick="switchStore('${s.id}')">Switch to this store</button>
+             <button class="btn btn-danger btn-sm" onclick="deleteStore('${s.id}')">Delete</button>`}
+      </div>`;
+  }
+
+  const html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Manage Stores</h1>
+      <p class="page-sub">Each store has its own inputs, GL file, RAD values, and cycle settings. Switch between them without losing any data.</p>
+    </div>
+    <div class="ph-right"><a href="#/" class="btn btn-link">← Dashboard</a></div>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><h2>Your Stores</h2></div>
+    <div class="card-body">
+      <div class="store-list">${storeCards}</div>
+      <p class="hint">Click a store name to rename it. Renaming takes effect immediately.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><h2>Add a New Store</h2></div>
+    <div class="card-body">
+      <form onsubmit="return createStore(event)" style="display:flex; gap:10px; align-items:flex-end;">
+        <label style="flex:1;">
+          <span style="display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:3px; text-transform:uppercase; letter-spacing:.3px;">Store name</span>
+          <input id="new-store-name" type="text" placeholder="e.g. HML Clarenville" style="width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px;" required>
+        </label>
+        <button type="submit" class="btn btn-primary">Create store &amp; switch to it</button>
+      </form>
+    </div>
+  </section>`;
+
+  app.innerHTML = html;
+}
+
+window.createStore = function(ev) {
+  ev.preventDefault();
+  const name = String(document.getElementById('new-store-name').value || '').trim();
+  if (!name) return false;
+  const meta = loadMeta();
+  const id = 's' + Date.now().toString(36);
+  meta.stores[id] = { id, name };
+  saveMeta(meta);
+  toast('Created store: ' + name, 'success');
+  window.switchStore(id);
+  return false;
+};
+
+window.renameStore = function(id, newName) {
+  newName = String(newName || '').trim();
+  if (!newName) return;
+  const meta = loadMeta();
+  if (!meta.stores[id]) return;
+  meta.stores[id].name = newName;
+  saveMeta(meta);
+  updateStoreNav();
+};
+
+window.deleteStore = function(id) {
+  const meta = loadMeta();
+  if (!meta.stores[id] || id === meta.activeStore) return;
+  const name = meta.stores[id].name;
+  if (!confirm(`Delete store "${name}"? All inputs, GL data, and RAD values for this store will be permanently removed.`)) return;
+  localStorage.removeItem(stateKeyFor(id));
+  localStorage.removeItem(glKeyFor(id));
+  delete meta.stores[id];
+  saveMeta(meta);
+  toast('Deleted store: ' + name, 'success');
+  renderStores();
+  updateStoreNav();
+};
+
 // ── Router ────────────────────────────────────────────────────
 function route() {
   const h = location.hash || '#/';
@@ -2057,6 +2282,8 @@ function route() {
     renderRad();
   } else if (h === '#/bulk') {
     renderBulk();
+  } else if (h === '#/stores') {
+    renderStores();
   } else {
     renderDashboard();
   }
@@ -2064,7 +2291,7 @@ function route() {
 }
 
 window.addEventListener('hashchange', route);
-window.addEventListener('DOMContentLoaded', route);
+window.addEventListener('DOMContentLoaded', () => { initStores(); updateStoreNav(); route(); });
 </script>
 
 </body>
