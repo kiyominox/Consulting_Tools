@@ -190,11 +190,41 @@ h3.grp:first-child{margin-top:0;}
 .lg-step13{background:#ffe4d6; color:#b04200;}
 .lg-ignore{background:#ececec; color:var(--muted);}
 .lg-review{background:#fff3e0; color:var(--warn);}
-.review-table .dec-select{font-size:12px; padding:3px 6px; border:1px solid var(--border); border-radius:4px; background:#fff;}
-.review-table tr.dec-step11 td{background:#f3f9ed;}
-.review-table tr.dec-step13 td{background:#fdf0e8;}
-.review-table tr.dec-ignore td{background:#f7f7f7; color:var(--muted);}
-.review-table tr.dec-review td{background:#fffbe5;}
+
+/* Review table — sortable / filterable */
+.review-wrap{overflow:auto; border:1px solid var(--border); border-radius:var(--radius); background:#fff; max-height:72vh;}
+.rev-table{border-collapse:separate; border-spacing:0; width:100%; font-size:12px;}
+.rev-table th,.rev-table td{padding:5px 8px; border-bottom:1px solid var(--border-soft); white-space:nowrap; text-align:left; vertical-align:middle;}
+.rev-table thead th{position:sticky; background:#f3f6fa; z-index:2;}
+.rev-table thead .hdr-row th{top:0; cursor:pointer; user-select:none; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--text-soft); border-bottom:1px solid var(--border);}
+.rev-table thead .hdr-row th:hover{background:#e9eff7;}
+.rev-table thead .hdr-row th.sorted{color:var(--primary);}
+.rev-table thead .flt-row th{top:28px; padding:3px 6px; z-index:1;}
+.rev-table thead .flt-row input{width:100%; min-width:54px; padding:3px 5px; border:1px solid var(--border); border-radius:3px; font-size:11px; font-family:inherit; font-weight:400; text-transform:none; letter-spacing:0;}
+.rev-table td.r,.rev-table th.r{text-align:right; font-variant-numeric:tabular-nums;}
+.rev-table tbody tr:hover td{background:var(--row-hi);}
+.rev-table .sort-arrow{font-size:9px; margin-left:3px;}
+.rev-table td.muted{color:var(--muted); max-width:280px; overflow:hidden; text-overflow:ellipsis;}
+
+.st-badge{display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; white-space:nowrap;}
+.st-11{background:#e2efda; color:var(--ok);}
+.st-13{background:#ffe4d6; color:#b04200;}
+.st-rev{background:#fff3e0; color:var(--warn);}
+.st-none{background:#eef0f3; color:var(--muted);}
+.st-forced{box-shadow:0 0 0 2px rgba(31,78,121,.4);}
+
+.dec-btns{display:inline-flex; gap:3px;}
+.dec-btn{padding:3px 7px; border:1px solid var(--border); border-radius:4px; background:#fff; font-size:11px; font-weight:600; cursor:pointer; color:var(--text-soft); font-family:inherit; line-height:1.2;}
+.dec-btn:hover{border-color:var(--primary-2); color:var(--primary);}
+.dec-btn.active-11{background:var(--ok); color:#fff; border-color:var(--ok);}
+.dec-btn.active-13{background:#b04200; color:#fff; border-color:#b04200;}
+.dec-btn.active-ig{background:var(--muted); color:#fff; border-color:var(--muted);}
+.dec-btn.active-auto{background:var(--primary); color:#fff; border-color:var(--primary);}
+
+.rev-toggle{display:inline-flex; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+.rev-toggle button{padding:6px 12px; border:0; background:#fff; font-size:12px; font-weight:600; cursor:pointer; color:var(--text-soft); font-family:inherit;}
+.rev-toggle button.active{background:var(--primary); color:#fff;}
+.rev-toggle button + button{border-left:1px solid var(--border);}
 
 /* RAD */
 .rad-input{width:130px; text-align:right;}
@@ -512,48 +542,48 @@ function rowId(row) {
   return ref + '|' + dtS + '|' + amt + '|' + ctrl;
 }
 
-function classifyGL(rows, recYear, recMonth) {
+function classifyRow(r, recYear, recMonth) {
+  if (!r['Acctg. Date']) return null;
+  const acctgDate = new Date(r['Acctg. Date']);
+  if (isNaN(acctgDate)) return null;
   const recStart = new Date(recYear, recMonth - 1, 1);
   const recEnd   = new Date(recYear, recMonth - 1, lastDay(recYear, recMonth));
-  const s1 = [], s2 = [], rv = [];
-
-  for (const r of rows) {
-    if (!r['Acctg. Date']) continue;
-    const journal = String(r.Journal || '').trim();
-    if (SALES_JOURNALS.has(journal)) continue;
-
-    const acctgDate = new Date(r['Acctg. Date']);
-    if (isNaN(acctgDate)) continue;
-
-    const ym = getControlYm(r, acctgDate);
-    const rec = Object.assign({}, r, {_row_id: rowId(r)});
-
+  const journal  = String(r.Journal || '').trim();
+  const isSales  = SALES_JOURNALS.has(journal);
+  const ym = getControlYm(r, acctgDate);
+  let auto = 'none';
+  if (!isSales) {
     if (acctgDate >= recStart && acctgDate <= recEnd) {
-      if (ym && (ym.year > recYear || (ym.year === recYear && ym.month > recMonth))) {
-        s1.push(rec);
-      }
+      if (ym && (ym.year > recYear || (ym.year === recYear && ym.month > recMonth))) auto = 'step13';
     } else if (acctgDate > recEnd) {
-      if (ym && (ym.year < recYear || (ym.year === recYear && ym.month <= recMonth))) {
-        s2.push(rec);
-      } else if (!ym && hasNontrivialControl(r)) {
-        rv.push(rec);
-      }
+      if (ym && (ym.year < recYear || (ym.year === recYear && ym.month <= recMonth))) auto = 'step11';
+      else if (!ym && hasNontrivialControl(r)) auto = 'review';
     }
   }
-  return {s1, s2, rv};
+  return {auto, ym, acctgDate, recStart, recEnd, isSales};
 }
 
-function applyReviewDecisions(s1, s2, rv, decisions) {
-  if (!rv.length || !decisions) return {s1, s2, rv};
-  const newS1 = s1.slice(), newS2 = s2.slice(), newRv = [];
-  for (const r of rv) {
-    const d = decisions[r._row_id];
-    if (d === 'step11')      newS2.push(r);
-    else if (d === 'step13') newS1.push(r);
-    else if (d === 'ignore') { /* drop */ }
-    else                     newRv.push(r);
+// Classify every GL row for a rec month, applying per-row decisions as overrides.
+// Returns effective Step 13 (s1), Step 11 (s2), still-needs-review (rv), and the
+// full reconcilable universe (rec month onward, non-sales) for the review page.
+function classifyAll(rows, recYear, recMonth, decisions) {
+  decisions = decisions || {};
+  const s1 = [], s2 = [], rv = [], universe = [];
+  for (const r of rows) {
+    const cl = classifyRow(r, recYear, recMonth);
+    if (!cl) continue;
+    const rid = rowId(r);
+    const rawDec = decisions[rid];
+    const dec = (rawDec && rawDec !== 'auto') ? rawDec : null;
+    const rec = Object.assign({}, r, {_row_id: rid, _auto: cl.auto, _decision: dec});
+    const eff = dec || cl.auto;
+    rec._effective = (eff === 'review') ? 'none' : eff;
+    if (eff === 'step13')      s1.push(rec);
+    else if (eff === 'step11') s2.push(rec);
+    else if (eff === 'review') rv.push(rec);
+    if ((!cl.isSales && cl.acctgDate >= cl.recStart) || dec) universe.push(rec);
   }
-  return {s1: newS1, s2: newS2, rv: newRv};
+  return {s1, s2, rv, universe};
 }
 
 // ── Reconciliation calculation ────────────────────────────────
@@ -621,10 +651,9 @@ function buildRec(state, glRows, mkey) {
   const {year, month} = parseMonthKey(mkey);
   let s1 = [], s2 = [], rv = [];
   if (glRows) {
-    const c = classifyGL(glRows, year, month);
     const decisions = (state.reviewDecisions || {})[mkey] || {};
-    const a = applyReviewDecisions(c.s1, c.s2, c.rv, decisions);
-    s1 = a.s1; s2 = a.s2; rv = a.rv;
+    const c = classifyAll(glRows, year, month, decisions);
+    s1 = c.s1; s2 = c.s2; rv = c.rv;
   }
   const s1Total = s1.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
   const s2Total = s2.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
@@ -1752,6 +1781,140 @@ function renderMonthDetail(mkey) {
 }
 
 // ── Review page ───────────────────────────────────────────────
+let _rev = null;   // {mkey, year, month, rows, sort:{col,dir}, filters:{}, view}
+
+const REVIEW_COLS = [
+  {key:'date',     label:'Acctg. Date', disp:r=>fmtDate(r['Acctg. Date']), sv:r=>{const d=new Date(r['Acctg. Date']); return isNaN(d)?-Infinity:d.getTime();}},
+  {key:'account',  label:'Acct',        disp:r=>r.Account || ''},
+  {key:'journal',  label:'Jrnl',        disp:r=>r.Journal || ''},
+  {key:'wip',      label:'WIP',         disp:r=>r.WIP || ''},
+  {key:'ref',      label:'Reference',   cls:'mono', disp:r=>r.Reference || ''},
+  {key:'amount',   label:'Amount',      cls:'r', disp:r=>fmtMoney(r['Amount $']), sv:r=>Number(r['Amount $'] || 0)},
+  {key:'control',  label:'Control',     disp:r=>r.Control || ''},
+  {key:'control2', label:'Control2',    disp:r=>r.Control2 || ''},
+  {key:'desc',     label:'Description', cls:'muted', disp:r=>r['Posting Description'] || ''},
+  {key:'status',   label:'Status',      disp:r=>_reviewStatus(r).txt, sv:r=>({'Step 11 (add)':1,'Step 13 (subtract)':2,'Needs review':3,'Not included':4}[_reviewStatus(r).txt]||9)},
+];
+
+function _reviewStatus(r) {
+  const eff = (r._decision || r._auto);
+  const e = (eff === 'review') ? 'none' : eff;
+  const forced = !!r._decision;
+  if (e === 'step11') return {txt:'Step 11 (add)', cls:'st-11', forced};
+  if (e === 'step13') return {txt:'Step 13 (subtract)', cls:'st-13', forced};
+  if (r._auto === 'review' && !r._decision) return {txt:'Needs review', cls:'st-rev', forced};
+  return {txt:'Not included', cls:'st-none', forced};
+}
+
+function _reviewCounts() {
+  let needs = 0, s11 = 0, s13 = 0;
+  for (const r of _rev.rows) {
+    const shown = r._decision || r._auto;
+    if (r._auto === 'review' && !r._decision) needs++;
+    if (shown === 'step11') s11++;
+    else if (shown === 'step13') s13++;
+  }
+  return {needs, s11, s13, total: _rev.rows.length};
+}
+
+function _reviewVisibleRows() {
+  let rows = _rev.rows;
+  if (_rev.view === 'needs') rows = rows.filter(r => r._auto === 'review' && !r._decision);
+  for (const col of REVIEW_COLS) {
+    const f = (_rev.filters[col.key] || '').trim().toLowerCase();
+    if (f) rows = rows.filter(r => String(col.disp(r)).toLowerCase().includes(f));
+  }
+  const col = REVIEW_COLS.find(c => c.key === _rev.sort.col) || REVIEW_COLS[0];
+  const dir = _rev.sort.dir === 'desc' ? -1 : 1;
+  const sv = r => col.sv ? col.sv(r) : String(col.disp(r)).toLowerCase();
+  return rows.slice().sort((a, b) => { const x = sv(a), y = sv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+}
+
+function _reviewHeaderRow() {
+  let h = '';
+  for (const col of REVIEW_COLS) {
+    const sorted = _rev.sort.col === col.key;
+    const arrow = sorted ? (_rev.sort.dir === 'asc' ? '▲' : '▼') : '';
+    h += `<th class="${col.cls === 'r' ? 'r ' : ''}${sorted ? 'sorted' : ''}" onclick="reviewSort('${col.key}')">${escapeHTML(col.label)}<span class="sort-arrow">${arrow}</span></th>`;
+  }
+  return h + `<th>Classify</th>`;
+}
+
+function _reviewFilterRow() {
+  let h = '';
+  for (const col of REVIEW_COLS) {
+    h += `<th><input type="text" placeholder="filter" value="${escapeHTML(_rev.filters[col.key] || '')}" oninput="reviewFilter('${col.key}', this.value)"></th>`;
+  }
+  return h + `<th></th>`;
+}
+
+function renderReviewBody() {
+  const tbody = document.getElementById('review-tbody');
+  if (!tbody) return;
+  const rows = _reviewVisibleRows();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${REVIEW_COLS.length + 1}" class="empty">No entries match the current filters.</td></tr>`;
+    return;
+  }
+  let h = '';
+  for (const r of rows) {
+    const st = _reviewStatus(r);
+    const shown = r._decision || r._auto;
+    h += '<tr>';
+    for (const col of REVIEW_COLS) {
+      if (col.key === 'status') {
+        h += `<td><span class="st-badge ${st.cls}${st.forced ? ' st-forced' : ''}">${escapeHTML(st.txt)}</span></td>`;
+      } else {
+        h += `<td class="${col.cls || ''}">${escapeHTML(String(col.disp(r)))}</td>`;
+      }
+    }
+    h += `<td><div class="dec-btns">
+        <button type="button" class="dec-btn${shown === 'step11' ? ' active-11' : ''}" title="Include in Step 11 (add to GL)" onclick="setReviewDecision(${r._idx},'step11')">+11</button>
+        <button type="button" class="dec-btn${shown === 'step13' ? ' active-13' : ''}" title="Include in Step 13 (subtract from GL)" onclick="setReviewDecision(${r._idx},'step13')">&minus;13</button>
+        <button type="button" class="dec-btn${r._decision === 'ignore' ? ' active-ig' : ''}" title="Exclude this entry" onclick="setReviewDecision(${r._idx},'ignore')">Ign</button>
+        <button type="button" class="dec-btn${!r._decision ? ' active-auto' : ''}" title="Use automatic classification" onclick="setReviewDecision(${r._idx},'auto')">Auto</button>
+      </div></td>`;
+    h += '</tr>';
+  }
+  tbody.innerHTML = h;
+}
+
+function updateReviewCounts() {
+  const c = _reviewCounts();
+  const e = document.getElementById('rev-counts');
+  if (e) e.innerHTML = `<strong>${c.s11}</strong> in Step 11 &middot; <strong>${c.s13}</strong> in Step 13 &middot; <strong>${c.needs}</strong> still need review`;
+  const nb = document.getElementById('rev-toggle-needs'); if (nb) nb.textContent = `Needs review (${c.needs})`;
+  const ab = document.getElementById('rev-toggle-all');   if (ab) ab.textContent = `All entries (${c.total})`;
+}
+
+window.reviewSort = function(col) {
+  if (_rev.sort.col === col) _rev.sort.dir = _rev.sort.dir === 'asc' ? 'desc' : 'asc';
+  else { _rev.sort.col = col; _rev.sort.dir = 'asc'; }
+  const hr = document.getElementById('review-hdr-row'); if (hr) hr.innerHTML = _reviewHeaderRow();
+  renderReviewBody();
+};
+
+window.reviewFilter = function(col, val) { _rev.filters[col] = val; renderReviewBody(); };
+
+window.reviewSetView = function(v) {
+  _rev.view = v;
+  document.querySelectorAll('.rev-toggle button').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  renderReviewBody();
+};
+
+window.setReviewDecision = function(idx, val) {
+  const row = _rev.rows[idx];
+  if (!row) return;
+  const state = loadState();
+  state.reviewDecisions = state.reviewDecisions || {};
+  const md = state.reviewDecisions[_rev.mkey] = state.reviewDecisions[_rev.mkey] || {};
+  if (val === 'auto') { delete md[row._row_id]; row._decision = null; }
+  else { md[row._row_id] = val; row._decision = val; }
+  saveState(state);
+  renderReviewBody();
+  updateReviewCounts();
+};
+
 function renderReview(mkey) {
   setActiveNav('dashboard');
   const glRows = loadGL();
@@ -1762,108 +1925,65 @@ function renderReview(mkey) {
   }
   const state = loadState();
   const {year, month} = parseMonthKey(mkey);
-  const c = classifyGL(glRows, year, month);
   const decisions = (state.reviewDecisions || {})[mkey] || {};
+  const c = classifyAll(glRows, year, month, decisions);
+  const rows = c.universe;
+  rows.forEach((r, i) => r._idx = i);
+  const needs = rows.filter(r => r._auto === 'review' && !r._decision).length;
+  _rev = {mkey, year, month, rows, sort:{col:'date', dir:'asc'}, filters:{}, view: needs ? 'needs' : 'all'};
 
   let html = `
   <div class="page-header">
     <div class="ph-left">
       <h1>Review GL Entries – ${monthLabel(year, month)}</h1>
       <p class="page-sub">
-        These GL entries posted after ${monthLabel(year, month)} but have a non-month control value
-        (e.g.&nbsp;a JE reference or invoice number).  Decide whether each belongs in
-        Step&nbsp;11, Step&nbsp;13, or should be ignored.
+        Sort or filter any column.  Use the buttons on each row to force an entry into
+        <strong>Step&nbsp;11</strong> (add to GL), <strong>Step&nbsp;13</strong> (subtract), ignore it,
+        or return it to automatic.  For example, a March entry with a blank Control that should have
+        been Feb can be set to Step&nbsp;11 so it gets included.  Changes save automatically.
       </p>
     </div>
-    <div class="ph-right">
-      <a href="#/month/${mkey}" class="btn btn-link">← Back to rec</a>
-    </div>
-  </div>`;
+    <div class="ph-right"><a href="#/month/${mkey}" class="btn btn-link">← Back to rec</a></div>
+  </div>
 
-  if (!c.rv.length) {
-    html += `<section class="card"><div class="card-body"><p class="empty">No entries to review for this month.</p></div></section>`;
+  <section class="card">
+    <div class="card-header" style="gap:16px; flex-wrap:wrap;">
+      <div class="rev-toggle">
+        <button type="button" id="rev-toggle-needs" data-v="needs" class="${_rev.view === 'needs' ? 'active' : ''}" onclick="reviewSetView('needs')">Needs review (${needs})</button>
+        <button type="button" id="rev-toggle-all" data-v="all" class="${_rev.view === 'all' ? 'active' : ''}" onclick="reviewSetView('all')">All entries (${rows.length})</button>
+      </div>
+      <div class="legend">
+        <span class="st-badge st-11">Step 11</span>
+        <span class="st-badge st-13">Step 13</span>
+        <span class="st-badge st-rev">Needs review</span>
+        <span class="st-badge st-none">Not included</span>
+      </div>
+      <span id="rev-counts" class="hint" style="margin-left:auto;"></span>
+    </div>
+    <div class="card-body">`;
+
+  if (!rows.length) {
+    html += `<p class="empty">No reconcilable GL entries dated ${monthLabel(year, month)} or later.</p></div></section>`;
     app.innerHTML = html;
     return;
   }
 
-  c.rv.sort((a, b) => {
-    const da = new Date(a['Acctg. Date']).getTime();
-    const db = new Date(b['Acctg. Date']).getTime();
-    return da - db;
-  });
-
   html += `
-  <form onsubmit="return saveReview(event, '${mkey}')">
-    <section class="card">
-      <div class="card-header">
-        <h2>${c.rv.length} flagged entries</h2>
-        <div class="legend">
-          <span class="lg lg-step11">Step 11 (add)</span>
-          <span class="lg lg-step13">Step 13 (subtract)</span>
-          <span class="lg lg-ignore">Ignore</span>
-          <span class="lg lg-review">Leave for review</span>
-        </div>
-      </div>
-      <div class="card-body">
-        <table class="data-table compact review-table">
-          <thead><tr>
-            <th>Acctg. Date</th><th>Acct</th><th>Jrnl</th><th>Reference</th>
-            <th class="r">Amount</th><th>Control</th><th>Control2</th>
-            <th>Description</th><th>Decision</th>
-          </tr></thead>
-          <tbody>`;
-  for (const r of c.rv) {
-    const d = decisions[r._row_id] || 'review';
-    html += `
-            <tr class="dec-${d}">
-              <td>${fmtDate(r['Acctg. Date'])}</td>
-              <td>${escapeHTML(r.Account || '')}</td>
-              <td>${escapeHTML(r.Journal || '')}</td>
-              <td class="mono">${escapeHTML(r.Reference || '')}</td>
-              <td class="r">${fmtMoney(r['Amount $'])}</td>
-              <td>${escapeHTML(r.Control || '')}</td>
-              <td>${escapeHTML(r.Control2 || '')}</td>
-              <td class="muted">${escapeHTML(r['Posting Description'] || '')}</td>
-              <td>
-                <select name="row::${escapeHTML(r._row_id)}" class="dec-select" onchange="this.parentElement.parentElement.className='dec-'+this.value">
-                  <option value="review" ${d==='review'?'selected':''}>· review later</option>
-                  <option value="step11" ${d==='step11'?'selected':''}>+ Step 11 (add to GL)</option>
-                  <option value="step13" ${d==='step13'?'selected':''}>− Step 13 (subtract)</option>
-                  <option value="ignore" ${d==='ignore'?'selected':''}>✗ ignore</option>
-                </select>
-              </td>
-            </tr>`;
-  }
-  html += `
-          </tbody>
+      <div class="review-wrap">
+        <table class="rev-table">
+          <thead>
+            <tr class="hdr-row" id="review-hdr-row">${_reviewHeaderRow()}</tr>
+            <tr class="flt-row">${_reviewFilterRow()}</tr>
+          </thead>
+          <tbody id="review-tbody"></tbody>
         </table>
       </div>
-    </section>
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary">Save decisions</button>
-      <a href="#/month/${mkey}" class="btn btn-link">Cancel</a>
     </div>
-  </form>`;
+  </section>`;
   app.innerHTML = html;
+  renderReviewBody();
+  updateReviewCounts();
 }
-
-window.saveReview = function(ev, mkey) {
-  ev.preventDefault();
-  const fd = new FormData(ev.target);
-  const state = loadState();
-  state.reviewDecisions = state.reviewDecisions || {};
-  state.reviewDecisions[mkey] = {};
-  for (const [k, v] of fd.entries()) {
-    if (k.startsWith('row::')) {
-      const rid = k.slice(5);
-      if (v !== 'review') state.reviewDecisions[mkey][rid] = v;
-    }
-  }
-  saveState(state);
-  toast('Review decisions saved', 'success');
-  location.hash = '#/month/' + mkey;
-  return false;
-};
 
 // ── RAD page ──────────────────────────────────────────────────
 function renderRad() {
@@ -1995,6 +2115,42 @@ const BULK_GROUPS = [
 
 let bulkExtraMonths = [];
 
+function _caretAtStart(inp) { try { return inp.selectionStart === 0 && inp.selectionEnd === 0; } catch (e) { return true; } }
+function _caretAtEnd(inp)   { try { return inp.selectionStart === inp.value.length && inp.selectionEnd === inp.value.length; } catch (e) { return true; } }
+
+window.bulkKeyNav = function(e) {
+  const inp = e.target;
+  if (!inp || inp.tagName !== 'INPUT') return;
+  const td = inp.closest('td'), tr = inp.closest('tr');
+  if (!td || !tr) return;
+  const ci = td.cellIndex;
+  const focusCell = (row, colIdx) => {
+    if (!row || colIdx < 0) return false;
+    const cell = row.cells[colIdx];
+    if (!cell) return false;
+    const t = cell.querySelector('input');
+    if (!t) return false;
+    t.focus();
+    try { t.select(); } catch (_) {}
+    return true;
+  };
+  switch (e.key) {
+    case 'ArrowDown':
+    case 'Enter':
+      if (focusCell(tr.nextElementSibling, ci)) e.preventDefault();
+      break;
+    case 'ArrowUp':
+      if (focusCell(tr.previousElementSibling, ci)) e.preventDefault();
+      break;
+    case 'ArrowLeft':
+      if (_caretAtStart(inp) && focusCell(tr, ci - 1)) e.preventDefault();
+      break;
+    case 'ArrowRight':
+      if (_caretAtEnd(inp) && focusCell(tr, ci + 1)) e.preventDefault();
+      break;
+  }
+};
+
 function bulkMonthList(state) {
   const s = new Set([...Object.keys(state.inputs || {}), ...Object.keys(state.rad || {}), ...bulkExtraMonths]);
   return [...s].sort();
@@ -2008,10 +2164,10 @@ function bulkRowHTML(mkey, inp, radVal) {
     g.fields.forEach(([f], i) => {
       const cls = i === 0 ? ' class="grp-start"' : '';
       if (f === '__rad') {
-        tds += `<td${cls}><input type="number" step="0.01" name="b_${mkey}___rad" value="${(radVal != null && radVal !== '') ? radVal : ''}"></td>`;
+        tds += `<td${cls}><input type="text" inputmode="decimal" name="b_${mkey}___rad" value="${(radVal != null && radVal !== '') ? radVal : ''}"></td>`;
       } else {
         const v = inp[f];
-        tds += `<td${cls}><input type="number" step="0.01" name="b_${mkey}_${f}" value="${(v != null && v !== 0) ? v : ''}"></td>`;
+        tds += `<td${cls}><input type="text" inputmode="decimal" name="b_${mkey}_${f}" value="${(v != null && v !== 0) ? v : ''}"></td>`;
       }
     });
   }
@@ -2045,8 +2201,10 @@ function renderBulk() {
       <h1>Bulk Entry</h1>
       <p class="page-sub">
         Enter values for many months on one page — fill straight down a column while
-        reading a year of balances off the MGR, WIP, or cores report.  GL balance columns
-        are pre-filled if you imported the Account Balance History.  Click <strong>Save all</strong> when done.
+        reading a year of balances off the MGR, WIP, or cores report.  Use
+        <strong>↑ ↓ or Enter</strong> to move down a column and <strong>← →</strong> (or Tab)
+        to move across.  GL balance columns are pre-filled if you imported the Account Balance
+        History.  Click <strong>Save all</strong> when done.
       </p>
     </div>
   </div>
@@ -2076,7 +2234,7 @@ function renderBulk() {
     html += `
       <form id="bulk-form" onsubmit="return saveBulk(event)">
         <div class="bulk-wrap">
-          <table class="bulk-table">
+          <table class="bulk-table" onkeydown="bulkKeyNav(event)">
             <thead>
               <tr class="grp-row">${grpRow}</tr>
               <tr class="fld-row">${fldRow}</tr>
