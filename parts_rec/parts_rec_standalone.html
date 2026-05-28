@@ -542,25 +542,34 @@ function rowId(row) {
   return ref + '|' + dtS + '|' + amt + '|' + ctrl;
 }
 
+// Calendar-day integer (YYYYMMDD) from local date components. Comparing at
+// day granularity avoids time-of-day artifacts: SheetJS bakes a small
+// offset (e.g. 00:00:52) into each date, which would otherwise push entries
+// posted on the last day of the rec month past a midnight recEnd boundary.
+function localDayNum(d) {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
 function classifyRow(r, recYear, recMonth) {
   if (!r['Acctg. Date']) return null;
   const acctgDate = new Date(r['Acctg. Date']);
   if (isNaN(acctgDate)) return null;
-  const recStart = new Date(recYear, recMonth - 1, 1);
-  const recEnd   = new Date(recYear, recMonth - 1, lastDay(recYear, recMonth));
+  const aDay     = localDayNum(acctgDate);
+  const startDay = recYear * 10000 + recMonth * 100 + 1;
+  const endDay   = recYear * 10000 + recMonth * 100 + lastDay(recYear, recMonth);
   const journal  = String(r.Journal || '').trim();
   const isSales  = SALES_JOURNALS.has(journal);
   const ym = getControlYm(r, acctgDate);
   let auto = 'none';
   if (!isSales) {
-    if (acctgDate >= recStart && acctgDate <= recEnd) {
+    if (aDay >= startDay && aDay <= endDay) {
       if (ym && (ym.year > recYear || (ym.year === recYear && ym.month > recMonth))) auto = 'step13';
-    } else if (acctgDate > recEnd) {
+    } else if (aDay > endDay) {
       if (ym && (ym.year < recYear || (ym.year === recYear && ym.month <= recMonth))) auto = 'step11';
       else if (!ym && hasNontrivialControl(r)) auto = 'review';
     }
   }
-  return {auto, ym, acctgDate, recStart, recEnd, isSales};
+  return {auto, ym, acctgDate, aDay, startDay, endDay, isSales};
 }
 
 // Classify every GL row for a rec month, applying per-row decisions as overrides.
@@ -581,7 +590,7 @@ function classifyAll(rows, recYear, recMonth, decisions) {
     if (eff === 'step13')      s1.push(rec);
     else if (eff === 'step11') s2.push(rec);
     else if (eff === 'review') rv.push(rec);
-    if ((!cl.isSales && cl.acctgDate >= cl.recStart) || dec) universe.push(rec);
+    if ((!cl.isSales && cl.aDay >= cl.startDay) || dec) universe.push(rec);
   }
   return {s1, s2, rv, universe};
 }
