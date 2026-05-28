@@ -1159,9 +1159,7 @@ function renderDashboard() {
           <td class="r mono">${fmtMoney(r.calc.s2Total)}</td>
           <td class="r">${fmtMoney(r.calc.radYTD)}</td>
           <td class="c">
-            ${r.reviewCount > 0
-              ? `<a href="#/review/${mk}" class="badge badge-review">${r.reviewCount}</a>`
-              : `<span class="badge badge-ok-small">0</span>`}
+            <a href="#/review/${mk}" class="badge ${r.reviewCount > 0 ? 'badge-review' : 'badge-ok-small'}">${r.reviewCount}</a>
           </td>
           <td class="actions">
             <a href="#/inputs/${mk}" title="Edit inputs">✎</a>
@@ -1623,7 +1621,7 @@ function renderMonthDetail(mkey) {
     </div>
     <div class="ph-right">
       <a href="#/inputs/${mkey}" class="btn btn-link">✎ Edit Inputs</a>
-      ${rec.reviewCount ? `<a href="#/review/${mkey}" class="btn btn-warn">Review ${rec.reviewCount} flagged GL entries</a>` : ''}
+      <a href="#/review/${mkey}" class="btn ${rec.reviewCount ? 'btn-warn' : 'btn-link'}">${rec.reviewCount ? `Review ${rec.reviewCount} flagged GL entries` : 'Review GL entries'}</a>
     </div>
   </div>
 
