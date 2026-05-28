@@ -34,17 +34,29 @@ python3 -m http.server 8000
 | File                | Purpose                                            |
 |---------------------|----------------------------------------------------|
 | `index.html`        | Main app (loads `xlsx.full.min.js` from same dir)  |
-| `xlsx.full.min.js`  | SheetJS — parses uploaded Excel files in browser   |
-| `../parts_rec_standalone.html` | Same app, with SheetJS inlined (single file) |
+| `xlsx.full.min.js`  | SheetJS (`xlsx-js-style` build) — reads uploaded Excel files and writes styled `.xlsx` exports in the browser |
+| `../parts_rec_standalone.html` | Same app, with the Excel library inlined (single file) |
 
 ## How it works
 
 1. **Upload GL Detail** (.xlsx export from CDK Drive) – parsed client-side
-2. **Enter monthly inputs** from CDK PDFs (MGR / Value by Source, recap, Fast Lane, GL balance inquiry)
-3. **Enter monthly RAD** – the tool computes the YTD sum (Jan → rec month) for each rec
-4. **Review flagged GL entries** – assign post-rec-month entries with non-month
+2. **Import GL balances** – upload the Account Balance History export (`BUR_ACCTHIST.xlsx`)
+   to auto-fill accounts 24200 / 24300 / 24401 for every month
+3. **Enter monthly inputs** from CDK PDFs (MGR / Value by Source, recap, Fast Lane).
+   Use **Bulk Entry** to type values for many months on one page — fill straight down a
+   column while reading a year of balances off the MGR, WIP, or cores report
+4. **Enter monthly RAD** – the tool computes the YTD sum (Jan → rec month) for each rec
+5. **Review flagged GL entries** – assign post-rec-month entries with non-month
    controls (JEs, invoice numbers) to Step 11 / Step 13 / Ignore
-5. **Dashboard** shows multi-month summary, variance trend, and drill-down to detail
+6. **Dashboard** shows multi-month summary, variance trend, and drill-down to detail
+
+## Exporting
+
+- On each month's detail page, the **Step 11** and **Step 13** GL-entry tables have
+  **Copy** (tab-separated, paste straight into Excel) and **Export .xlsx** buttons
+- The dashboard's **Export to Excel** button builds a polished workbook: a Summary sheet
+  plus one sheet per month with the full reconciliation and its Step 11 / Step 13 detail
+  tables (colour-coded headers, currency formatting, variance highlighting)
 
 ## Data storage
 
