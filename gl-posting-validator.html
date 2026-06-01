@@ -150,11 +150,6 @@
           <div class="tab-pane fade" id="tabNoReceipt"><div id="tableNoReceipt"></div></div>
           <div class="tab-pane fade" id="tabCorrect"><div id="tableCorrect"></div></div>
         </div>
-        <div class="mt-3 text-end">
-          <button class="btn btn-success px-4 fw-semibold" id="exportBtn">
-            📥 Export to Excel
-          </button>
-        </div>
       </div>
     </div>
   </div>
@@ -381,20 +376,24 @@ async function parseRRH(file, knownOrdersUpper) {
     const page = await pdf.getPage(p);
     const tc   = await page.getTextContent();
 
-    // Group text items by rounded Y position
+    // Group text items by rounded Y position.
+    // IMPORTANT: keep the whitespace fragments — PDF.js emits the column
+    // spacing as its own " " items. Dropping them (or re-joining with a
+    // single space) collapses the fixed-width columns and breaks parsing.
     const lineMap = new Map();
     for (const item of tc.items) {
-      if (!item.str.trim()) continue;
       const y = Math.round(item.transform[5]);
       if (!lineMap.has(y)) lineMap.set(y, []);
       lineMap.get(y).push({ text: item.str, x: item.transform[4] });
     }
 
-    // Sort by descending Y (top→bottom) then ascending X (left→right)
+    // Sort by descending Y (top→bottom) then ascending X (left→right),
+    // then concatenate fragments as-is to reproduce the printed line.
     const ys = [...lineMap.keys()].sort((a, b) => b - a);
     for (const y of ys) {
       const items = lineMap.get(y).sort((a, b) => a.x - b.x);
-      allLines.push(items.map(i => i.str).join(' '));
+      const lineText = items.map(i => i.text).join('').replace(/\s+/g, ' ').trim();
+      if (lineText) allLines.push(lineText);
     }
   }
 
@@ -553,10 +552,13 @@ function runAnalysis(targetMonths) {
 
       const invoices = orderToInvoices.get(orderUpper) || new Set();
       for (const invoice of invoices) {
-        // Already has a GL entry for this month → not missing
-        const hasCorrectGL = glRecords.some(g =>
-          g.ref === invoice && g.controlMonth === rcpt.receiptMonth);
-        if (hasCorrectGL) continue;
+        // If this invoice already has a GL entry in ANY month we're analyzing,
+        // it was already evaluated in the GL loop above — either CORRECT (posted
+        // to the right month) or WRONG MONTH (posted to a different analyzed
+        // month). Either way it's not "missing", so don't list it twice.
+        const alreadyEvaluated = glRecords.some(g =>
+          g.ref === invoice && targetMonths.includes(g.controlMonth));
+        if (alreadyEvaluated) continue;
 
         const key = `${invoice}|${rcpt.receiptMonth}`;
         if (!missingMap.has(key)) {
@@ -700,73 +702,8 @@ function renderResults(results) {
   tabs[3].textContent = `? No Receipt (${results.noReceipt.length})`;
   tabs[4].textContent = `✓ Correct (${results.correct.length})`;
 
-  document.getElementById('resultsSection').style.display = '';
+  document.getElementById('resultsSection').style.display = 'block';
   document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});
-}
-
-// ── Excel Export ───────────────────────────────────────────────────────────
-function exportToExcel() {
-  const res = state.analysisResults;
-  if (!res) return;
-
-  const HEADERS = ['Invoice Ref', 'GL Month', 'GL Amount', 'Status', 'Orders',
-                   'Receipt Dates', 'Receipt Month(s)', 'RRH Value', 'Notes'];
-
-  function rowsToSheet(rows) {
-    const data = [HEADERS];
-    for (const r of rows) {
-      data.push([
-        r.ref, r.controlMonth, r.glAmount, r.status, r.orders,
-        r.receiptDates || '', r.receiptMonths || '', r.rrhValue || '', r.note || ''
-      ]);
-    }
-    return XLSX.utils.aoa_to_sheet(data);
-  }
-
-  function style(ws) {
-    if (!ws['!ref']) return ws;
-    const range = XLSX.utils.decode_range(ws['!ref']);
-    ws['!cols'] = [
-      {wch:14},{wch:10},{wch:14},{wch:20},{wch:30},
-      {wch:25},{wch:18},{wch:12},{wch:40}
-    ];
-    // Bold header row
-    for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = ws[XLSX.utils.encode_cell({r:0, c})];
-      if (cell) {
-        if (!cell.s) cell.s = {};
-        cell.s.font = {bold: true};
-      }
-    }
-    return ws;
-  }
-
-  const wb = XLSX.utils.book_new();
-  const issues = [...res.wrong, ...res.missing, ...res.noReceipt];
-  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(issues)),       'All Issues');
-  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.wrong)),    'Wrong Month');
-  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.missing)),  'Missing from GL');
-  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.noReceipt)),'No RRH Receipt');
-  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.correct)),  'Correct Entries');
-
-  // Summary sheet
-  const S = res.summary;
-  const sumData = [
-    ['GL Posting Month Validator — Summary'],
-    [],
-    ['Metric', 'Count'],
-    ['Total GL Entries Analyzed', S.totalGL],
-    ['Correct Month', S.correct],
-    ['Wrong Month', S.wrongMonth],
-    ['Missing from GL', S.missing],
-    ['No RRH Receipt Data', S.noReceipt]
-  ];
-  const sumWs = XLSX.utils.aoa_to_sheet(sumData);
-  sumWs['!cols'] = [{wch:35},{wch:12}];
-  XLSX.utils.book_append_sheet(wb, sumWs, 'Summary');
-
-  const today = new Date().toISOString().slice(0,10);
-  XLSX.writeFile(wb, `GL_Posting_Validation_${today}.xlsx`);
 }
 
 // ── Main: Analyze ──────────────────────────────────────────────────────────
@@ -774,7 +711,7 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Analyzing…';
-  document.getElementById('progressArea').style.display = '';
+  document.getElementById('progressArea').style.display = 'block';
   document.getElementById('logArea').textContent = '';
   document.getElementById('resultsSection').style.display = 'none';
 
@@ -823,7 +760,6 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
   btn.textContent = '🔍 Analyze';
 });
 
-document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 </script>
 </body>
 </html>
