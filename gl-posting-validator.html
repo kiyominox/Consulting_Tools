@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GL Posting Month Validator</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f4f6fb; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .hero { background: linear-gradient(135deg, #1a3a5c 0%, #2e6da4 100%); color: #fff; padding: 2rem 0 1.5rem; }
+    .hero h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: .5px; }
+    .hero p { opacity: .85; font-size: .95rem; margin-bottom: 0; }
+    .upload-card { border: 2px dashed #c5d5e8; border-radius: 12px; transition: border-color .2s; background: #fff; }
+    .upload-card:hover, .upload-card.has-file { border-color: #2e6da4; }
+    .upload-card.has-file { background: #f0f7ff; }
+    .upload-icon { font-size: 2rem; }
+    .badge-correct { background-color: #198754; }
+    .badge-wrong { background-color: #dc3545; }
+    .badge-partial { background-color: #fd7e14; }
+    .badge-noreceipt { background-color: #6c757d; }
+    .badge-missing { background-color: #dc3545; }
+    .stat-card { border-radius: 10px; padding: 1.2rem 1.5rem; color: #fff; }
+    .stat-card .number { font-size: 2rem; font-weight: 700; }
+    .stat-card .label { font-size: .8rem; opacity: .9; text-transform: uppercase; letter-spacing: .5px; }
+    .table th { background: #e9eff7; font-size: .82rem; text-transform: uppercase; letter-spacing: .4px; white-space: nowrap; }
+    .table td { font-size: .85rem; vertical-align: middle; }
+    .status-badge { font-size: .75rem; padding: .3em .7em; border-radius: 20px; font-weight: 600; color: #fff; }
+    .progress-area { display: none; }
+    #resultsSection { display: none; }
+    .month-header { background: linear-gradient(90deg, #1a3a5c, #2e6da4); color: #fff; padding: .6rem 1rem; border-radius: 8px 8px 0 0; font-weight: 600; }
+    .note-cell { max-width: 200px; font-size: .78rem; color: #666; word-break: break-word; }
+    .orders-cell { max-width: 180px; font-size: .78rem; word-break: break-word; }
+    .tab-pane-inner { padding: 1rem 0; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    .log-area { font-size: .75rem; color: #555; background: #f8f9fa; border-radius: 6px; padding: .8rem; max-height: 120px; overflow-y: auto; font-family: monospace; }
+  </style>
+</head>
+<body>
+
+<div class="hero mb-4">
+  <div class="container">
+    <h1>📋 GL Posting Month Validator</h1>
+    <p>Compare GL entries against receipt history to verify correct posting months (April &amp; May)</p>
+  </div>
+</div>
+
+<div class="container pb-5">
+
+  <!-- Upload Section -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body p-4">
+      <h5 class="fw-bold mb-3">1. Upload Your Reports</h5>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">GL Report <span class="text-muted fw-normal">(Excel)</span></label>
+          <div class="upload-card p-3 text-center position-relative" id="glCard">
+            <div class="upload-icon">📊</div>
+            <div class="fw-semibold text-primary">GL with Control Month</div>
+            <small class="text-muted d-block mb-2">Columns: Reference, Acctg. Date, Amount, Control</small>
+            <input type="file" class="form-control" id="glFile" accept=".xlsx,.xls">
+            <div class="text-success mt-1 file-name" id="glFileName" style="display:none; font-size:.8rem;"></div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">All Data <span class="text-muted fw-normal">(Excel)</span></label>
+          <div class="upload-card p-3 text-center" id="adCard">
+            <div class="upload-icon">📋</div>
+            <div class="fw-semibold text-primary">Invoice / Order Data</div>
+            <small class="text-muted d-block mb-2">Invoice# (col A), Order# (col R), Amount (col Z)</small>
+            <input type="file" class="form-control" id="adFile" accept=".xlsx,.xls">
+            <div class="text-success mt-1 file-name" id="adFileName" style="display:none; font-size:.8rem;"></div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">RRH Receipt History <span class="text-muted fw-normal">(PDF)</span></label>
+          <div class="upload-card p-3 text-center" id="rrhCard">
+            <div class="upload-icon">📄</div>
+            <div class="fw-semibold text-primary">Parts Receipt History</div>
+            <small class="text-muted d-block mb-2">Receipt Date, Order Number, Order Value columns</small>
+            <input type="file" class="form-control" id="rrhFile" accept=".pdf">
+            <div class="text-success mt-1 file-name" id="rrhFileName" style="display:none; font-size:.8rem;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-1 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Months to Analyze</label>
+          <div class="d-flex gap-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="chkApr" value="APR" checked>
+              <label class="form-check-label" for="chkApr">April</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="chkMay" value="MAY" checked>
+              <label class="form-check-label" for="chkMay">May</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="chkMar" value="MAR">
+              <label class="form-check-label" for="chkMar">March</label>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-8 text-end">
+          <button class="btn btn-primary px-4 py-2 fw-semibold" id="analyzeBtn" disabled>
+            🔍 Analyze
+          </button>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div class="progress-area mt-3" id="progressArea">
+        <div class="progress mb-2" style="height:8px;">
+          <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" id="progressBar" style="width:0%"></div>
+        </div>
+        <div class="log-area" id="logArea"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Section -->
+  <div id="resultsSection">
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4" id="summaryCards"></div>
+
+    <!-- Tabs -->
+    <div class="card shadow-sm">
+      <div class="card-header p-0">
+        <ul class="nav nav-tabs border-0" id="resultsTabs" role="tablist">
+          <li class="nav-item"><button class="nav-link active fw-semibold" data-bs-toggle="tab" data-bs-target="#tabAll">All Issues</button></li>
+          <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabWrong">⚠ Wrong Month</button></li>
+          <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabMissing">❌ Missing</button></li>
+          <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabNoReceipt">? No Receipt</button></li>
+          <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabCorrect">✓ Correct</button></li>
+        </ul>
+      </div>
+      <div class="card-body p-3">
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="tabAll"><div id="tableAll"></div></div>
+          <div class="tab-pane fade" id="tabWrong"><div id="tableWrong"></div></div>
+          <div class="tab-pane fade" id="tabMissing"><div id="tableMissing"></div></div>
+          <div class="tab-pane fade" id="tabNoReceipt"><div id="tableNoReceipt"></div></div>
+          <div class="tab-pane fade" id="tabCorrect"><div id="tableCorrect"></div></div>
+        </div>
+        <div class="mt-3 text-end">
+          <button class="btn btn-success px-4 fw-semibold" id="exportBtn">
+            📥 Export to Excel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+// ── PDF.js worker ──────────────────────────────────────────────────────────
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ──────────────────────────────────────────────────────────────────
+let state = {
+  glRecords: [],           // [{ref, acctgDate, amount, controlMonth}]
+  allDataByInvoice: null,  // Map: invoice -> [{order, amount}]
+  orderToInvoices: null,   // Map: order(upper) -> Set of invoice strings
+  rrhByOrder: null,        // Map: order(upper) -> [{receiptDate, receiptMonth, value, line}]
+  analysisResults: null
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function log(msg) {
+  const el = document.getElementById('logArea');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+function setProgress(pct) {
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+const MONTH_NAMES = {
+  JAN:'January', FEB:'February', MAR:'March', APR:'April',
+  MAY:'May', JUN:'June', JUL:'July', AUG:'August',
+  SEP:'September', OCT:'October', NOV:'November', DEC:'December'
+};
+
+function dateToMonth(ddMMMYY) {
+  // "01APR26" → "APR"
+  const m = (ddMMMYY || '').toUpperCase().match(/\d{2}([A-Z]{3})\d{2}/);
+  return m ? m[1] : null;
+}
+
+function escRx(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function fmtAmt(v) {
+  if (v === null || v === undefined) return '';
+  return '$' + Number(v).toLocaleString('en-CA', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+// ── File-name display ──────────────────────────────────────────────────────
+function wireFileInput(inputId, cardId, nameId) {
+  document.getElementById(inputId).addEventListener('change', function() {
+    const card = document.getElementById(cardId);
+    const nameEl = document.getElementById(nameId);
+    if (this.files.length) {
+      card.classList.add('has-file');
+      nameEl.textContent = '✓ ' + this.files[0].name;
+      nameEl.style.display = 'block';
+    } else {
+      card.classList.remove('has-file');
+      nameEl.style.display = 'none';
+    }
+    checkReady();
+  });
+}
+wireFileInput('glFile',  'glCard',  'glFileName');
+wireFileInput('adFile',  'adCard',  'adFileName');
+wireFileInput('rrhFile', 'rrhCard', 'rrhFileName');
+
+function checkReady() {
+  const ok = document.getElementById('glFile').files.length &&
+             document.getElementById('adFile').files.length &&
+             document.getElementById('rrhFile').files.length;
+  document.getElementById('analyzeBtn').disabled = !ok;
+}
+
+// ── GL Excel Parser ────────────────────────────────────────────────────────
+async function parseGL(file) {
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf, {type:'array', cellDates:true});
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+  const records = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+    const ref   = String(r[0]).trim();
+    const date  = r[1];
+    const amt   = parseFloat(r[2]) || 0;
+    const ctrl  = r[3] ? String(r[3]).trim().toUpperCase() : null;
+    records.push({ ref, acctgDate: date, amount: amt, controlMonth: ctrl });
+  }
+  log(`GL: ${records.length} entries loaded`);
+  return records;
+}
+
+// ── All Data Excel Parser ──────────────────────────────────────────────────
+async function parseAllData(file) {
+  const buf = await file.arrayBuffer();
+  const wb  = XLSX.read(buf, {type:'array'});
+  const ws  = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+
+  const byInvoice = new Map();
+  const orderToInv = new Map();
+
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0]) continue;
+    const invoice = String(r[0]).trim();
+    const order   = r[17] ? String(r[17]).trim() : null;  // col R (index 17)
+    const amt     = parseFloat(r[25]) || 0;               // col Z (index 25)
+    const partName = r[31] ? String(r[31]).trim() : '';   // col AF (Part Name)
+    const shipDate = r[34] ? String(r[34]).trim() : '';   // col AI (Shipped Date)
+
+    if (!byInvoice.has(invoice)) byInvoice.set(invoice, []);
+    byInvoice.get(invoice).push({ order, amt, partName, shipDate });
+
+    if (order) {
+      const key = order.toUpperCase();
+      if (!orderToInv.has(key)) orderToInv.set(key, new Set());
+      orderToInv.get(key).add(invoice);
+    }
+  }
+
+  log(`All Data: ${byInvoice.size} unique invoices, ${orderToInv.size} unique orders`);
+  return { byInvoice, orderToInv };
+}
+
+// ── RRH PDF Parser ─────────────────────────────────────────────────────────
+async function parseRRH(file, knownOrdersUpper) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+  const totalPages = pdf.numPages;
+  log(`RRH PDF: ${totalPages} pages`);
+
+  const allLines = [];
+
+  for (let p = 1; p <= totalPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc   = await page.getTextContent();
+
+    // Group text items by rounded Y position
+    const lineMap = new Map();
+    for (const item of tc.items) {
+      if (!item.str.trim()) continue;
+      const y = Math.round(item.transform[5]);
+      if (!lineMap.has(y)) lineMap.set(y, []);
+      lineMap.get(y).push({ text: item.str, x: item.transform[4] });
+    }
+
+    // Sort by descending Y (top→bottom) then ascending X (left→right)
+    const ys = [...lineMap.keys()].sort((a, b) => b - a);
+    for (const y of ys) {
+      const items = lineMap.get(y).sort((a, b) => a.x - b.x);
+      allLines.push(items.map(i => i.str).join(' '));
+    }
+  }
+
+  // Parse each line
+  const byOrder = new Map();
+  const dateRx  = /\b(\d{2}(?:JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\d{2})\b/gi;
+  const timeRx  = /\b(\d{1,2}:\d{2}[AP]M)\b/i;
+  const valRx   = /\b(\d+\.\d{2})\b/;
+  // RC + qty + oh pattern: single letter R or O, then two numbers
+  const afterTimeRx = /\d{1,2}:\d{2}[AP]M\s+([RO])\s+(\d+)\s+(\d+)\s*([\w]+)?/i;
+
+  let parsed = 0;
+
+  for (const line of allLines) {
+    // Skip non-data lines
+    if (!line.trim()) continue;
+    if (/Receipt History|Part Number|CARBONEAR|Sort So|^Page\s|\bRRH\b|^----/i.test(line)) continue;
+    if (/^28[A-Z]{3}\d{2}/.test(line.trim())) continue; // report date header
+
+    // Must have a time pattern to be a receipt data line
+    const tMatch = line.match(timeRx);
+    if (!tMatch) continue;
+
+    // Get receipt date = the date immediately before the time
+    const beforeTime = line.slice(0, line.indexOf(tMatch[0]));
+    const datesBeforeTime = [...beforeTime.matchAll(dateRx)].map(m => m[1]);
+    if (datesBeforeTime.length === 0) continue;
+    const receiptDate  = datesBeforeTime[datesBeforeTime.length - 1].toUpperCase();
+    const receiptMonth = dateToMonth(receiptDate);
+    if (!receiptMonth) continue;
+
+    // Get value = decimal number before receipt date in beforeTime
+    const vMatch = beforeTime.match(/(\d+\.\d{2})\s+\d{2}[A-Z]{3}\d{2}\s*$/i);
+    const value  = vMatch ? parseFloat(vMatch[1]) : null;
+
+    // Find order number: token after RC Qty OH pattern (after the time)
+    const afterTime = line.slice(line.indexOf(tMatch[0]) + tMatch[0].length);
+    const atMatch   = afterTime.match(/^\s*([RO])\s+(\d+)\s+(\d+)\s+([A-Z][A-Z0-9]+)/i);
+    let orderNum = null;
+
+    if (atMatch) {
+      const candidate = atMatch[4].toUpperCase();
+      // Validate: must be in knownOrders OR match common order patterns
+      if (knownOrdersUpper.has(candidate) ||
+          /^(RIM|CS|C[0-9]|R0)\d+/.test(candidate) ||
+          /^[A-Z]{1,3}\d{4,}/.test(candidate)) {
+        orderNum = candidate;
+      }
+    }
+
+    // Fallback: scan for any known order in the full line
+    if (!orderNum) {
+      for (const k of knownOrdersUpper) {
+        // whole-word match
+        if (new RegExp('(?<![A-Z0-9])' + escRx(k) + '(?![A-Z0-9])', 'i').test(line)) {
+          orderNum = k;
+          break;
+        }
+      }
+    }
+
+    if (orderNum) {
+      const key = orderNum.toUpperCase();
+      if (!byOrder.has(key)) byOrder.set(key, []);
+      byOrder.get(key).push({ receiptDate, receiptMonth, value, line });
+      parsed++;
+    }
+  }
+
+  log(`RRH: ${parsed} receipt events matched to known orders`);
+  log(`RRH: ${byOrder.size} unique orders found`);
+  return byOrder;
+}
+
+// ── Analysis Engine ────────────────────────────────────────────────────────
+function runAnalysis(targetMonths) {
+  const { glRecords, allDataByInvoice, orderToInvoices, rrhByOrder } = state;
+
+  const results = {
+    summary: { totalGL: 0, correct: 0, wrongMonth: 0, noReceipt: 0, missing: 0 },
+    rows: [],          // all combined
+    wrong: [],
+    missing: [],
+    noReceipt: [],
+    correct: []
+  };
+
+  // ── Check each GL entry ──────────────────────────────────────────────────
+  for (const entry of glRecords) {
+    const month = entry.controlMonth;
+    if (!targetMonths.includes(month)) continue;
+    results.summary.totalGL++;
+
+    const lines = allDataByInvoice.get(entry.ref) || [];
+    const orders = [...new Set(lines.map(l => l.order).filter(Boolean).map(o => o.toUpperCase()))];
+
+    // Gather all RRH receipts for this invoice's orders
+    const allReceipts = [];
+    const receiptMonths = new Set();
+    for (const o of orders) {
+      for (const r of (rrhByOrder.get(o) || [])) {
+        allReceipts.push({ ...r, order: o });
+        receiptMonths.add(r.receiptMonth);
+      }
+    }
+
+    // Compute total RRH value for this invoice's orders
+    const rrhTotal = allReceipts.reduce((s, r) => s + (r.value || 0), 0);
+
+    let status, statusClass, note = '';
+
+    if (lines.length === 0) {
+      status = 'NOT IN ALL DATA'; statusClass = 'noreceipt';
+      note = 'Invoice reference not found in All Data file';
+    } else if (allReceipts.length === 0) {
+      status = 'NO RRH RECEIPT'; statusClass = 'noreceipt';
+      note = `Orders: ${orders.slice(0,5).join(', ')}${orders.length > 5 ? '…' : ''} — no matching RRH entries`;
+    } else if (receiptMonths.has(month)) {
+      if (receiptMonths.size === 1) {
+        status = 'CORRECT'; statusClass = 'correct';
+      } else {
+        status = 'CORRECT (SPLIT)'; statusClass = 'partial';
+        const other = [...receiptMonths].filter(m => m !== month);
+        note = `Also has receipts in: ${other.join(', ')}`;
+      }
+    } else {
+      status = 'WRONG MONTH'; statusClass = 'wrong';
+      note = `Posted to ${month} but receipts are in: ${[...receiptMonths].join(', ')}`;
+    }
+
+    const row = {
+      ref: entry.ref,
+      controlMonth: month,
+      glAmount: entry.amount,
+      acctgDate: entry.acctgDate,
+      orders: orders.slice(0, 8).join(', ') + (orders.length > 8 ? '…' : ''),
+      receiptDates: [...new Set(allReceipts.map(r => r.receiptDate))].slice(0, 6).join(', '),
+      receiptMonths: [...receiptMonths].join(', '),
+      rrhValue: rrhTotal || null,
+      status, statusClass, note
+    };
+
+    results.rows.push(row);
+    if (statusClass === 'correct' || statusClass === 'partial') { results.correct.push(row); results.summary.correct++; }
+    else if (statusClass === 'wrong')    { results.wrong.push(row);     results.summary.wrongMonth++; }
+    else if (statusClass === 'noreceipt') { results.noReceipt.push(row); results.summary.noReceipt++; }
+  }
+
+  // ── Find missing GL entries ──────────────────────────────────────────────
+  // Group by (invoice, month) so each invoice only appears once per month
+  const missingMap = new Map();
+
+  for (const [orderUpper, receipts] of rrhByOrder) {
+    for (const rcpt of receipts) {
+      if (!targetMonths.includes(rcpt.receiptMonth)) continue;
+
+      const invoices = orderToInvoices.get(orderUpper) || new Set();
+      for (const invoice of invoices) {
+        // Already has a GL entry for this month → not missing
+        const hasCorrectGL = glRecords.some(g =>
+          g.ref === invoice && g.controlMonth === rcpt.receiptMonth);
+        if (hasCorrectGL) continue;
+
+        const key = `${invoice}|${rcpt.receiptMonth}`;
+        if (!missingMap.has(key)) {
+          missingMap.set(key, {
+            invoice,
+            month: rcpt.receiptMonth,
+            orders: new Set(),
+            dates: new Set(),
+            totalValue: 0,
+            glEntries: glRecords.filter(g => g.ref === invoice)
+          });
+        }
+        const e = missingMap.get(key);
+        e.orders.add(orderUpper);
+        e.dates.add(rcpt.receiptDate);
+        e.totalValue += rcpt.value || 0;
+      }
+    }
+  }
+
+  for (const data of missingMap.values()) {
+    const glEntry = data.glEntries[0] || null;
+    const postedTo = data.glEntries.length
+      ? [...new Set(data.glEntries.map(g => g.controlMonth))].join(', ')
+      : null;
+    const note = postedTo
+      ? `Posted to GL in: ${postedTo} — receipt month is ${data.month}`
+      : 'Not found in GL at all';
+
+    const row = {
+      ref: data.invoice,
+      controlMonth: data.month,
+      glAmount: glEntry ? glEntry.amount : null,
+      acctgDate: glEntry ? glEntry.acctgDate : null,
+      orders: [...data.orders].slice(0, 8).join(', ') + (data.orders.size > 8 ? '…' : ''),
+      receiptDates: [...data.dates].slice(0, 6).join(', '),
+      receiptMonths: data.month,
+      rrhValue: data.totalValue || null,
+      status: 'MISSING FROM GL',
+      statusClass: 'missing',
+      note
+    };
+
+    results.missing.push(row);
+    results.rows.push(row);
+    results.summary.missing++;
+  }
+
+  return results;
+}
+
+// ── Build HTML Table ───────────────────────────────────────────────────────
+function buildTable(rows, caption) {
+  if (!rows.length) {
+    return `<div class="alert alert-success mb-0">✓ No issues found for ${caption}</div>`;
+  }
+
+  const statusColors = {
+    correct: '#198754', partial: '#fd7e14', wrong: '#dc3545',
+    noreceipt: '#6c757d', missing: '#dc3545'
+  };
+  const statusLabels = {
+    correct: '✓ Correct', partial: '~ Correct (Split)', wrong: '⚠ Wrong Month',
+    noreceipt: '? No Receipt', missing: '❌ Missing'
+  };
+
+  let html = `<div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+    <thead><tr>
+      <th>Invoice Ref</th>
+      <th>GL Month</th>
+      <th>GL Amount</th>
+      <th>Status</th>
+      <th>Orders</th>
+      <th>Receipt Date(s)</th>
+      <th>Receipt Month(s)</th>
+      <th>RRH Value</th>
+      <th>Notes</th>
+    </tr></thead><tbody>`;
+
+  for (const r of rows) {
+    const color = statusColors[r.statusClass] || '#6c757d';
+    const label = statusLabels[r.status] || r.status;
+    html += `<tr>
+      <td><code>${escHtml(r.ref)}</code></td>
+      <td><strong>${escHtml(r.controlMonth)}</strong></td>
+      <td class="text-end">${escHtml(fmtAmt(r.glAmount))}</td>
+      <td><span class="status-badge" style="background:${color}">${escHtml(label)}</span></td>
+      <td class="orders-cell">${escHtml(r.orders)}</td>
+      <td style="font-size:.78rem">${escHtml(r.receiptDates || '—')}</td>
+      <td>${r.receiptMonths ? `<strong>${escHtml(r.receiptMonths)}</strong>` : '<em class="text-muted">—</em>'}</td>
+      <td class="text-end">${r.rrhValue ? escHtml(fmtAmt(r.rrhValue)) : '<em class="text-muted">—</em>'}</td>
+      <td class="note-cell">${escHtml(r.note || '')}</td>
+    </tr>`;
+  }
+
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function escHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Render Results ─────────────────────────────────────────────────────────
+function renderResults(results) {
+  const S = results.summary;
+
+  // Summary cards
+  const cards = [
+    { label:'GL Entries Analyzed', value: S.totalGL, color:'#1a3a5c' },
+    { label:'Correct Month',        value: S.correct,    color:'#198754' },
+    { label:'Wrong Month',          value: S.wrongMonth, color:'#dc3545' },
+    { label:'Missing from GL',      value: S.missing,    color:'#e63946' },
+    { label:'No RRH Receipt',       value: S.noReceipt,  color:'#6c757d' }
+  ];
+  document.getElementById('summaryCards').innerHTML = cards.map(c =>
+    `<div class="col-sm-6 col-md-4 col-lg-2">
+       <div class="stat-card" style="background:${c.color}">
+         <div class="number">${c.value}</div>
+         <div class="label">${c.label}</div>
+       </div>
+     </div>`
+  ).join('');
+
+  // All Issues = wrong + missing + noReceipt
+  const issues = [...results.wrong, ...results.missing, ...results.noReceipt];
+
+  document.getElementById('tableAll').innerHTML       = buildTable(issues,           'all months');
+  document.getElementById('tableWrong').innerHTML     = buildTable(results.wrong,    'wrong month');
+  document.getElementById('tableMissing').innerHTML   = buildTable(results.missing,  'missing entries');
+  document.getElementById('tableNoReceipt').innerHTML = buildTable(results.noReceipt,'no receipt');
+  document.getElementById('tableCorrect').innerHTML   = buildTable(results.correct,  'correct entries');
+
+  // Update tab labels
+  const tabs = document.querySelectorAll('#resultsTabs .nav-link');
+  tabs[0].textContent = `All Issues (${issues.length})`;
+  tabs[1].textContent = `⚠ Wrong Month (${results.wrong.length})`;
+  tabs[2].textContent = `❌ Missing (${results.missing.length})`;
+  tabs[3].textContent = `? No Receipt (${results.noReceipt.length})`;
+  tabs[4].textContent = `✓ Correct (${results.correct.length})`;
+
+  document.getElementById('resultsSection').style.display = '';
+  document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});
+}
+
+// ── Excel Export ───────────────────────────────────────────────────────────
+function exportToExcel() {
+  const res = state.analysisResults;
+  if (!res) return;
+
+  const HEADERS = ['Invoice Ref', 'GL Month', 'GL Amount', 'Status', 'Orders',
+                   'Receipt Dates', 'Receipt Month(s)', 'RRH Value', 'Notes'];
+
+  function rowsToSheet(rows) {
+    const data = [HEADERS];
+    for (const r of rows) {
+      data.push([
+        r.ref, r.controlMonth, r.glAmount, r.status, r.orders,
+        r.receiptDates || '', r.receiptMonths || '', r.rrhValue || '', r.note || ''
+      ]);
+    }
+    return XLSX.utils.aoa_to_sheet(data);
+  }
+
+  function style(ws) {
+    if (!ws['!ref']) return ws;
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    ws['!cols'] = [
+      {wch:14},{wch:10},{wch:14},{wch:20},{wch:30},
+      {wch:25},{wch:18},{wch:12},{wch:40}
+    ];
+    // Bold header row
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({r:0, c})];
+      if (cell) {
+        if (!cell.s) cell.s = {};
+        cell.s.font = {bold: true};
+      }
+    }
+    return ws;
+  }
+
+  const wb = XLSX.utils.book_new();
+  const issues = [...res.wrong, ...res.missing, ...res.noReceipt];
+  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(issues)),       'All Issues');
+  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.wrong)),    'Wrong Month');
+  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.missing)),  'Missing from GL');
+  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.noReceipt)),'No RRH Receipt');
+  XLSX.utils.book_append_sheet(wb, style(rowsToSheet(res.correct)),  'Correct Entries');
+
+  // Summary sheet
+  const S = res.summary;
+  const sumData = [
+    ['GL Posting Month Validator — Summary'],
+    [],
+    ['Metric', 'Count'],
+    ['Total GL Entries Analyzed', S.totalGL],
+    ['Correct Month', S.correct],
+    ['Wrong Month', S.wrongMonth],
+    ['Missing from GL', S.missing],
+    ['No RRH Receipt Data', S.noReceipt]
+  ];
+  const sumWs = XLSX.utils.aoa_to_sheet(sumData);
+  sumWs['!cols'] = [{wch:35},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, sumWs, 'Summary');
+
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `GL_Posting_Validation_${today}.xlsx`);
+}
+
+// ── Main: Analyze ──────────────────────────────────────────────────────────
+document.getElementById('analyzeBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Analyzing…';
+  document.getElementById('progressArea').style.display = '';
+  document.getElementById('logArea').textContent = '';
+  document.getElementById('resultsSection').style.display = 'none';
+
+  const targetMonths = [];
+  if (document.getElementById('chkApr').checked) targetMonths.push('APR');
+  if (document.getElementById('chkMay').checked) targetMonths.push('MAY');
+  if (document.getElementById('chkMar').checked) targetMonths.push('MAR');
+
+  try {
+    setProgress(5);
+    log('Loading GL file…');
+    state.glRecords = await parseGL(document.getElementById('glFile').files[0]);
+    setProgress(25);
+
+    log('Loading All Data file…');
+    const adResult = await parseAllData(document.getElementById('adFile').files[0]);
+    state.allDataByInvoice = adResult.byInvoice;
+    state.orderToInvoices  = adResult.orderToInv;
+    setProgress(50);
+
+    log('Extracting order numbers for RRH matching…');
+    const knownOrders = new Set(state.orderToInvoices.keys()); // already uppercase
+    log(`  ${knownOrders.size} unique orders from All Data`);
+
+    log('Parsing RRH PDF (this may take a moment)…');
+    state.rrhByOrder = await parseRRH(document.getElementById('rrhFile').files[0], knownOrders);
+    setProgress(80);
+
+    log(`Running analysis for months: ${targetMonths.join(', ')}…`);
+    state.analysisResults = runAnalysis(targetMonths);
+    setProgress(100);
+
+    const S = state.analysisResults.summary;
+    log(`Done! Analyzed: ${S.totalGL} GL entries → ` +
+        `${S.correct} correct, ${S.wrongMonth} wrong month, ` +
+        `${S.missing} missing, ${S.noReceipt} no receipt data`);
+
+    renderResults(state.analysisResults);
+  } catch (err) {
+    log('ERROR: ' + err.message);
+    console.error(err);
+    alert('An error occurred: ' + err.message + '\n\nCheck the browser console for details.');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '🔍 Analyze';
+});
+
+document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+</script>
+</body>
+</html>
