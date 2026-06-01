@@ -90,25 +90,30 @@
         </div>
       </div>
 
-      <div class="row g-3 mt-1 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label fw-semibold">Months to Analyze</label>
-          <div class="d-flex gap-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="chkApr" value="APR" checked>
-              <label class="form-check-label" for="chkApr">April</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="chkMay" value="MAY" checked>
-              <label class="form-check-label" for="chkMay">May</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="chkMar" value="MAR">
-              <label class="form-check-label" for="chkMar">March</label>
-            </div>
+      <div class="row g-3 mt-2 align-items-end">
+        <div class="col-md-9">
+          <div class="d-flex align-items-baseline gap-2 mb-1">
+            <label class="form-label fw-semibold mb-0">Months to Analyze</label>
+            <span class="text-muted small" id="monthAutoHint"></span>
+            <button type="button" class="btn btn-link btn-sm p-0 ms-1" id="selectAllMonths">All</button>
+            <button type="button" class="btn btn-link btn-sm p-0" id="clearAllMonths">None</button>
+          </div>
+          <div class="d-flex flex-wrap gap-1" id="monthCheckboxes">
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkJAN" value="JAN"><label class="form-check-label" for="chkJAN">Jan</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkFEB" value="FEB"><label class="form-check-label" for="chkFEB">Feb</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkMAR" value="MAR"><label class="form-check-label" for="chkMAR">Mar</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkAPR" value="APR"><label class="form-check-label" for="chkAPR">Apr</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkMAY" value="MAY"><label class="form-check-label" for="chkMAY">May</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkJUN" value="JUN"><label class="form-check-label" for="chkJUN">Jun</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkJUL" value="JUL"><label class="form-check-label" for="chkJUL">Jul</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkAUG" value="AUG"><label class="form-check-label" for="chkAUG">Aug</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkSEP" value="SEP"><label class="form-check-label" for="chkSEP">Sep</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkOCT" value="OCT"><label class="form-check-label" for="chkOCT">Oct</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkNOV" value="NOV"><label class="form-check-label" for="chkNOV">Nov</label></div>
+            <div class="form-check form-check-inline me-0"><input class="form-check-input" type="checkbox" id="chkDEC" value="DEC"><label class="form-check-label" for="chkDEC">Dec</label></div>
           </div>
         </div>
-        <div class="col-md-8 text-end">
+        <div class="col-md-3 text-end">
           <button class="btn btn-primary px-4 py-2 fw-semibold" id="analyzeBtn" disabled>
             🔍 Analyze
           </button>
@@ -140,6 +145,7 @@
           <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabMissing">❌ Missing</button></li>
           <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabNoReceipt">? No Receipt</button></li>
           <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabCorrect">✓ Correct</button></li>
+          <li class="nav-item"><button class="nav-link fw-semibold" data-bs-toggle="tab" data-bs-target="#tabVariance">⚠ Variances</button></li>
         </ul>
       </div>
       <div class="card-body p-3">
@@ -149,6 +155,7 @@
           <div class="tab-pane fade" id="tabMissing"><div id="tableMissing"></div></div>
           <div class="tab-pane fade" id="tabNoReceipt"><div id="tableNoReceipt"></div></div>
           <div class="tab-pane fade" id="tabCorrect"><div id="tableCorrect"></div></div>
+          <div class="tab-pane fade" id="tabVariance"><div id="tableVariance"></div></div>
         </div>
       </div>
     </div>
@@ -317,6 +324,7 @@ async function parseGL(file) {
   const ws  = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
   const records = [];
+  const monthsFound = new Set();
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r[0]) continue;
@@ -325,8 +333,17 @@ async function parseGL(file) {
     const amt   = parseFloat(r[2]) || 0;
     const ctrl  = r[3] ? String(r[3]).trim().toUpperCase() : null;
     records.push({ ref, acctgDate: date, amount: amt, controlMonth: ctrl });
+    if (ctrl) monthsFound.add(ctrl);
   }
   log(`GL: ${records.length} entries loaded`);
+  // Auto-check the months present in this GL file
+  document.querySelectorAll('#monthCheckboxes input').forEach(cb => {
+    cb.checked = monthsFound.has(cb.value);
+  });
+  const hint = monthsFound.size
+    ? `— auto-detected: ${[...monthsFound].join(', ')}`
+    : '';
+  document.getElementById('monthAutoHint').textContent = hint;
   return records;
 }
 
@@ -349,8 +366,9 @@ async function parseAllData(file) {
     const partName = r[31] ? String(r[31]).trim() : '';   // col AF (Part Name)
     const shipDate = r[34] ? String(r[34]).trim() : '';   // col AI (Shipped Date)
 
-    if (!byInvoice.has(invoice)) byInvoice.set(invoice, []);
-    byInvoice.get(invoice).push({ order, amt, partName, shipDate });
+    if (!byInvoice.has(invoice)) byInvoice.set(invoice, { lines:[], adTotal:0 });
+    byInvoice.get(invoice).lines.push({ order, amt, partName, shipDate });
+    byInvoice.get(invoice).adTotal += amt;
 
     if (order) {
       const key = order.toUpperCase();
@@ -360,6 +378,9 @@ async function parseAllData(file) {
   }
 
   log(`All Data: ${byInvoice.size} unique invoices, ${orderToInv.size} unique orders`);
+  // Sanity: log a sample invoice total
+  const sample = [...byInvoice.entries()].find(([,v])=>v.adTotal>0);
+  if (sample) log(`  Sample invoice ${sample[0]}: All Data total $${sample[1].adTotal.toFixed(2)}`);
   return { byInvoice, orderToInv };
 }
 
@@ -473,13 +494,23 @@ function runAnalysis(targetMonths) {
   const { glRecords, allDataByInvoice, orderToInvoices, rrhByOrder } = state;
 
   const results = {
-    summary: { totalGL: 0, correct: 0, wrongMonth: 0, noReceipt: 0, missing: 0 },
-    rows: [],          // all combined
+    summary: { totalGL: 0, correct: 0, wrongMonth: 0, noReceipt: 0, missing: 0, variance: 0 },
+    rows: [],
     wrong: [],
     missing: [],
     noReceipt: [],
-    correct: []
+    correct: [],
+    variances: []
   };
+
+  // Pre-compute per-invoice: combined GL amount across ALL analyzed GL rows for
+  // the same invoice, and whether it appears in multiple months (split posting).
+  const glByInvoice = new Map(); // ref -> [{entry}]
+  for (const entry of glRecords) {
+    if (!targetMonths.includes(entry.controlMonth)) continue;
+    if (!glByInvoice.has(entry.ref)) glByInvoice.set(entry.ref, []);
+    glByInvoice.get(entry.ref).push(entry);
+  }
 
   // ── Check each GL entry ──────────────────────────────────────────────────
   for (const entry of glRecords) {
@@ -487,10 +518,18 @@ function runAnalysis(targetMonths) {
     if (!targetMonths.includes(month)) continue;
     results.summary.totalGL++;
 
-    const lines = allDataByInvoice.get(entry.ref) || [];
+    const adEntry = allDataByInvoice.get(entry.ref) || { lines: [], adTotal: 0 };
+    const lines   = adEntry.lines;
+    const adTotal = adEntry.adTotal;
+
     const orders = [...new Set(lines.map(l => l.order).filter(Boolean).map(o => o.toUpperCase()))];
 
-    // Gather all RRH receipts for this invoice's orders
+    // All GL rows for this invoice in the analyzed period
+    const glRows = glByInvoice.get(entry.ref) || [entry];
+    const glCombined = glRows.reduce((s, g) => s + (g.amount || 0), 0);
+    const isSplit = glRows.length > 1 && new Set(glRows.map(g => g.controlMonth)).size > 1;
+
+    // Gather ALL RRH receipts for this invoice's orders
     const allReceipts = [];
     const receiptMonths = new Set();
     for (const o of orders) {
@@ -500,8 +539,16 @@ function runAnalysis(targetMonths) {
       }
     }
 
-    // Compute total RRH value for this invoice's orders
-    const rrhTotal = allReceipts.reduce((s, r) => s + (r.value || 0), 0);
+    // RRH value only for the GL control month (for targeted comparison)
+    const rrhMonthValue = allReceipts
+      .filter(r => r.receiptMonth === month)
+      .reduce((s, r) => s + (r.value || 0), 0);
+
+    // Amount variance: combined GL postings vs All Data invoice total
+    // Only meaningful when we have All Data
+    const hasAdTotal = adTotal !== 0;
+    const variance   = hasAdTotal ? +(glCombined - adTotal).toFixed(2) : null;
+    const hasVariance = variance !== null && Math.abs(variance) > 0.01;
 
     let status, statusClass, note = '';
 
@@ -513,26 +560,41 @@ function runAnalysis(targetMonths) {
       note = `Orders: ${orders.slice(0,5).join(', ')}${orders.length > 5 ? '…' : ''} — no matching RRH entries`;
     } else if (receiptMonths.has(month)) {
       if (receiptMonths.size === 1) {
-        status = 'CORRECT'; statusClass = 'correct';
+        status = isSplit ? 'CORRECT (SPLIT GL)' : 'CORRECT'; statusClass = 'correct';
       } else {
-        status = 'CORRECT (SPLIT)'; statusClass = 'partial';
+        status = isSplit ? 'CORRECT (SPLIT GL)' : 'CORRECT (SPLIT RCPT)'; statusClass = 'partial';
         const other = [...receiptMonths].filter(m => m !== month);
-        note = `Also has receipts in: ${other.join(', ')}`;
+        note = `Receipts also in: ${other.join(', ')}`;
       }
     } else {
       status = 'WRONG MONTH'; statusClass = 'wrong';
-      note = `Posted to ${month} but receipts are in: ${[...receiptMonths].join(', ')}`;
+      note = `Posted to ${month} — receipts are in: ${[...receiptMonths].join(', ')}`;
+    }
+
+    if (isSplit && status !== 'WRONG MONTH') {
+      const splitMonths = [...new Set(glRows.map(g => g.controlMonth))];
+      note = (note ? note + '; ' : '') + `Split GL: ${splitMonths.join(' + ')}`;
+    }
+
+    if (hasVariance && !note.includes('variance')) {
+      const sign = variance > 0 ? '+' : '';
+      note = (note ? note + '; ' : '') + `Amount variance: ${sign}$${variance.toFixed(2)}`;
     }
 
     const row = {
       ref: entry.ref,
       controlMonth: month,
       glAmount: entry.amount,
+      glCombined: glRows.length > 1 ? glCombined : null,
+      adTotal: adTotal || null,
+      variance,
+      hasVariance,
+      isSplit,
       acctgDate: entry.acctgDate,
       orders: orders.slice(0, 8).join(', ') + (orders.length > 8 ? '…' : ''),
       receiptDates: [...new Set(allReceipts.map(r => r.receiptDate))].slice(0, 6).join(', '),
       receiptMonths: [...receiptMonths].join(', '),
-      rrhValue: rrhTotal || null,
+      rrhValue: rrhMonthValue || null,
       status, statusClass, note
     };
 
@@ -540,6 +602,8 @@ function runAnalysis(targetMonths) {
     if (statusClass === 'correct' || statusClass === 'partial') { results.correct.push(row); results.summary.correct++; }
     else if (statusClass === 'wrong')    { results.wrong.push(row);     results.summary.wrongMonth++; }
     else if (statusClass === 'noreceipt') { results.noReceipt.push(row); results.summary.noReceipt++; }
+
+    if (hasVariance) { results.variances.push(row); results.summary.variance++; }
   }
 
   // ── Find missing GL entries ──────────────────────────────────────────────
@@ -588,10 +652,19 @@ function runAnalysis(targetMonths) {
       ? `Posted to GL in: ${postedTo} — receipt month is ${data.month}`
       : 'Not found in GL at all';
 
+    const adEntry  = allDataByInvoice.get(data.invoice) || { adTotal: 0 };
+    const glCombined = data.glEntries.reduce((s,g)=>s+(g.amount||0),0);
+    const variance = adEntry.adTotal ? +(glCombined - adEntry.adTotal).toFixed(2) : null;
+    const hasVariance = variance !== null && Math.abs(variance) > 0.01;
+    if (hasVariance) results.summary.variance++;
+
     const row = {
       ref: data.invoice,
       controlMonth: data.month,
       glAmount: glEntry ? glEntry.amount : null,
+      glCombined: data.glEntries.length > 1 ? glCombined : null,
+      adTotal: adEntry.adTotal || null,
+      variance, hasVariance, isSplit: false,
       acctgDate: glEntry ? glEntry.acctgDate : null,
       orders: [...data.orders].slice(0, 8).join(', ') + (data.orders.size > 8 ? '…' : ''),
       receiptDates: [...data.dates].slice(0, 6).join(', '),
@@ -625,30 +698,43 @@ function buildTable(rows, caption) {
     noreceipt: '? No Receipt', missing: '❌ Missing'
   };
 
+  const fmtVariance = (v) => {
+    if (v === null || v === undefined) return '<em class="text-muted">—</em>';
+    const sign = v > 0 ? '+' : '';
+    const color = Math.abs(v) < 0.02 ? '#198754' : (v > 0 ? '#dc3545' : '#e67e00');
+    const icon  = Math.abs(v) < 0.02 ? '' : (v > 0 ? ' ▲' : ' ▼');
+    return `<span style="color:${color};font-weight:600">${sign}${escHtml(fmtAmt(v))}${icon}</span>`;
+  };
+
   let html = `<div class="table-responsive">
     <table class="table table-hover table-sm mb-0">
     <thead><tr>
       <th>Invoice Ref</th>
       <th>GL Month</th>
       <th>GL Amount</th>
+      <th>Invoice Total<br><small class="fw-normal text-muted">(All Data)</small></th>
+      <th>GL Combined<br><small class="fw-normal text-muted">(if split)</small></th>
+      <th>$ Variance<br><small class="fw-normal text-muted">(GL−Invoice)</small></th>
       <th>Status</th>
       <th>Orders</th>
-      <th>Receipt Date(s)</th>
       <th>Receipt Month(s)</th>
-      <th>RRH Value</th>
+      <th>RRH Value<br><small class="fw-normal text-muted">(this month)</small></th>
       <th>Notes</th>
     </tr></thead><tbody>`;
 
   for (const r of rows) {
     const color = statusColors[r.statusClass] || '#6c757d';
     const label = statusLabels[r.status] || r.status;
-    html += `<tr>
+    const rowClass = r.hasVariance ? ' class="table-warning"' : '';
+    html += `<tr${rowClass}>
       <td><code>${escHtml(r.ref)}</code></td>
       <td><strong>${escHtml(r.controlMonth)}</strong></td>
       <td class="text-end">${escHtml(fmtAmt(r.glAmount))}</td>
+      <td class="text-end">${r.adTotal ? escHtml(fmtAmt(r.adTotal)) : '<em class="text-muted">—</em>'}</td>
+      <td class="text-end">${r.glCombined !== null ? `<span title="Sum of all GL rows for this invoice">${escHtml(fmtAmt(r.glCombined))}</span>` : '<em class="text-muted">—</em>'}</td>
+      <td class="text-end">${fmtVariance(r.variance)}</td>
       <td><span class="status-badge" style="background:${color}">${escHtml(label)}</span></td>
       <td class="orders-cell">${escHtml(r.orders)}</td>
-      <td style="font-size:.78rem">${escHtml(r.receiptDates || '—')}</td>
       <td>${r.receiptMonths ? `<strong>${escHtml(r.receiptMonths)}</strong>` : '<em class="text-muted">—</em>'}</td>
       <td class="text-end">${r.rrhValue ? escHtml(fmtAmt(r.rrhValue)) : '<em class="text-muted">—</em>'}</td>
       <td class="note-cell">${escHtml(r.note || '')}</td>
@@ -670,14 +756,15 @@ function renderResults(results) {
 
   // Summary cards
   const cards = [
-    { label:'GL Entries Analyzed', value: S.totalGL, color:'#1a3a5c' },
+    { label:'GL Entries Analyzed', value: S.totalGL,    color:'#1a3a5c' },
     { label:'Correct Month',        value: S.correct,    color:'#198754' },
     { label:'Wrong Month',          value: S.wrongMonth, color:'#dc3545' },
     { label:'Missing from GL',      value: S.missing,    color:'#e63946' },
-    { label:'No RRH Receipt',       value: S.noReceipt,  color:'#6c757d' }
+    { label:'No RRH Receipt',       value: S.noReceipt,  color:'#6c757d' },
+    { label:'Amount Variance',      value: S.variance,   color: S.variance ? '#e67e00' : '#198754' }
   ];
   document.getElementById('summaryCards').innerHTML = cards.map(c =>
-    `<div class="col-sm-6 col-md-4 col-lg-2">
+    `<div class="col-sm-6 col-md-4 col-lg-2" style="min-width:130px">
        <div class="stat-card" style="background:${c.color}">
          <div class="number">${c.value}</div>
          <div class="label">${c.label}</div>
@@ -688,11 +775,12 @@ function renderResults(results) {
   // All Issues = wrong + missing + noReceipt
   const issues = [...results.wrong, ...results.missing, ...results.noReceipt];
 
-  document.getElementById('tableAll').innerHTML       = buildTable(issues,           'all months');
-  document.getElementById('tableWrong').innerHTML     = buildTable(results.wrong,    'wrong month');
-  document.getElementById('tableMissing').innerHTML   = buildTable(results.missing,  'missing entries');
-  document.getElementById('tableNoReceipt').innerHTML = buildTable(results.noReceipt,'no receipt');
-  document.getElementById('tableCorrect').innerHTML   = buildTable(results.correct,  'correct entries');
+  document.getElementById('tableAll').innerHTML       = buildTable(issues,             'all months');
+  document.getElementById('tableWrong').innerHTML     = buildTable(results.wrong,      'wrong month');
+  document.getElementById('tableMissing').innerHTML   = buildTable(results.missing,    'missing entries');
+  document.getElementById('tableNoReceipt').innerHTML = buildTable(results.noReceipt,  'no receipt');
+  document.getElementById('tableCorrect').innerHTML   = buildTable(results.correct,    'correct entries');
+  document.getElementById('tableVariance').innerHTML  = buildTable(results.variances,  'amount variances');
 
   // Update tab labels
   const tabs = document.querySelectorAll('#resultsTabs .nav-link');
@@ -701,12 +789,20 @@ function renderResults(results) {
   tabs[2].textContent = `❌ Missing (${results.missing.length})`;
   tabs[3].textContent = `? No Receipt (${results.noReceipt.length})`;
   tabs[4].textContent = `✓ Correct (${results.correct.length})`;
+  tabs[5].textContent = `⚠ Variances (${results.variances.length})`;
 
   document.getElementById('resultsSection').style.display = 'block';
   document.getElementById('resultsSection').scrollIntoView({behavior:'smooth'});
 }
 
 // ── Main: Analyze ──────────────────────────────────────────────────────────
+document.getElementById('selectAllMonths').addEventListener('click', () => {
+  document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = true);
+});
+document.getElementById('clearAllMonths').addEventListener('click', () => {
+  document.querySelectorAll('#monthCheckboxes input').forEach(cb => cb.checked = false);
+});
+
 document.getElementById('analyzeBtn').addEventListener('click', async () => {
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true;
@@ -715,16 +811,18 @@ document.getElementById('analyzeBtn').addEventListener('click', async () => {
   document.getElementById('logArea').textContent = '';
   document.getElementById('resultsSection').style.display = 'none';
 
-  const targetMonths = [];
-  if (document.getElementById('chkApr').checked) targetMonths.push('APR');
-  if (document.getElementById('chkMay').checked) targetMonths.push('MAY');
-  if (document.getElementById('chkMar').checked) targetMonths.push('MAR');
-
   try {
     setProgress(5);
     log('Loading GL file…');
     state.glRecords = await parseGL(document.getElementById('glFile').files[0]);
     setProgress(25);
+
+    // Collect after parseGL so the auto-detect checkboxes are already set
+    const targetMonths = [...document.querySelectorAll('#monthCheckboxes input:checked')].map(cb => cb.value);
+    if (!targetMonths.length) {
+      log('⚠ No months selected — check at least one month to analyze.');
+      btn.disabled = false; btn.textContent = '🔍 Analyze'; return;
+    }
 
     log('Loading All Data file…');
     const adResult = await parseAllData(document.getElementById('adFile').files[0]);
