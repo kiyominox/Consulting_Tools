@@ -691,15 +691,62 @@ document.getElementById("genBtn").onclick=generateReport;
 document.getElementById("reportFilter").addEventListener("input",renderReport);
 document.getElementById("onlyMatched").addEventListener("change",renderReport);
 document.getElementById("printBtn").onclick=()=>window.print();
-document.getElementById("exportCsvBtn").onclick=()=>{
+
+/* ----- Export (All / In-Deskit-only, as Excel or CSV) ----- */
+function exportRowsForScope(scope){
+  return REPORT_DATA.filter(r => scope==="matched" ? r._matched : true);
+}
+function exportFileBase(scope){
+  const tag = scope==="matched" ? "InDeskit" : "All";
+  return `Vehicle_Sales_Report_${CURRENT_DEALER}_${tag}_${fmtDate(new Date())}`;
+}
+function exportCSV(scope){
   const esc=v=>{ const s=String(v==null?"":v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
   const lines=[REPORT_COLS.map(c=>esc(c.label)).join(",")];
-  REPORT_DATA.forEach(r=>{ lines.push(REPORT_COLS.map(c=>{ let v=r[c.key];
-    if(c.type==="date") v=fmtDate(v); else if(c.type==="money") v=(v==null?"":(+v).toFixed(2)); return esc(v); }).join(",")); });
+  exportRowsForScope(scope).forEach(r=>{ lines.push(REPORT_COLS.map(c=>{ let v=r[c.key];
+    if(c.type==="date") v=fmtDate(v); else if(c.type==="money") v=(v==null||v===""?"":(+v).toFixed(2)); return esc(v); }).join(",")); });
   const blob=new Blob(["﻿"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
-  a.download=`Vehicle_Sales_Report_${CURRENT_DEALER}_${fmtDate(new Date())}.csv`; a.click();
-};
+  a.download=exportFileBase(scope)+".csv"; a.click();
+}
+function exportXLSX(scope){
+  const aoa=[REPORT_COLS.map(c=>c.label)];
+  exportRowsForScope(scope).forEach(r=>{
+    aoa.push(REPORT_COLS.map(c=>{
+      let v=r[c.key];
+      if(c.type==="date") return (v instanceof Date)? v : "";
+      if(c.type==="money") return (v==null||v==="")? "" : round2(+v);
+      if(c.type==="int") return (v===""||v==null)? "" : +v;
+      return v==null? "" : String(v);
+    }));
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true});
+  // column widths + number/date formats
+  ws["!cols"]=REPORT_COLS.map(c=>({wch: c.type==="money"?14 : c.type==="date"?12 : Math.max(10,c.label.length+2)}));
+  const last=aoa.length-1;
+  REPORT_COLS.forEach((c,ci)=>{
+    if(c.type!=="money"&&c.type!=="date") return;
+    for(let ri=1;ri<=last;ri++){
+      const addr=XLSX.utils.encode_cell({r:ri,c:ci}); const cell=ws[addr];
+      if(!cell||cell.v===""||cell.v==null) continue;
+      cell.z = c.type==="money" ? "#,##0.00" : "yyyy-mm-dd";
+    }
+  });
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,CURRENT_DEALER.slice(0,28)||"Report");
+  XLSX.writeFile(wb, exportFileBase(scope)+".xlsx");
+}
+function doExport(scope,fmt){
+  if(!REPORT_DATA.length){ alert("Generate a report first."); return; }
+  if(fmt==="csv") exportCSV(scope); else exportXLSX(scope);
+}
+const exportBtn=document.getElementById("exportBtn");
+const exportMenu=document.getElementById("exportMenu");
+exportBtn.onclick=(e)=>{ e.stopPropagation(); exportMenu.classList.toggle("hide"); };
+exportMenu.querySelectorAll(".menu-item").forEach(b=>{
+  b.onclick=()=>{ exportMenu.classList.add("hide"); doExport(b.dataset.scope, b.dataset.fmt); };
+});
+document.addEventListener("click",(e)=>{ if(!exportMenu.classList.contains("hide") && !exportMenu.contains(e.target) && e.target!==exportBtn) exportMenu.classList.add("hide"); });
 
 /* init */
 refreshSettingsUI(); maybeEnableGenerate();

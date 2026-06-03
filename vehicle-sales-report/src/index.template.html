@@ -116,6 +116,15 @@
   .footer-note{font-size:12px;color:var(--muted);text-align:center;padding:18px}
   .hide{display:none !important}
   .filter-input{padding:7px 10px;border:1px solid var(--line);border-radius:7px;min-width:200px}
+  .export-wrap{position:relative;display:inline-block}
+  .export-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:20;background:#fff;
+       border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(15,23,42,.14);
+       padding:6px;min-width:230px}
+  .export-menu .menu-section{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+       letter-spacing:.4px;padding:8px 10px 4px}
+  .export-menu .menu-item{display:block;width:100%;text-align:left;border:none;background:transparent;
+       padding:8px 10px;border-radius:7px;font-weight:500}
+  .export-menu .menu-item:hover{background:var(--soft)}
   @media print{
     header.app{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .card.no-print,.toolbar,.drop,#settingsCard,#uploadCard{display:none !important}
@@ -237,7 +246,17 @@
           <input type="checkbox" id="onlyMatched" /> Only deals found in Deskit
         </label>
         <div class="grow"></div>
-        <button id="exportCsvBtn">Export CSV</button>
+        <div class="export-wrap">
+          <button id="exportBtn">Export &#9662;</button>
+          <div class="export-menu hide" id="exportMenu">
+            <div class="menu-section">All deals</div>
+            <button class="menu-item" data-scope="all" data-fmt="xlsx">Excel (.xlsx)</button>
+            <button class="menu-item" data-scope="all" data-fmt="csv">CSV (.csv)</button>
+            <div class="menu-section">Only deals found in Deskit</div>
+            <button class="menu-item" data-scope="matched" data-fmt="xlsx">Excel (.xlsx)</button>
+            <button class="menu-item" data-scope="matched" data-fmt="csv">CSV (.csv)</button>
+          </div>
+        </div>
         <button id="printBtn">Print / PDF</button>
       </div>
       <div class="report-wrap">

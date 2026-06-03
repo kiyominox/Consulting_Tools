@@ -34,7 +34,9 @@ computer.** Just double-click `index.html`.
    columns (Account #, Reference, Posting Date, Amount or Debit/Credit) are
    auto-detected; adjust the mapping if a heading is unusual.
 4. Click **Generate Report**.
-5. **Step 3 – Report.** Sort, filter, **Export CSV**, or **Print / PDF**.
+5. **Step 3 – Report.** Sort, filter, **Export**, or **Print / PDF**. The **Export** menu
+   offers four choices — *All deals* or *Only deals found in Deskit*, each as **Excel
+   (.xlsx)** or **CSV**. Excel exports keep real dates and numeric/money formatting.
 
 ## Report columns
 
