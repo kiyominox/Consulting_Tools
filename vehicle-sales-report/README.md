@@ -56,8 +56,30 @@ Sales F&I Commission.
 | Cost | Sum of **Cost** accounts |
 | F&I Gross | **F&I Sale** − **F&I Cost** accounts |
 | Sales Commission | Sum of **Sales Commission** accounts |
-| F&I Commission | Sum of **F&I Commission** accounts |
+| F&I Commission | Tiered % of the deal's F&I Gross (see below), or sum of accounts |
 | Sales F&I Commission | Sales Commission + F&I Commission |
+
+## F&I Commission — tiered by business manager
+
+By default F&I Commission is **not** read from GL accounts (MacDonald's F&I pay isn't
+booked in the sales journals). Instead it is calculated as a **percentage of each deal's
+F&I Gross**, where the rate is set by the **business manager's average F&I Gross per deal
+for the month**:
+
+| Manager's monthly average F&I Gross / deal | Rate |
+|---|---|
+| less than $2,000 | 16% |
+| $2,000 – $2,250 | 18% |
+| above $2,250 | 20% |
+
+So each manager (Deskit `FI MANAGER`) gets one rate for the month based on their average,
+and that rate is applied to every one of their deals: `F&I Commission = rate × F&I Gross`.
+Deals with no business manager (e.g. wholesale) get none. The thresholds and rates are
+**editable per dealership** in Step 1, and the report shows a per-manager breakdown
+(deals, average, rate, commission).
+
+You can switch a dealership back to **"Sum of GL commission accounts"** in Step 1 if its
+F&I commission is posted to the ledger instead.
 
 ## Account categories & balance signs
 
@@ -80,16 +102,25 @@ Only GL lines posted to a configured account are counted; everything else is ign
 - The bottom row totals every money column; the cards above summarise units, price,
   front gross, F&I gross and commission.
 
-## Known data note — F&I Commission
-
-MacDonald's F&I commission accounts (`74000`, `85500`, `85600`) have **no activity in the
-vehicle-sales journals (10/12/20)** that make up the sample Journal Report, so the F&I
-Commission column computes to `$0`. F&I manager pay appears to be booked outside these
-journals (payroll/back-end). To populate that column, either include the journal where
-F&I commission is posted in the export, or point the **F&I Commission** category at the
-account that actually carries it. Sales commission (`1101`/`1102`/`1103`,
-"FRONTCOMMISSION DUE") posts in these journals and computes correctly.
-
 > The single "Commissions" list from the chart of accounts is pre-split into **Sales
-> Commission** (`1100`–`1103`) and **F&I Commission** (`74000`, `85500`, `85600`) so the
-> report can show both columns. Adjust the split in Step 1 if needed.
+> Commission** (`1100`–`1103`) and **F&I Commission** (`74000`, `85500`, `85600`). Sales
+> Commission is read from those accounts; F&I Commission uses the tiered method above.
+> Adjust either in Step 1 if needed.
+
+## Editing & rebuilding (`index.html` is generated)
+
+`index.html` is a built artifact — do not hand-edit it. The sources live in:
+
+```
+src/index.template.html   page layout + styles
+src/app.js                application logic
+src/mac_defaults.js        MacDonald chart of accounts (window.MAC_DEFAULTS)
+vendor/xlsx.full.min.js    SheetJS parser (embedded for offline use)
+build.py                   inlines all of the above into index.html
+```
+
+After changing anything in `src/`, rebuild the standalone file:
+
+```bash
+python3 build.py
+```

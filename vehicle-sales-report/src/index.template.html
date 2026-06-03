@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vehicle Sales Report</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#ffffff; --ink:#1e293b; --muted:#64748b;
+    --line:#e2e8f0; --accent:#1d4ed8; --accent-dark:#1e40af;
+    --good:#16a34a; --warn:#b45309; --bad:#dc2626; --soft:#f1f5f9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink);background:#f8fafc;font-size:14px;line-height:1.45}
+  header.app{background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;padding:18px 24px;
+       display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+  header.app h1{font-size:20px;margin:0;font-weight:650;letter-spacing:.2px}
+  header.app .sub{font-size:12px;opacity:.85;margin-top:2px}
+  .grow{flex:1}
+  .deal-pick{display:flex;align-items:center;gap:8px}
+  .deal-pick label{font-size:12px;opacity:.9}
+  select,input,button,textarea{font-family:inherit;font-size:14px}
+  select.dealer{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.4);
+       background:rgba(255,255,255,.12);color:#fff;font-weight:600}
+  select.dealer option{color:#1e293b}
+  main{max-width:1500px;margin:0 auto;padding:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+       box-shadow:0 1px 2px rgba(15,23,42,.04);margin-bottom:20px}
+  .card > .hd{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line);
+       cursor:pointer;user-select:none}
+  .card > .hd h2{font-size:15px;margin:0;font-weight:650}
+  .card > .hd .chev{margin-left:auto;color:var(--muted);transition:transform .15s}
+  .card.collapsed > .hd .chev{transform:rotate(-90deg)}
+  .card.collapsed > .bd{display:none}
+  .card > .bd{padding:18px}
+  .step-badge{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;
+       display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .col{flex:1;min-width:280px}
+  button{cursor:pointer;border-radius:8px;border:1px solid var(--line);background:#fff;padding:8px 14px;font-weight:600;color:var(--ink)}
+  button:hover{background:var(--soft)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:var(--accent-dark)}
+  button.ghost{background:transparent;border-color:transparent;color:var(--accent);padding:6px 8px}
+  button.tiny{padding:4px 8px;font-size:12px}
+  button.danger{color:var(--bad)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+
+  .drop{border:2px dashed var(--line);border-radius:10px;padding:18px;text-align:center;transition:.15s;background:#fcfdff}
+  .drop.over{border-color:var(--accent);background:#eff6ff}
+  .drop.loaded{border-style:solid;border-color:var(--good);background:#f0fdf4}
+  .drop h3{margin:0 0 4px;font-size:14px}
+  .drop .fname{font-weight:600;color:var(--good)}
+  .drop input[type=file]{display:none}
+
+  .cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+  .cat-tabs button{font-size:13px}
+  .cat-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .cat-panel{display:none}
+  .cat-panel.active{display:block}
+  .cat-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;
+       background:var(--soft);padding:10px 12px;border-radius:8px}
+  .cat-meta .desc{font-size:12.5px;color:var(--muted);flex:1;min-width:220px}
+  .sign-pick{display:flex;align-items:center;gap:6px;font-size:12.5px}
+  .tier-box{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:12px}
+  .tier-box h4{margin:0 0 8px;font-size:13px}
+  .tier-grid{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px}
+  .tier-grid input{width:84px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;font-variant-numeric:tabular-nums}
+  .tier-grid .seg{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:7px;padding:6px 8px}
+  .acct-scroll{max-height:380px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:8px}
+  .acct-list{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+  .acct-row{display:flex;gap:8px;align-items:center}
+  .acct-row input{padding:7px 10px;border:1px solid var(--line);border-radius:7px}
+  .acct-row input.num{width:120px;font-variant-numeric:tabular-nums}
+  .acct-row input.dsc{flex:1}
+  .acct-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  details.bulk{margin-top:8px}
+  details.bulk summary{cursor:pointer;color:var(--accent);font-size:13px;font-weight:600}
+  details.bulk textarea{width:100%;min-height:90px;margin-top:8px;padding:10px;border:1px solid var(--line);border-radius:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .status{font-size:13px;padding:8px 12px;border-radius:8px;display:none}
+  .status.show{display:block}
+  .status.ok{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+  .status.err{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
+  .status.info{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+  .banner{font-size:13px;padding:9px 12px;border-radius:8px;margin-top:10px}
+  .banner.j{background:#ecfeff;color:#155e75;border:1px solid #a5f3fc}
+  .banner.f{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
+
+  .report-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+  table.report{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
+  table.report th,table.report td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+  table.report thead th{position:sticky;top:0;background:#f8fafc;z-index:2;font-weight:650;
+       border-bottom:2px solid var(--line);cursor:pointer;user-select:none}
+  table.report thead th .arrow{color:var(--accent);font-size:10px;margin-left:3px}
+  table.report td.num,table.report th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.report tbody tr:hover{background:#f8fbff}
+  table.report tr.missing{background:#fffbeb}
+  table.report tr.missing:hover{background:#fef3c7}
+  table.report tfoot td{position:sticky;bottom:0;background:#eef2ff;font-weight:700;border-top:2px solid var(--accent)}
+  .neg{color:var(--bad)}
+  .pill{display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:999px;background:#fef3c7;color:#92400e}
+  .summary-cards{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .scard{flex:1;min-width:150px;background:var(--soft);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .scard .lab{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .scard .val{font-size:19px;font-weight:700;margin-top:2px}
+  .legend{font-size:12px;color:var(--muted);margin-top:10px}
+  details.fibasis{margin-top:12px;border:1px solid var(--line);border-radius:8px;padding:0 12px}
+  details.fibasis summary{cursor:pointer;font-weight:650;font-size:13px;padding:10px 0}
+  table.basis{border-collapse:collapse;font-size:12.5px;margin:0 0 12px}
+  table.basis th,table.basis td{padding:6px 14px 6px 0;text-align:left}
+  table.basis td.num,table.basis th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .footer-note{font-size:12px;color:var(--muted);text-align:center;padding:18px}
+  .hide{display:none !important}
+  .filter-input{padding:7px 10px;border:1px solid var(--line);border-radius:7px;min-width:200px}
+  @media print{
+    header.app{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .card.no-print,.toolbar,.drop,#settingsCard,#uploadCard{display:none !important}
+    .report-wrap{overflow:visible;border:none}
+    table.report thead th{position:static}
+  }
+</style>
+</head>
+<body>
+<header class="app">
+  <div>
+    <h1>Vehicle Sales Report</h1>
+    <div class="sub">CDK Journal/GL &times; Deskit cross-reference</div>
+  </div>
+  <div class="grow"></div>
+  <div class="deal-pick">
+    <label for="dealerSel">Dealership</label>
+    <select id="dealerSel" class="dealer">
+      <option value="MacDonald">MacDonald</option>
+      <option value="Hillside">Hillside</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <!-- STEP 1: ACCOUNT SETTINGS -->
+  <section class="card" id="settingsCard">
+    <div class="hd" data-toggle>
+      <span class="step-badge">1</span>
+      <h2>GL Account Setup &mdash; <span id="settingsDealerName">MacDonald</span></h2>
+      <span class="chev">&#9660;</span>
+    </div>
+    <div class="bd">
+      <p class="muted" style="margin-top:0">
+        Define which GL account numbers belong to each category, <b>per dealership</b>. The report math uses
+        these to calculate Price, Cost, F&amp;I Gross and commissions. Settings save in this browser
+        automatically; use Export/Import for a backup or to copy to another computer.
+      </p>
+      <div class="cat-tabs" id="catTabs"></div>
+      <div id="catPanels"></div>
+      <div class="acct-actions" style="margin-top:16px;border-top:1px solid var(--line);padding-top:14px">
+        <button class="primary" id="saveCfgBtn">Save Settings</button>
+        <span id="cfgSaveStatus" class="muted"></span>
+        <div class="grow"></div>
+        <button id="exportCfgBtn">Export Settings (backup)</button>
+        <button id="importCfgBtn">Import Settings</button>
+        <input type="file" id="importCfgFile" accept="application/json" class="hide" />
+        <button class="danger" id="resetCfgBtn">Reset to defaults</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: UPLOAD -->
+  <section class="card" id="uploadCard">
+    <div class="hd" data-toggle>
+      <span class="step-badge">2</span>
+      <h2>Upload Files</h2>
+      <span class="chev">&#9660;</span>
+    </div>
+    <div class="bd">
+      <div class="row">
+        <div class="col">
+          <div class="drop" id="glDrop">
+            <h3>CDK GL / Journal Export <span class="muted">(the "bible")</span></h3>
+            <p class="muted" style="margin:4px 0 10px">Determines which deals appear. Drag a file here or</p>
+            <button class="primary" type="button" onclick="document.getElementById('glFile').click()">Choose GL file</button>
+            <input type="file" id="glFile" accept=".xlsx,.xls,.csv" />
+            <div class="fname" id="glName"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="drop" id="dkDrop">
+            <h3>Deskit Export <span class="muted">(cross-reference)</span></h3>
+            <p class="muted" style="margin:4px 0 10px">Supplies dates, customer, vehicle, salespeople. Drag here or</p>
+            <button class="primary" type="button" onclick="document.getElementById('dkFile').click()">Choose Deskit file</button>
+            <input type="file" id="dkFile" accept=".xlsx,.xls,.csv" />
+            <div class="fname" id="dkName"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="glFormatNote"></div>
+
+      <div id="glMapWrap" class="hide" style="margin-top:14px;background:var(--soft);border-radius:10px;padding:14px">
+        <b style="font-size:13px">GL column mapping</b>
+        <span class="muted" style="font-size:12px"> &mdash; auto-detected. Adjust only if needed.</span>
+        <div class="row" style="margin-top:10px">
+          <div style="min-width:180px"><label class="muted" style="font-size:12px">Account #</label><br><select id="mapAccount" class="filter-input"></select></div>
+          <div style="min-width:180px"><label class="muted" style="font-size:12px">Reference / Stock #</label><br><select id="mapRef" class="filter-input"></select></div>
+          <div style="min-width:180px"><label class="muted" style="font-size:12px">Posting Date</label><br><select id="mapDate" class="filter-input"></select></div>
+          <div style="min-width:180px"><label class="muted" style="font-size:12px">Amount</label><br><select id="mapAmount" class="filter-input"></select></div>
+          <div style="min-width:150px"><label class="muted" style="font-size:12px">Debit (optional)</label><br><select id="mapDebit" class="filter-input"></select></div>
+          <div style="min-width:150px"><label class="muted" style="font-size:12px">Credit (optional)</label><br><select id="mapCredit" class="filter-input"></select></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0">
+          Use a single <b>Amount</b> column, OR a <b>Debit</b> + <b>Credit</b> pair (Amount = Debit &minus; Credit).
+        </p>
+      </div>
+
+      <div class="toolbar" style="margin-top:16px">
+        <button class="primary" id="genBtn" disabled>Generate Report</button>
+        <div id="loadStatus" class="status"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: REPORT -->
+  <section class="card no-print hide" id="reportCard">
+    <div class="hd" data-toggle>
+      <span class="step-badge">3</span>
+      <h2>Report &mdash; <span id="reportDealerName"></span></h2>
+      <span class="chev">&#9660;</span>
+    </div>
+    <div class="bd">
+      <div class="summary-cards" id="summaryCards"></div>
+      <div class="toolbar">
+        <input type="text" class="filter-input" id="reportFilter" placeholder="Filter rows (stock, customer, salesperson…)" />
+        <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:6px">
+          <input type="checkbox" id="onlyMatched" /> Only deals found in Deskit
+        </label>
+        <div class="grow"></div>
+        <button id="exportCsvBtn">Export CSV</button>
+        <button id="printBtn">Print / PDF</button>
+      </div>
+      <div class="report-wrap">
+        <table class="report" id="reportTable">
+          <thead></thead><tbody></tbody><tfoot></tfoot>
+        </table>
+      </div>
+      <div class="legend" id="reportLegend"></div>
+      <div id="fiBasis"></div>
+    </div>
+  </section>
+</main>
+
+<div class="footer-note">Standalone tool &mdash; runs entirely in your browser. No data leaves this computer.</div>
+
+<!-- SheetJS (embedded for offline use) -->
+<script>/*__SHEETJS_LIB__*/</script>
+<!-- MacDonald default chart-of-accounts -->
+<script>/*__MAC_DEFAULTS__*/</script>
+<!-- Application -->
+<script>
+/*__APP_JS__*/
+</script>
+</body>
+</html>
