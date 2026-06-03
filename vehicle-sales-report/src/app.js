@@ -305,7 +305,8 @@ function parseDeskit(grid){
   const col={ stock:idx("STOCK#"), make:idx("MAKE"), vehicle:idx("VEHICLE"),
     inservice:idx("INSERVICE DATE"), first:idx("FIRST NAME"), last:idx("LAST NAME"),
     sold:idx("SOLD DATE"), delivery:idx("DELIVERY DATE"),
-    sp1:idx("SP1"), sm:idx("SM"), fi:idx("FI MANAGER"), type:idx("TYPE"), status:idx("STATUS") };
+    sp1:idx("SP1"), sm:idx("SM"), fi:idx("FI MANAGER"),
+    vehType:idx("VEH TYPE"), type:idx("TYPE"), status:idx("STATUS") };
   const deals={};
   for(let i=hr+1;i<grid.length;i++){
     const row=grid[i]; if(!row) continue;
@@ -314,7 +315,7 @@ function parseDeskit(grid){
     deals[stock]={ stock:String(row[col.stock]).trim(), make:g(col.make), vehicle:g(col.vehicle),
       inservice:g(col.inservice), sold:g(col.sold), delivery:g(col.delivery),
       first:g(col.first), last:g(col.last), sp1:g(col.sp1), sm:g(col.sm), fi:g(col.fi),
-      type:g(col.type), status:g(col.status) };
+      vehType:g(col.vehType), type:g(col.type), status:g(col.status) };
   }
   return deals;
 }
@@ -441,6 +442,7 @@ const REPORT_COLS = [
   {key:"stock",      label:"Stock #",              type:"text"},
   {key:"year",       label:"Year",                 type:"text"},
   {key:"model",      label:"Model",                type:"text"},
+  {key:"vehType",    label:"Veh Type",             type:"text"},
   {key:"dealType",   label:"Deal Type",            type:"text"},
   {key:"customer",   label:"Customer Name",        type:"text"},
   {key:"daysInStock",label:"Days In Stock",        type:"int"},
@@ -548,6 +550,7 @@ function generateReport(){
       stock: gl.stockDisp||(dk?dk.stock:stock),
       soldDate, postDate,
       year:ym.year, model:ym.model||(dk?String(dk.make||""):""),
+      vehType: dk?String(dk.vehType||"").trim():"",
       dealType: dk?String(dk.type||"").trim():"",
       customer:customerName(dk), daysInStock,
       price, cost, frontGross: round2(price-cost),

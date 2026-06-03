@@ -41,12 +41,13 @@ computer.** Just double-click **`Vehicle Sales Report.html`**.
 
 ## Report columns
 
-Sold Date · Stock # · Year · Model · Deal Type · Customer Name · Days In Stock · Price ·
-Cost · Front Gross · Salesperson · Sales Commission · Business Manager · F&I Sales ·
+Sold Date · Stock # · Year · Model · Veh Type · Deal Type · Customer Name · Days In Stock ·
+Price · Cost · Front Gross · Salesperson · Sales Commission · Business Manager · F&I Sales ·
 F&I Cost · F&I Gross · F&I Commission · Sales F&I Commission.
 
-**Deal Type** comes from Deskit's `TYPE` field (Finance, Cash, Lease, Cash Wholesale,
-Cash DealerTrade, etc.) and has a checkbox dropdown in Step 3 to show/hide selected types.
+**Veh Type** comes from Deskit's `VEH TYPE` field (New / Used / CPO). **Deal Type** comes
+from Deskit's `TYPE` field (Finance, Cash, Lease, Cash Wholesale, Cash DealerTrade, etc.)
+and has a checkbox dropdown in Step 3 to show/hide selected types.
 
 ### Where each value comes from
 
@@ -55,6 +56,7 @@ Cash DealerTrade, etc.) and has a checkbox dropdown in Step 3 to show/hide selec
 | Sold Date, Days In Stock | Deskit `SOLD DATE`; days = Sold − `INSERVICE DATE` |
 | Stock # | GL `Reference` (= Deskit `STOCK#`) |
 | Year, Model | Parsed from Deskit `VEHICLE` (leading year split off) |
+| Veh Type | Deskit `VEH TYPE` (New / Used / CPO) |
 | Deal Type | Deskit `TYPE` (Finance / Cash / Lease / Wholesale / …) |
 | Customer Name | Deskit `FIRST NAME` + `LAST NAME` |
 | Salesperson | Deskit `SP1` |
