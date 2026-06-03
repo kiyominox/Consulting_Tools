@@ -109,6 +109,28 @@ Each category has a **balance type** so GL signs come out right on the report:
 
 Only GL lines posted to a configured account are counted; everything else is ignored.
 
+## Step 4 – Dashboard
+
+After generating, a **Dashboard** appears with metric cards (deals, New/Used/CPO split,
+front gross, F&I gross, total gross, per-deal averages/PVR, commissions) and breakdown
+tables — **by Salesperson, by Business Manager, by Vehicle Type, and by Deal Type** — each
+showing deal count, front/F&I/total gross and per-deal averages. The dashboard reflects
+**whatever is currently shown**, so a new- or used-car manager can filter to their slice
+(e.g. Veh Type = New) and the whole dashboard updates; the controller leaves filters open
+for the full picture.
+
+## Excel export
+
+The `.xlsx` exports are styled via ExcelJS and contain two sheets:
+
+- **Summary** — titled header, Key Metrics block, and the same four breakdown tables.
+- **Deals** — the full report with a frozen, colored header row, banded rows, money/date
+  number formats, an autofilter, and a totals row.
+
+By default the **"Only deals found in Deskit"** filter is **ticked**, so reports and the
+dashboard start with retail/Deskit-matched deals only (untick it to include wholesale and
+dealer-trade units that are in the GL but not Deskit).
+
 ## Notes
 
 - A deal that exists in the GL but **isn't found in Deskit** is still shown (highlighted,
@@ -130,7 +152,8 @@ Only GL lines posted to a configured account are counted; everything else is ign
 src/index.template.html   page layout + styles
 src/app.js                 application logic
 src/mac_defaults.js        MacDonald chart of accounts (window.MAC_DEFAULTS)
-vendor/xlsx.full.min.js    SheetJS parser (embedded for offline use)
+vendor/xlsx.full.min.js    SheetJS parser (reads the uploads, offline)
+vendor/exceljs.min.js      ExcelJS writer (styled .xlsx export, offline)
 build.py                   inlines all of the above into "Vehicle Sales Report.html"
 ```
 

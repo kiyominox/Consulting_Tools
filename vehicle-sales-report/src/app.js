@@ -639,10 +639,10 @@ function renderReport(){
   thead.appendChild(htr);
 
   tbody.innerHTML="";
-  const totals={}; let shown=0;
+  const totals={}; let shown=0; const vis=[];
   REPORT_DATA.forEach(r=>{
     if(!rowVisible(r)) return;
-    shown++;
+    shown++; vis.push(r);
     const tr=document.createElement("tr"); if(!r._matched) tr.className="missing";
     REPORT_COLS.forEach(c=>{
       const td=document.createElement("td"); let v=r[c.key];
@@ -684,7 +684,87 @@ function renderReport(){
     `F&amp;I Gross = F&amp;I Sale − F&amp;I Cost. Sales F&amp;I Commission = Sales Commission + F&amp;I Commission.`;
 
   renderFiBasis();
+  renderDashboard(vis);
+  const dcard=document.getElementById("dashboardCard");
+  dcard.classList.remove("hide");
+  document.getElementById("dashDealerName").textContent=CURRENT_DEALER;
 }
+
+/* ============================================================ METRICS + DASHBOARD */
+function summarize(rows){
+  const t={count:rows.length,price:0,cost:0,front:0,fiSale:0,fiCost:0,fi:0,salesComm:0,fiComm:0,
+           newCount:0,usedCount:0,cpoCount:0};
+  rows.forEach(r=>{
+    t.price+=r.price; t.cost+=r.cost; t.front+=r.frontGross;
+    t.fiSale+=r.fiSale; t.fiCost+=r.fiCost; t.fi+=r.fiGross;
+    t.salesComm+=r.salesComm; t.fiComm+=r.fiComm;
+    const v=String(r.vehType||"").toUpperCase();
+    if(v==="NEW") t.newCount++; else if(v==="USED") t.usedCount++; else if(v==="CPO") t.cpoCount++;
+  });
+  t.total=t.front+t.fi; t.totalComm=t.salesComm+t.fiComm;
+  t.avgFront=t.count?t.front/t.count:0; t.avgFi=t.count?t.fi/t.count:0; t.avgTotal=t.count?t.total/t.count:0;
+  return t;
+}
+function groupSummary(rows, keyFn, blankLabel){
+  const m=new Map();
+  rows.forEach(r=>{
+    let k=keyFn(r); if(k===""||k==null) k=blankLabel||"(none)";
+    let g=m.get(k);
+    if(!g){ g={name:k,count:0,front:0,fi:0,total:0,price:0,cost:0,salesComm:0,fiComm:0}; m.set(k,g); }
+    g.count++; g.front+=r.frontGross; g.fi+=r.fiGross; g.total+=r.frontGross+r.fiGross;
+    g.price+=r.price; g.cost+=r.cost; g.salesComm+=r.salesComm; g.fiComm+=r.fiComm;
+  });
+  const arr=[...m.values()];
+  arr.forEach(g=>{ g.avgFront=g.count?g.front/g.count:0; g.avgFi=g.count?g.fi/g.count:0; g.avgTotal=g.count?g.total/g.count:0; });
+  arr.sort((a,b)=>b.total-a.total);
+  return arr;
+}
+
+const DASH_TABLES = [
+  {title:"By Salesperson",       key:"salesperson", blank:"(no salesperson)"},
+  {title:"By Business Manager",  key:"bizMgr",      blank:"(no manager)"},
+  {title:"By Vehicle Type",      key:"vehType",     blank:"(blank)"},
+  {title:"By Deal Type",         key:"dealType",    blank:"(blank)"},
+];
+
+function renderDashboard(rows){
+  const t=summarize(rows);
+  const note=document.getElementById("dashScopeNote");
+  note.innerHTML = `Reflects the <b>${rows.length}</b> deal(s) currently shown (Veh Type / Deal Type / search / Deskit filters all apply). `+
+                   `Adjust the filters above to slice by new/used, manager, etc.`;
+
+  const cards=[
+    {lab:"Deals", val:t.count.toLocaleString(), sub:`New ${t.newCount} · Used ${t.usedCount} · CPO ${t.cpoCount}`, accent:true},
+    {lab:"Total Gross", val:fmtMoney(t.total), sub:`${fmtMoney(t.avgTotal)} / deal (PVR)`, accent:true},
+    {lab:"Front Gross", val:fmtMoney(t.front), sub:`${fmtMoney(t.avgFront)} / deal`},
+    {lab:"F&I Gross", val:fmtMoney(t.fi), sub:`${fmtMoney(t.avgFi)} / deal`},
+    {lab:"Total Sales", val:fmtMoney(t.price), sub:`Cost ${fmtMoney(t.cost)}`},
+    {lab:"Sales Commission", val:fmtMoney(t.salesComm)},
+    {lab:"F&I Commission", val:fmtMoney(t.fiComm), sub:`Total comp ${fmtMoney(t.totalComm)}`},
+  ];
+  document.getElementById("dashCards").innerHTML = cards.map(c=>
+    `<div class="scard${c.accent?" accent":""}"><div class="lab">${c.lab}</div>`+
+    `<div class="val">${c.val}</div>${c.sub?`<div class="sub">${c.sub}</div>`:""}</div>`).join("");
+
+  const wrap=document.getElementById("dashTables");
+  wrap.innerHTML = DASH_TABLES.map(def=>{
+    const groups=groupSummary(rows, r=>r[def.key], def.blank);
+    const tot=groups.reduce((a,g)=>({count:a.count+g.count,front:a.front+g.front,fi:a.fi+g.fi,total:a.total+g.total}),{count:0,front:0,fi:0,total:0});
+    const body=groups.map(g=>`<tr><td>${escapeHtml(g.name)}</td><td>${g.count}</td>`+
+      `<td>${fmtMoney(g.front)}</td><td>${fmtMoney(g.avgFront)}</td>`+
+      `<td>${fmtMoney(g.fi)}</td><td>${fmtMoney(g.avgFi)}</td>`+
+      `<td>${fmtMoney(g.total)}</td><td>${fmtMoney(g.avgTotal)}</td></tr>`).join("");
+    const avgTot=tot.count?tot.total/tot.count:0;
+    return `<div class="dash-table"><h3>${def.title}</h3><div class="twrap"><table class="grp">`+
+      `<thead><tr><th>${def.title.replace(/^By /,"")}</th><th>Deals</th><th>Front</th><th>Avg Front</th>`+
+      `<th>F&I</th><th>Avg F&I</th><th>Total</th><th>Avg Total</th></tr></thead>`+
+      `<tbody>${body}</tbody>`+
+      `<tfoot><tr><td>Total</td><td>${tot.count}</td><td>${fmtMoney(tot.front)}</td><td></td>`+
+      `<td>${fmtMoney(tot.fi)}</td><td></td><td>${fmtMoney(tot.total)}</td><td>${fmtMoney(avgTot)}</td></tr></tfoot>`+
+      `</table></div></div>`;
+  }).join("");
+}
+function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
 
 function renderFiBasis(){
   const el=document.getElementById("fiBasis");
@@ -771,36 +851,151 @@ function exportCSV(scope){
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
   a.download=exportFileBase(scope)+".csv"; a.click();
 }
-function exportXLSX(scope){
-  const aoa=[REPORT_COLS.map(c=>c.label)];
-  exportRowsForScope(scope).forEach(r=>{
-    aoa.push(REPORT_COLS.map(c=>{
-      let v=r[c.key];
-      if(c.type==="date") return (v instanceof Date)? v : "";
-      if(c.type==="money") return (v==null||v==="")? "" : round2(+v);
-      if(c.type==="int") return (v===""||v==null)? "" : +v;
-      return v==null? "" : String(v);
-    }));
-  });
-  const ws=XLSX.utils.aoa_to_sheet(aoa,{cellDates:true});
-  // column widths + number/date formats
-  ws["!cols"]=REPORT_COLS.map(c=>({wch: c.type==="money"?14 : c.type==="date"?12 : Math.max(10,c.label.length+2)}));
-  const last=aoa.length-1;
-  REPORT_COLS.forEach((c,ci)=>{
-    if(c.type!=="money"&&c.type!=="date") return;
-    for(let ri=1;ri<=last;ri++){
-      const addr=XLSX.utils.encode_cell({r:ri,c:ci}); const cell=ws[addr];
-      if(!cell||cell.v===""||cell.v==null) continue;
-      cell.z = c.type==="money" ? "#,##0.00" : "yyyy-mm-dd";
-    }
-  });
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,CURRENT_DEALER.slice(0,28)||"Report");
-  XLSX.writeFile(wb, exportFileBase(scope)+".xlsx");
+/* styled .xlsx via ExcelJS — a Summary sheet of metrics + a formatted Deals sheet */
+const XL = { navy:"FF1E3A8A", blue:"FF1D4ED8", soft:"FFF1F5F9", band:"FFF8FAFC",
+             white:"FFFFFFFF", total:"FFEEF2FF", grey:"FF94A3B8" };
+function xlBorderAll(){ const s={style:"thin",color:{argb:XL.soft}}; return {top:s,left:s,bottom:s,right:s}; }
+function numFmtFor(type){ return type==="money"?"#,##0.00":type==="int"?"#,##0":type==="date"?"yyyy-mm-dd":null; }
+
+async function exportXLSX(scope){
+  const rows=exportRowsForScope(scope);
+  const wb=new ExcelJS.Workbook();
+  wb.creator="Vehicle Sales Report"; wb.created=new Date();
+  buildSummarySheet(wb, rows, scope);
+  buildDetailSheet(wb, rows);
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=exportFileBase(scope)+".xlsx"; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
 }
-function doExport(scope,fmt){
+
+function buildDetailSheet(wb, rows){
+  const ws=wb.addWorksheet("Deals",{views:[{state:"frozen",ySplit:1}]});
+  ws.columns=REPORT_COLS.map(c=>({header:c.label,key:c.key,
+    width: c.type==="money"?14 : c.type==="date"?12 : c.type==="int"?12
+         : (c.key==="customer"||c.key==="model")?24 : (c.key==="salesperson"||c.key==="bizMgr")?18
+         : Math.max(11,c.label.length+2)}));
+  rows.forEach(r=>{
+    const o={};
+    REPORT_COLS.forEach(c=>{ let v=r[c.key];
+      if(c.type==="date") o[c.key]=(v instanceof Date)?v:null;
+      else if(c.type==="money") o[c.key]=(v==null||v==="")?null:round2(+v);
+      else if(c.type==="int") o[c.key]=(v===""||v==null)?null:+v;
+      else o[c.key]= v==null?"":String(v);
+    });
+    ws.addRow(o);
+  });
+  const hr=ws.getRow(1); hr.height=22;
+  hr.eachCell(c=>{ c.font={bold:true,color:{argb:XL.white}};
+    c.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.navy}};
+    c.alignment={vertical:"middle",horizontal:"left"}; c.border=xlBorderAll(); });
+  REPORT_COLS.forEach((c,i)=>{ const f=numFmtFor(c.type); if(f) ws.getColumn(i+1).numFmt=f; });
+  for(let ri=2; ri<=rows.length+1; ri++){
+    const row=ws.getRow(ri);
+    const band = (ri%2===1);
+    row.eachCell(c=>{ c.border=xlBorderAll(); if(band) c.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.band}}; });
+  }
+  // totals row (money columns only)
+  const totals={}; rows.forEach(r=>REPORT_COLS.forEach(c=>{ if(c.type==="money") totals[c.key]=(totals[c.key]||0)+(+r[c.key]||0); }));
+  const tvals=REPORT_COLS.map((c,i)=> i===0?`TOTALS (${rows.length} deals)` : (c.type==="money"?round2(totals[c.key]||0):null));
+  const tr=ws.addRow(tvals);
+  tr.eachCell((c,i)=>{ c.font={bold:true}; c.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.total}};
+    c.border={top:{style:"medium",color:{argb:XL.blue}}};
+    if(REPORT_COLS[i-1] && REPORT_COLS[i-1].type==="money") c.numFmt="#,##0.00"; });
+  ws.autoFilter={from:{row:1,column:1},to:{row:1,column:REPORT_COLS.length}};
+}
+
+function buildSummarySheet(wb, rows, scope){
+  const ws=wb.addWorksheet("Summary",{views:[{showGridLines:false}]});
+  const NCOL=8;
+  ws.columns=[{width:28},{width:14},{width:14},{width:14},{width:14},{width:14},{width:14},{width:14}];
+  let row=1;
+  ws.mergeCells(row,1,row,NCOL); let c=ws.getCell(row,1);
+  c.value="Vehicle Sales Report"; c.font={bold:true,size:20,color:{argb:XL.white}};
+  c.alignment={vertical:"middle",horizontal:"left",indent:1};
+  c.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.navy}}; ws.getRow(row).height=34; row++;
+  ws.mergeCells(row,1,row,NCOL); c=ws.getCell(row,1);
+  const scopeTxt = scope==="shown" ? "Filtered view (deals shown)" : "All deals";
+  c.value=`${CURRENT_DEALER}    •    ${scopeTxt}    •    ${rows.length} deals    •    generated ${fmtDate(new Date())}`;
+  c.font={color:{argb:XL.white}}; c.alignment={horizontal:"left",indent:1};
+  c.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.blue}}; ws.getRow(row).height=20; row+=2;
+
+  const t=summarize(rows);
+  row=addKpiBlock(ws,row,t); row++;
+  DASH_TABLES.forEach(def=>{
+    const groups=groupSummary(rows, r=>r[def.key], def.blank);
+    row=addGroupTable(ws,row,def.title,def.title.replace(/^By /,""),groups); row++;
+  });
+  ws.mergeCells(row,1,row,NCOL); c=ws.getCell(row,1);
+  c.value="Generated by the Vehicle Sales Report tool."; c.font={italic:true,size:10,color:{argb:XL.grey}};
+}
+
+function addKpiBlock(ws,row,t){
+  ws.mergeCells(row,1,row,2); let h=ws.getCell(row,1); h.value="Key Metrics";
+  h.font={bold:true,size:12,color:{argb:XL.white}}; h.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.blue}};
+  h.alignment={indent:1}; ws.getRow(row).height=18; row++;
+  const kpis=[
+    ["Deals", t.count, "int"],
+    ["New / Used / CPO", `${t.newCount} / ${t.usedCount} / ${t.cpoCount}`, "text"],
+    ["Total Sales", t.price, "money"],
+    ["Total Cost", t.cost, "money"],
+    ["Front Gross", t.front, "money"],
+    ["F&I Gross", t.fi, "money"],
+    ["Total Gross", t.total, "money"],
+    ["Avg Front / Deal", t.avgFront, "money"],
+    ["Avg F&I / Deal", t.avgFi, "money"],
+    ["Avg Total Gross / Deal (PVR)", t.avgTotal, "money"],
+    ["Sales Commission", t.salesComm, "money"],
+    ["F&I Commission", t.fiComm, "money"],
+    ["Total Commission", t.totalComm, "money"],
+  ];
+  kpis.forEach((k,idx)=>{
+    const lc=ws.getCell(row,1), vc=ws.getCell(row,2);
+    lc.value=k[0]; vc.value=k[1];
+    if(k[2]==="money") vc.numFmt="#,##0.00"; else if(k[2]==="int") vc.numFmt="#,##0";
+    vc.alignment={horizontal:"right"};
+    lc.border=xlBorderAll(); vc.border=xlBorderAll();
+    if(idx%2===0){ const fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.band}}; lc.fill=fill; vc.fill=fill; }
+    row++;
+  });
+  return row;
+}
+
+function addGroupTable(ws,row,title,firstCol,groups){
+  ws.mergeCells(row,1,row,8); let tc=ws.getCell(row,1); tc.value=title;
+  tc.font={bold:true,size:12}; tc.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.soft}};
+  tc.alignment={indent:1}; ws.getRow(row).height=18; row++;
+  const headers=[firstCol,"Deals","Front Gross","Avg Front","F&I Gross","Avg F&I","Total Gross","Avg Total"];
+  headers.forEach((hh,i)=>{ const cell=ws.getCell(row,i+1); cell.value=hh;
+    cell.font={bold:true,color:{argb:XL.white}}; cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.navy}};
+    cell.border=xlBorderAll(); cell.alignment={horizontal:i===0?"left":"right"}; });
+  row++;
+  groups.forEach((g,idx)=>{
+    const vals=[g.name,g.count,round2(g.front),round2(g.avgFront),round2(g.fi),round2(g.avgFi),round2(g.total),round2(g.avgTotal)];
+    vals.forEach((v,i)=>{ const cell=ws.getCell(row,i+1); cell.value=v; cell.border=xlBorderAll();
+      if(i>=2) cell.numFmt="#,##0.00"; else if(i===1) cell.numFmt="#,##0";
+      cell.alignment={horizontal:i===0?"left":"right"};
+      if(idx%2===0) cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.band}};
+    });
+    row++;
+  });
+  const tot=groups.reduce((a,g)=>({count:a.count+g.count,front:a.front+g.front,fi:a.fi+g.fi,total:a.total+g.total}),{count:0,front:0,fi:0,total:0});
+  const avgTot=tot.count?tot.total/tot.count:0;
+  const tvals=["Total",tot.count,round2(tot.front),null,round2(tot.fi),null,round2(tot.total),round2(avgTot)];
+  tvals.forEach((v,i)=>{ const cell=ws.getCell(row,i+1); cell.value=v; cell.font={bold:true};
+    cell.fill={type:"pattern",pattern:"solid",fgColor:{argb:XL.total}};
+    cell.border={top:{style:"thin",color:{argb:XL.blue}}};
+    if(i>=2&&v!=null) cell.numFmt="#,##0.00"; else if(i===1) cell.numFmt="#,##0";
+    cell.alignment={horizontal:i===0?"left":"right"};
+  });
+  row++;
+  return row;
+}
+
+async function doExport(scope,fmt){
   if(!REPORT_DATA.length){ alert("Generate a report first."); return; }
-  if(fmt==="csv") exportCSV(scope); else exportXLSX(scope);
+  try{ if(fmt==="csv") exportCSV(scope); else await exportXLSX(scope); }
+  catch(err){ alert("Export failed: "+(err&&err.message||err)); }
 }
 const exportBtn=document.getElementById("exportBtn");
 const exportMenu=document.getElementById("exportMenu");
