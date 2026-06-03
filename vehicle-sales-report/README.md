@@ -34,8 +34,8 @@ computer.** Just double-click **`Vehicle Sales Report.html`**.
    columns (Account #, Reference, Posting Date, Amount or Debit/Credit) are
    auto-detected; adjust the mapping if a heading is unusual.
 4. Click **Generate Report**.
-5. **Step 3 – Report.** Sort, search, filter by **Deal Type** (checkbox dropdown),
-   **Export**, or **Print / PDF**. The **Export** menu
+5. **Step 3 – Report.** Sort, search, filter by **Veh Type** and **Deal Type** (checkbox
+   dropdowns), **Export**, or **Print / PDF**. The **Export** menu
    offers four choices — *All deals* or *Only deals found in Deskit*, each as **Excel
    (.xlsx)** or **CSV**. Excel exports keep real dates and numeric/money formatting.
 
@@ -46,8 +46,9 @@ Price · Cost · Front Gross · Salesperson · Sales Commission · Business Mana
 F&I Cost · F&I Gross · F&I Commission · Sales F&I Commission.
 
 **Veh Type** comes from Deskit's `VEH TYPE` field (New / Used / CPO). **Deal Type** comes
-from Deskit's `TYPE` field (Finance, Cash, Lease, Cash Wholesale, Cash DealerTrade, etc.)
-and has a checkbox dropdown in Step 3 to show/hide selected types.
+from Deskit's `TYPE` field (Finance, Cash, Lease, Cash Wholesale, Cash DealerTrade, etc.).
+Both have a **checkbox dropdown** in Step 3 (Select all / Clear) to show/hide values; the
+two filters combine (a row must pass both).
 
 ### Where each value comes from
 

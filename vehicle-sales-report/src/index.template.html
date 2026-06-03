@@ -126,7 +126,7 @@
        padding:8px 10px;border-radius:7px;font-weight:500}
   .export-menu .menu-item:hover{background:var(--soft)}
   .export-menu.scroll{max-height:330px;overflow:auto}
-  #dealTypeMenu{left:0;right:auto}
+  #dealTypeMenu,#vehTypeMenu{left:0;right:auto}
   .export-menu .menu-check{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;font-size:13px;cursor:pointer}
   .export-menu .menu-check:hover{background:var(--soft)}
   .export-menu .menu-check input{margin:0}
@@ -248,6 +248,10 @@
       <div class="summary-cards" id="summaryCards"></div>
       <div class="toolbar">
         <input type="text" class="filter-input" id="reportFilter" placeholder="Filter rows (stock, customer, salesperson…)" />
+        <div class="export-wrap">
+          <button id="vehTypeBtn">Veh Type &#9662;</button>
+          <div class="export-menu scroll hide" id="vehTypeMenu"></div>
+        </div>
         <div class="export-wrap">
           <button id="dealTypeBtn">Deal Type &#9662;</button>
           <div class="export-menu scroll hide" id="dealTypeMenu"></div>
