@@ -445,9 +445,12 @@ const REPORT_COLS = [
   {key:"daysInStock",label:"Days In Stock",        type:"int"},
   {key:"price",      label:"Price",                type:"money"},
   {key:"cost",       label:"Cost",                 type:"money"},
+  {key:"frontGross", label:"Front Gross",          type:"money"},
   {key:"salesperson",label:"Salesperson",          type:"text"},
   {key:"salesComm",  label:"Sales Commission",     type:"money"},
   {key:"bizMgr",     label:"Business Manager",     type:"text"},
+  {key:"fiSale",     label:"F&I Sales",            type:"money"},
+  {key:"fiCost",     label:"F&I Cost",             type:"money"},
   {key:"fiGross",    label:"F&I Gross",            type:"money"},
   {key:"fiComm",     label:"F&I Commission",       type:"money"},
   {key:"salesFiComm",label:"Sales F&I Commission", type:"money"},
@@ -528,7 +531,8 @@ function generateReport(){
     const gl=byStock[stock]; const dk=dkDeals?dkDeals[stock]:null;
     const catVal=ck=>(gl.cats[ck]||0)*dc[ck].sign;
     const price=catVal("sale"), cost=catVal("cost");
-    const fiGross=catVal("fiSale")-catVal("fiCost");
+    const fiSale=catVal("fiSale"), fiCost=catVal("fiCost");
+    const fiGross=fiSale-fiCost;
     const salesComm=catVal("salesComm");
     const fiCommAcct=catVal("fiComm");
     const ym=parseYearModel(dk&&dk.vehicle);
@@ -542,10 +546,10 @@ function generateReport(){
       soldDate, postDate,
       year:ym.year, model:ym.model||(dk?String(dk.make||""):""),
       customer:customerName(dk), daysInStock,
-      price, cost,
+      price, cost, frontGross: round2(price-cost),
       salesperson: dk?String(dk.sp1||"").trim():"",
       salesComm, bizMgr: dk?String(dk.fi||"").trim():"",
-      fiGross, fiCommAcct, fiComm:0, salesFiComm:0,
+      fiSale, fiCost, fiGross, fiCommAcct, fiComm:0, salesFiComm:0,
       _matched: !!dk,
     });
   });

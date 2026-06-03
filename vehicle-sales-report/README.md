@@ -39,8 +39,8 @@ computer.** Just double-click `index.html`.
 ## Report columns
 
 Sold Date · Stock # · Year · Model · Customer Name · Days In Stock · Price · Cost ·
-Salesperson · Sales Commission · Business Manager · F&I Gross · F&I Commission ·
-Sales F&I Commission.
+Front Gross · Salesperson · Sales Commission · Business Manager · F&I Sales · F&I Cost ·
+F&I Gross · F&I Commission · Sales F&I Commission.
 
 ### Where each value comes from
 
@@ -54,7 +54,10 @@ Sales F&I Commission.
 | Business Manager | Deskit `FI MANAGER` |
 | Price | Sum of **Sale** accounts |
 | Cost | Sum of **Cost** accounts |
-| F&I Gross | **F&I Sale** − **F&I Cost** accounts |
+| Front Gross | Price − Cost |
+| F&I Sales | Sum of **F&I Sale** accounts |
+| F&I Cost | Sum of **F&I Cost** accounts |
+| F&I Gross | F&I Sales − F&I Cost |
 | Sales Commission | Sum of **Sales Commission** accounts |
 | F&I Commission | Tiered % of the deal's F&I Gross (see below), or sum of accounts |
 | Sales F&I Commission | Sales Commission + F&I Commission |
