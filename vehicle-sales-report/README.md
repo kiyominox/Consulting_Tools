@@ -3,11 +3,20 @@
 A **single, fully standalone HTML tool** for building a per-dealership vehicle sales
 report from two exports:
 
-1. **CDK GL export** — the "bible" that determines *which deals appear* on the report.
+1. **CDK GL / Journal export** — the "bible" that determines *which deals appear*.
 2. **Deskit export** — the cross-reference that supplies dates, customer, vehicle and
    salespeople.
 
 The two files are joined on **GL `Reference` number = Deskit `STOCK#`**.
+
+The tool auto-detects the **CDK Journal Report** layout (the hierarchical export with
+`Refer Detail` lines) and reads the account/amount/reference from those detail lines. A
+plain flat GL (one row per entry with Account/Amount columns) also works — the column
+mapping is auto-detected and adjustable.
+
+**MacDonald's chart of accounts is pre-loaded** (Sale 299, Cost 299, F&I Sale 46,
+F&I Cost 31, Sales Commission 4, F&I Commission 3). Hillside starts empty until those
+accounts are provided. Everything is editable in Step 1 and saved in the browser.
 
 Everything runs in the browser. No server, no internet connection required — the
 SheetJS spreadsheet parser is embedded directly in the file. **No data ever leaves the
@@ -71,6 +80,16 @@ Only GL lines posted to a configured account are counted; everything else is ign
 - The bottom row totals every money column; the cards above summarise units, price,
   front gross, F&I gross and commission.
 
-> Built with placeholder defaults. Once the real account lists for each dealership and a
-> live GL export are loaded, the figures populate immediately — adjust the account lists
-> in Step 1 anytime accounts are added, removed, or changed in the GL.
+## Known data note — F&I Commission
+
+MacDonald's F&I commission accounts (`74000`, `85500`, `85600`) have **no activity in the
+vehicle-sales journals (10/12/20)** that make up the sample Journal Report, so the F&I
+Commission column computes to `$0`. F&I manager pay appears to be booked outside these
+journals (payroll/back-end). To populate that column, either include the journal where
+F&I commission is posted in the export, or point the **F&I Commission** category at the
+account that actually carries it. Sales commission (`1101`/`1102`/`1103`,
+"FRONTCOMMISSION DUE") posts in these journals and computes correctly.
+
+> The single "Commissions" list from the chart of accounts is pre-split into **Sales
+> Commission** (`1100`–`1103`) and **F&I Commission** (`74000`, `85500`, `85600`) so the
+> report can show both columns. Adjust the split in Step 1 if needed.
