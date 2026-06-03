@@ -610,11 +610,21 @@ function sortReport(){
   });
 }
 
+function rowVisible(r){
+  if(document.getElementById("onlyMatched").checked && !r._matched) return false;
+  if(!vehTypeFilter.pass(r)) return false;
+  if(!dealTypeFilter.pass(r)) return false;
+  const filter=document.getElementById("reportFilter").value.trim().toLowerCase();
+  if(filter){
+    const hay=[r.stock,r.customer,r.salesperson,r.bizMgr,r.model,r.year,r.vehType,r.dealType].join(" ").toLowerCase();
+    if(!hay.includes(filter)) return false;
+  }
+  return true;
+}
+
 function renderReport(){
   const table=document.getElementById("reportTable");
   const thead=table.querySelector("thead"), tbody=table.querySelector("tbody"), tfoot=table.querySelector("tfoot");
-  const filter=document.getElementById("reportFilter").value.trim().toLowerCase();
-  const onlyMatched=document.getElementById("onlyMatched").checked;
 
   thead.innerHTML="";
   const htr=document.createElement("tr");
@@ -631,13 +641,7 @@ function renderReport(){
   tbody.innerHTML="";
   const totals={}; let shown=0;
   REPORT_DATA.forEach(r=>{
-    if(onlyMatched && !r._matched) return;
-    if(!vehTypeFilter.pass(r)) return;
-    if(!dealTypeFilter.pass(r)) return;
-    if(filter){
-      const hay=[r.stock,r.customer,r.salesperson,r.bizMgr,r.model,r.year].join(" ").toLowerCase();
-      if(!hay.includes(filter)) return;
-    }
+    if(!rowVisible(r)) return;
     shown++;
     const tr=document.createElement("tr"); if(!r._matched) tr.className="missing";
     REPORT_COLS.forEach(c=>{
@@ -752,10 +756,10 @@ const dealTypeFilter = makeColumnFilter({btnId:"dealTypeBtn", menuId:"dealTypeMe
 
 /* ----- Export (All / In-Deskit-only, as Excel or CSV) ----- */
 function exportRowsForScope(scope){
-  return REPORT_DATA.filter(r => scope==="matched" ? r._matched : true);
+  return REPORT_DATA.filter(r => scope==="shown" ? rowVisible(r) : true);
 }
 function exportFileBase(scope){
-  const tag = scope==="matched" ? "InDeskit" : "All";
+  const tag = scope==="shown" ? "Shown" : "All";
   return `Vehicle_Sales_Report_${CURRENT_DEALER}_${tag}_${fmtDate(new Date())}`;
 }
 function exportCSV(scope){

@@ -90,7 +90,7 @@
   .banner.j{background:#ecfeff;color:#155e75;border:1px solid #a5f3fc}
   .banner.f{background:#fffbeb;color:#92400e;border:1px solid #fde68a}
 
-  .report-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+  .report-wrap{overflow:auto;border:1px solid var(--line);border-radius:10px;max-height:calc(100vh - 210px)}
   table.report{border-collapse:collapse;width:100%;font-size:12.5px;white-space:nowrap}
   table.report th,table.report td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
   table.report thead th{position:sticky;top:0;background:#f8fafc;z-index:2;font-weight:650;
@@ -134,7 +134,7 @@
   @media print{
     header.app{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .card.no-print,.toolbar,.drop,#settingsCard,#uploadCard{display:none !important}
-    .report-wrap{overflow:visible;border:none}
+    .report-wrap{overflow:visible;border:none;max-height:none}
     table.report thead th{position:static}
   }
 </style>
@@ -266,9 +266,9 @@
             <div class="menu-section">All deals</div>
             <button class="menu-item" data-scope="all" data-fmt="xlsx">Excel (.xlsx)</button>
             <button class="menu-item" data-scope="all" data-fmt="csv">CSV (.csv)</button>
-            <div class="menu-section">Only deals found in Deskit</div>
-            <button class="menu-item" data-scope="matched" data-fmt="xlsx">Excel (.xlsx)</button>
-            <button class="menu-item" data-scope="matched" data-fmt="csv">CSV (.csv)</button>
+            <div class="menu-section">Only deals shown (current filters)</div>
+            <button class="menu-item" data-scope="shown" data-fmt="xlsx">Excel (.xlsx)</button>
+            <button class="menu-item" data-scope="shown" data-fmt="csv">CSV (.csv)</button>
           </div>
         </div>
         <button id="printBtn">Print / PDF</button>

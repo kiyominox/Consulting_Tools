@@ -36,8 +36,10 @@ computer.** Just double-click **`Vehicle Sales Report.html`**.
 4. Click **Generate Report**.
 5. **Step 3 – Report.** Sort, search, filter by **Veh Type** and **Deal Type** (checkbox
    dropdowns), **Export**, or **Print / PDF**. The **Export** menu
-   offers four choices — *All deals* or *Only deals found in Deskit*, each as **Excel
-   (.xlsx)** or **CSV**. Excel exports keep real dates and numeric/money formatting.
+   offers four choices — *All deals* or *Only deals shown* (the rows currently visible
+   after every filter/search), each as **Excel (.xlsx)** or **CSV**. Excel exports keep
+   real dates and numeric/money formatting. The column-header row and totals row stay
+   pinned while you scroll through the deals.
 
 ## Report columns
 
