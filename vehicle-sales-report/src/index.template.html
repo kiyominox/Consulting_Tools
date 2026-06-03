@@ -125,6 +125,12 @@
   .export-menu .menu-item{display:block;width:100%;text-align:left;border:none;background:transparent;
        padding:8px 10px;border-radius:7px;font-weight:500}
   .export-menu .menu-item:hover{background:var(--soft)}
+  .export-menu.scroll{max-height:330px;overflow:auto}
+  #dealTypeMenu{left:0;right:auto}
+  .export-menu .menu-check{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;font-size:13px;cursor:pointer}
+  .export-menu .menu-check:hover{background:var(--soft)}
+  .export-menu .menu-check input{margin:0}
+  .export-menu .dt-controls{display:flex;gap:6px;padding:4px 6px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;position:sticky;top:0;background:#fff}
   @media print{
     header.app{background:#1e3a8a !important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .card.no-print,.toolbar,.drop,#settingsCard,#uploadCard{display:none !important}
@@ -242,6 +248,10 @@
       <div class="summary-cards" id="summaryCards"></div>
       <div class="toolbar">
         <input type="text" class="filter-input" id="reportFilter" placeholder="Filter rows (stock, customer, salesperson…)" />
+        <div class="export-wrap">
+          <button id="dealTypeBtn">Deal Type &#9662;</button>
+          <div class="export-menu scroll hide" id="dealTypeMenu"></div>
+        </div>
         <label class="muted" style="font-size:12.5px;display:flex;align-items:center;gap:6px">
           <input type="checkbox" id="onlyMatched" /> Only deals found in Deskit
         </label>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the standalone vehicle-sales-report/index.html.
+"""Assemble the standalone "Vehicle Sales Report.html".
 
 Injects the SheetJS library, the MacDonald default chart-of-accounts, and the
 application JS into the HTML template, producing a single self-contained file
@@ -11,6 +11,7 @@ import pathlib, sys
 
 ROOT = pathlib.Path(__file__).parent
 SRC = ROOT / "src"
+OUTPUT_NAME = "Vehicle Sales Report.html"
 
 def read(p):
     return p.read_text(encoding="utf-8")
@@ -34,8 +35,8 @@ def main():
            .replace("/*__MAC_DEFAULTS__*/", macdef)
            .replace("/*__APP_JS__*/", appjs))
 
-    (ROOT / "index.html").write_text(out, encoding="utf-8")
-    print(f"Built index.html ({len(out):,} bytes)")
+    (ROOT / OUTPUT_NAME).write_text(out, encoding="utf-8")
+    print(f"Built {OUTPUT_NAME!r} ({len(out):,} bytes)")
 
 if __name__ == "__main__":
     main()

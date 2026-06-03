@@ -305,7 +305,7 @@ function parseDeskit(grid){
   const col={ stock:idx("STOCK#"), make:idx("MAKE"), vehicle:idx("VEHICLE"),
     inservice:idx("INSERVICE DATE"), first:idx("FIRST NAME"), last:idx("LAST NAME"),
     sold:idx("SOLD DATE"), delivery:idx("DELIVERY DATE"),
-    sp1:idx("SP1"), sm:idx("SM"), fi:idx("FI MANAGER"), type:idx("VEH TYPE"), status:idx("STATUS") };
+    sp1:idx("SP1"), sm:idx("SM"), fi:idx("FI MANAGER"), type:idx("TYPE"), status:idx("STATUS") };
   const deals={};
   for(let i=hr+1;i<grid.length;i++){
     const row=grid[i]; if(!row) continue;
@@ -441,6 +441,7 @@ const REPORT_COLS = [
   {key:"stock",      label:"Stock #",              type:"text"},
   {key:"year",       label:"Year",                 type:"text"},
   {key:"model",      label:"Model",                type:"text"},
+  {key:"dealType",   label:"Deal Type",            type:"text"},
   {key:"customer",   label:"Customer Name",        type:"text"},
   {key:"daysInStock",label:"Days In Stock",        type:"int"},
   {key:"price",      label:"Price",                type:"money"},
@@ -457,6 +458,8 @@ const REPORT_COLS = [
 ];
 let REPORT_DATA = [];
 let FI_BASIS = [];
+let DEAL_TYPES = [];
+let DEAL_TYPE_SEL = new Set();
 let SORT = { key:null, dir:1 };
 
 function toNum(v){
@@ -545,6 +548,7 @@ function generateReport(){
       stock: gl.stockDisp||(dk?dk.stock:stock),
       soldDate, postDate,
       year:ym.year, model:ym.model||(dk?String(dk.make||""):""),
+      dealType: dk?String(dk.type||"").trim():"",
       customer:customerName(dk), daysInStock,
       price, cost, frontGross: round2(price-cost),
       salesperson: dk?String(dk.sp1||"").trim():"",
@@ -575,7 +579,15 @@ function generateReport(){
   }
   rows.forEach(r=>{ r.salesFiComm = round2(r.salesComm + r.fiComm); });
 
-  REPORT_DATA=rows; SORT={key:"soldDate",dir:1}; sortReport();
+  REPORT_DATA=rows;
+  // distinct deal types for the filter dropdown (all selected by default)
+  DEAL_TYPES = Array.from(new Set(rows.map(r=>r.dealType||""))).sort((a,b)=>{
+    if(a===b) return 0; if(a==="") return 1; if(b==="") return -1;
+    return a.toLowerCase()<b.toLowerCase()?-1:1;
+  });
+  DEAL_TYPE_SEL = new Set(DEAL_TYPES);
+  buildDealTypeMenu(); updateDealTypeBtn();
+  SORT={key:"soldDate",dir:1}; sortReport();
   const missing=rows.filter(r=>!r._matched).length;
   status.className="status ok show";
   status.textContent=`✓ ${rows.length} deal(s) from GL · ${matchedLines.toLocaleString()} matching GL lines`
@@ -623,6 +635,7 @@ function renderReport(){
   const totals={}; let shown=0;
   REPORT_DATA.forEach(r=>{
     if(onlyMatched && !r._matched) return;
+    if(DEAL_TYPES.length && !DEAL_TYPE_SEL.has(r.dealType||"")) return;
     if(filter){
       const hay=[r.stock,r.customer,r.salesperson,r.bizMgr,r.model,r.year].join(" ").toLowerCase();
       if(!hay.includes(filter)) return;
@@ -692,6 +705,37 @@ document.getElementById("reportFilter").addEventListener("input",renderReport);
 document.getElementById("onlyMatched").addEventListener("change",renderReport);
 document.getElementById("printBtn").onclick=()=>window.print();
 
+/* ----- Deal Type filter (checkbox dropdown) ----- */
+const dealTypeBtn=document.getElementById("dealTypeBtn");
+const dealTypeMenu=document.getElementById("dealTypeMenu");
+function dtLabel(t){ return t===""? "(blank)" : t; }
+function updateDealTypeBtn(){
+  const total=DEAL_TYPES.length, sel=DEAL_TYPE_SEL.size;
+  let txt = total===0 ? "Deal Type" : (sel===total ? "Deal Type: All" : `Deal Type: ${sel} of ${total}`);
+  dealTypeBtn.innerHTML = txt + " &#9662;";
+}
+function buildDealTypeMenu(){
+  dealTypeMenu.innerHTML="";
+  const ctrl=document.createElement("div"); ctrl.className="dt-controls";
+  const all=document.createElement("button"); all.className="tiny"; all.textContent="Select all";
+  all.onclick=(e)=>{ e.stopPropagation(); DEAL_TYPE_SEL=new Set(DEAL_TYPES); buildDealTypeMenu(); updateDealTypeBtn(); renderReport(); };
+  const clr=document.createElement("button"); clr.className="tiny"; clr.textContent="Clear";
+  clr.onclick=(e)=>{ e.stopPropagation(); DEAL_TYPE_SEL=new Set(); buildDealTypeMenu(); updateDealTypeBtn(); renderReport(); };
+  ctrl.appendChild(all); ctrl.appendChild(clr); dealTypeMenu.appendChild(ctrl);
+  if(!DEAL_TYPES.length){
+    const e=document.createElement("div"); e.className="menu-section"; e.textContent="Generate a report first"; dealTypeMenu.appendChild(e); return;
+  }
+  DEAL_TYPES.forEach(t=>{
+    const lab=document.createElement("label"); lab.className="menu-check";
+    const cb=document.createElement("input"); cb.type="checkbox"; cb.checked=DEAL_TYPE_SEL.has(t);
+    cb.onchange=()=>{ if(cb.checked) DEAL_TYPE_SEL.add(t); else DEAL_TYPE_SEL.delete(t); updateDealTypeBtn(); renderReport(); };
+    const span=document.createElement("span"); span.textContent=dtLabel(t);
+    lab.appendChild(cb); lab.appendChild(span); dealTypeMenu.appendChild(lab);
+  });
+}
+dealTypeBtn.onclick=(e)=>{ e.stopPropagation(); dealTypeMenu.classList.toggle("hide"); };
+document.addEventListener("click",(e)=>{ if(!dealTypeMenu.classList.contains("hide") && !dealTypeMenu.contains(e.target) && e.target!==dealTypeBtn) dealTypeMenu.classList.add("hide"); });
+
 /* ----- Export (All / In-Deskit-only, as Excel or CSV) ----- */
 function exportRowsForScope(scope){
   return REPORT_DATA.filter(r => scope==="matched" ? r._matched : true);
@@ -749,4 +793,4 @@ exportMenu.querySelectorAll(".menu-item").forEach(b=>{
 document.addEventListener("click",(e)=>{ if(!exportMenu.classList.contains("hide") && !exportMenu.contains(e.target) && e.target!==exportBtn) exportMenu.classList.add("hide"); });
 
 /* init */
-refreshSettingsUI(); maybeEnableGenerate();
+refreshSettingsUI(); maybeEnableGenerate(); buildDealTypeMenu(); updateDealTypeBtn();

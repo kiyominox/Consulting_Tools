@@ -20,7 +20,7 @@ accounts are provided. Everything is editable in Step 1 and saved in the browser
 
 Everything runs in the browser. No server, no internet connection required — the
 SheetJS spreadsheet parser is embedded directly in the file. **No data ever leaves the
-computer.** Just double-click `index.html`.
+computer.** Just double-click **`Vehicle Sales Report.html`**.
 
 ---
 
@@ -34,15 +34,19 @@ computer.** Just double-click `index.html`.
    columns (Account #, Reference, Posting Date, Amount or Debit/Credit) are
    auto-detected; adjust the mapping if a heading is unusual.
 4. Click **Generate Report**.
-5. **Step 3 – Report.** Sort, filter, **Export**, or **Print / PDF**. The **Export** menu
+5. **Step 3 – Report.** Sort, search, filter by **Deal Type** (checkbox dropdown),
+   **Export**, or **Print / PDF**. The **Export** menu
    offers four choices — *All deals* or *Only deals found in Deskit*, each as **Excel
    (.xlsx)** or **CSV**. Excel exports keep real dates and numeric/money formatting.
 
 ## Report columns
 
-Sold Date · Stock # · Year · Model · Customer Name · Days In Stock · Price · Cost ·
-Front Gross · Salesperson · Sales Commission · Business Manager · F&I Sales · F&I Cost ·
-F&I Gross · F&I Commission · Sales F&I Commission.
+Sold Date · Stock # · Year · Model · Deal Type · Customer Name · Days In Stock · Price ·
+Cost · Front Gross · Salesperson · Sales Commission · Business Manager · F&I Sales ·
+F&I Cost · F&I Gross · F&I Commission · Sales F&I Commission.
+
+**Deal Type** comes from Deskit's `TYPE` field (Finance, Cash, Lease, Cash Wholesale,
+Cash DealerTrade, etc.) and has a checkbox dropdown in Step 3 to show/hide selected types.
 
 ### Where each value comes from
 
@@ -51,6 +55,7 @@ F&I Gross · F&I Commission · Sales F&I Commission.
 | Sold Date, Days In Stock | Deskit `SOLD DATE`; days = Sold − `INSERVICE DATE` |
 | Stock # | GL `Reference` (= Deskit `STOCK#`) |
 | Year, Model | Parsed from Deskit `VEHICLE` (leading year split off) |
+| Deal Type | Deskit `TYPE` (Finance / Cash / Lease / Wholesale / …) |
 | Customer Name | Deskit `FIRST NAME` + `LAST NAME` |
 | Salesperson | Deskit `SP1` |
 | Business Manager | Deskit `FI MANAGER` |
@@ -112,16 +117,16 @@ Only GL lines posted to a configured account are counted; everything else is ign
 > Commission is read from those accounts; F&I Commission uses the tiered method above.
 > Adjust either in Step 1 if needed.
 
-## Editing & rebuilding (`index.html` is generated)
+## Editing & rebuilding (`Vehicle Sales Report.html` is generated)
 
-`index.html` is a built artifact — do not hand-edit it. The sources live in:
+`Vehicle Sales Report.html` is a built artifact — do not hand-edit it. The sources live in:
 
 ```
 src/index.template.html   page layout + styles
-src/app.js                application logic
+src/app.js                 application logic
 src/mac_defaults.js        MacDonald chart of accounts (window.MAC_DEFAULTS)
 vendor/xlsx.full.min.js    SheetJS parser (embedded for offline use)
-build.py                   inlines all of the above into index.html
+build.py                   inlines all of the above into "Vehicle Sales Report.html"
 ```
 
 After changing anything in `src/`, rebuild the standalone file:
