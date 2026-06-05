@@ -248,6 +248,16 @@
   table.basis thead th{color:var(--ink-2);font-weight:700}
   table.basis tfoot th{border-bottom:none;border-top:2px solid var(--accent)}
   table.basis td.num,table.basis th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .fibasis-bar{display:flex;align-items:center;gap:10px;margin:6px 0 2px;flex-wrap:wrap}
+  .fibasis-bar .grow{flex:1}
+  input.firate{width:60px;padding:4px 6px;border:1px solid var(--line-2);border-radius:var(--r-sm);
+       text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  input.firate:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .rate-cell{display:inline-flex;align-items:center;gap:3px;justify-content:flex-end}
+  .auto-hint{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+  table.basis tr.ov td{background:var(--warn-soft)}
+  table.basis tr.ov .auto-hint{color:var(--warn)}
+  button.attn{box-shadow:0 0 0 3px var(--warn-line)}
 
   /* ============================================================ SETTINGS DRAWER */
   .overlay{position:fixed;inset:0;background:rgba(22,25,29,.42);z-index:60;opacity:0;transition:opacity .2s}

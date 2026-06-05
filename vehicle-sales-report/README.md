@@ -93,6 +93,13 @@ Deals with no business manager (e.g. wholesale) get none. The thresholds and rat
 **editable per dealership** in Step 1, and the report shows a per-manager breakdown
 (deals, average, rate, commission).
 
+**Manual rate override:** in that per-manager basis table at the bottom of the report, the
+**Rate %** column is editable. Type a different percentage for any manager (the auto/tier
+rate is shown beneath as a reference and overridden rows are highlighted), then click
+**Recalculate F&I commissions** to re-apply across all of that manager's deals — the
+report, totals, dashboard and exports all update. **Reset to auto** clears overrides.
+Overrides reset whenever you generate a fresh report.
+
 You can switch a dealership back to **"Sum of GL commission accounts"** in Step 1 if its
 F&I commission is posted to the ledger instead.
 

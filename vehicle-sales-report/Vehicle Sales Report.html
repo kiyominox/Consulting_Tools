@@ -248,6 +248,16 @@
   table.basis thead th{color:var(--ink-2);font-weight:700}
   table.basis tfoot th{border-bottom:none;border-top:2px solid var(--accent)}
   table.basis td.num,table.basis th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .fibasis-bar{display:flex;align-items:center;gap:10px;margin:6px 0 2px;flex-wrap:wrap}
+  .fibasis-bar .grow{flex:1}
+  input.firate{width:60px;padding:4px 6px;border:1px solid var(--line-2);border-radius:var(--r-sm);
+       text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  input.firate:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .rate-cell{display:inline-flex;align-items:center;gap:3px;justify-content:flex-end}
+  .auto-hint{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+  table.basis tr.ov td{background:var(--warn-soft)}
+  table.basis tr.ov .auto-hint{color:var(--warn)}
+  button.attn{box-shadow:0 0 0 3px var(--warn-line)}
 
   /* ============================================================ SETTINGS DRAWER */
   .overlay{position:fixed;inset:0;background:rgba(22,25,29,.42);z-index:60;opacity:0;transition:opacity .2s}
@@ -1051,6 +1061,8 @@ const REPORT_COLS = [
 ];
 let REPORT_DATA = [];
 let FI_BASIS = [];
+let FI_RATE_OVERRIDE = {};   // normalized manager name -> manually entered %
+let FI_DIRTY = false;        // true when rates edited but not yet recalculated
 let SORT = { key:null, dir:1 };
 
 function toNum(v){
@@ -1092,6 +1104,37 @@ function tierRate(avg, tiers){
   if(avg < t.t1) return t.r1;
   if(avg <= t.t2) return t.r2;
   return t.r3;
+}
+
+/* Compute F&I commission for every deal and (re)build FI_BASIS.
+   Each business manager gets an auto rate from the tiers based on their monthly
+   average F&I gross; a manual override in FI_RATE_OVERRIDE takes precedence. */
+function applyFiCommissions(rows){
+  const dc=CONFIG[CURRENT_DEALER];
+  FI_BASIS=[];
+  if((dc.fiComm.method||"tiered")==="tiered"){
+    const tiers=dc.fiComm.tiers;
+    const groups={};
+    rows.forEach(r=>{ const k=normName(r.bizMgr); if(!k) return; (groups[k]=groups[k]||{name:r.bizMgr,key:k,deals:[]}).deals.push(r); });
+    Object.keys(groups).forEach(k=>{
+      const g=groups[k];
+      const total=g.deals.reduce((s,r)=>s+r.fiGross,0);
+      const avg=g.deals.length?total/g.deals.length:0;
+      const autoRate=tierRate(avg,tiers);
+      const ov=FI_RATE_OVERRIDE[k];
+      const overridden=(ov!=null && isFinite(ov));
+      const rate=overridden?ov:autoRate;
+      let comm=0;
+      g.deals.forEach(r=>{ r.fiComm=round2(rate/100*r.fiGross); comm+=r.fiComm; });
+      FI_BASIS.push({ name:g.name, key:k, count:g.deals.length, totalFiGross:total, avg,
+                      autoRate, rate, override:overridden?ov:null, commission:round2(comm) });
+    });
+    FI_BASIS.sort((a,b)=>b.count-a.count);
+    rows.forEach(r=>{ if(!normName(r.bizMgr)) r.fiComm=0; });
+  } else {
+    rows.forEach(r=>{ r.fiComm = r.fiCommAcct; });
+  }
+  rows.forEach(r=>{ r.salesFiComm = round2(r.salesComm + r.fiComm); });
 }
 
 function generateReport(){
@@ -1151,25 +1194,8 @@ function generateReport(){
   });
 
   // ----- F&I Commission -----
-  FI_BASIS = [];
-  if((dc.fiComm.method||"tiered")==="tiered"){
-    const groups={};
-    rows.forEach(r=>{ const k=normName(r.bizMgr); if(!k) return; (groups[k]=groups[k]||{name:r.bizMgr,deals:[]}).deals.push(r); });
-    Object.keys(groups).forEach(k=>{
-      const g=groups[k];
-      const total=g.deals.reduce((s,r)=>s+r.fiGross,0);
-      const avg=g.deals.length?total/g.deals.length:0;
-      const rate=tierRate(avg, dc.fiComm.tiers);
-      let comm=0;
-      g.deals.forEach(r=>{ r.fiComm=round2(rate/100*r.fiGross); comm+=r.fiComm; });
-      FI_BASIS.push({ name:g.name, count:g.deals.length, totalFiGross:total, avg, rate, commission:comm });
-    });
-    FI_BASIS.sort((a,b)=>b.count-a.count);
-    rows.forEach(r=>{ if(!normName(r.bizMgr)) r.fiComm=0; });
-  } else {
-    rows.forEach(r=>{ r.fiComm = r.fiCommAcct; });
-  }
-  rows.forEach(r=>{ r.salesFiComm = round2(r.salesComm + r.fiComm); });
+  FI_RATE_OVERRIDE = {}; FI_DIRTY = false;   // fresh data → drop any manual rate overrides
+  applyFiCommissions(rows);
 
   REPORT_DATA=rows;
   // populate the column filter dropdowns (all selected by default)
@@ -1469,20 +1495,59 @@ function renderDashboard(rows){
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
 
+function setFiDirty(v){
+  FI_DIRTY=v;
+  const n=document.getElementById("fiDirtyNote"); if(n) n.textContent = v ? "Rates changed — click Recalculate to apply." : "";
+  const b=document.getElementById("fiRecalcBtn"); if(b) b.classList.toggle("attn", v);
+}
+function fiAutoRate(key){ const b=FI_BASIS.find(x=>x.key===key); return b?b.autoRate:null; }
+function setFiOverride(mgr,raw){
+  const v=parseFloat(raw), a=fiAutoRate(mgr);
+  if(raw===""||isNaN(v)) delete FI_RATE_OVERRIDE[mgr];           // blank → back to auto
+  else if(a!=null && Math.abs(v-a)<1e-9) delete FI_RATE_OVERRIDE[mgr]; // equals auto → not an override
+  else FI_RATE_OVERRIDE[mgr]=v;
+}
+function readFiRateInputs(el){
+  el.querySelectorAll("input.firate").forEach(inp=>setFiOverride(inp.dataset.mgr, inp.value));
+}
 function renderFiBasis(){
   const el=document.getElementById("fiBasis");
   const dc=CONFIG[CURRENT_DEALER];
   if((dc.fiComm.method||"tiered")!=="tiered" || !FI_BASIS.length){ el.innerHTML=""; return; }
   const t=dc.fiComm.tiers;
-  let rows=FI_BASIS.map(b=>`<tr><td>${b.name}</td><td class="num">${b.count}</td>`+
-    `<td class="num">${fmtMoney(b.totalFiGross)}</td><td class="num">${fmtMoney(b.avg)}</td>`+
-    `<td class="num">${b.rate}%</td><td class="num">${fmtMoney(b.commission)}</td></tr>`).join("");
+  const body=FI_BASIS.map(b=>{
+    const pending=FI_RATE_OVERRIDE[b.key];
+    const ov=(pending!=null && isFinite(pending));
+    const displayRate=ov?pending:b.rate;
+    return `<tr${ov?' class="ov"':''}><td>${escapeHtml(b.name)}</td><td class="num">${b.count}</td>`+
+      `<td class="num">${fmtMoney(b.totalFiGross)}</td><td class="num">${fmtMoney(b.avg)}</td>`+
+      `<td class="num"><span class="rate-cell"><input type="number" class="firate" step="0.1" min="0" `+
+        `data-mgr="${escapeHtml(b.key)}" value="${displayRate}" aria-label="F&I rate % for ${escapeHtml(b.name)}">%</span>`+
+      `<span class="auto-hint">auto ${b.autoRate}%</span></td>`+
+      `<td class="num">${fmtMoney(b.commission)}</td></tr>`;
+  }).join("");
   const totComm=FI_BASIS.reduce((s,b)=>s+b.commission,0);
   el.innerHTML=`<details class="fibasis" open><summary>F&I Commission basis — per business manager `+
-    `(rates: &lt;$${t.t1}=${t.r1}%, $${t.t1}–$${t.t2}=${t.r2}%, &gt;$${t.t2}=${t.r3}%)</summary>`+
+    `(auto rates: &lt;$${t.t1}=${t.r1}%, $${t.t1}–$${t.t2}=${t.r2}%, &gt;$${t.t2}=${t.r3}%)</summary>`+
+    `<div class="fibasis-bar"><span class="muted">Edit any rate, then recalculate.</span>`+
+    `<span class="muted" id="fiDirtyNote" style="color:var(--warn);font-weight:700"></span>`+
+    `<div class="grow"></div>`+
+    `<button class="tiny" id="fiResetBtn">Reset to auto</button>`+
+    `<button class="tiny primary" id="fiRecalcBtn">Recalculate F&I commissions</button></div>`+
     `<table class="basis"><thead><tr><th>Business Manager</th><th class="num">Deals</th>`+
-    `<th class="num">Total F&I Gross</th><th class="num">Avg / Deal</th><th class="num">Rate</th><th class="num">F&I Commission</th></tr></thead>`+
-    `<tbody>${rows}</tbody><tfoot><tr><th>Total</th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num">${fmtMoney(totComm)}</th></tr></tfoot></table></details>`;
+    `<th class="num">Total F&I Gross</th><th class="num">Avg / Deal</th><th class="num">Rate %</th><th class="num">F&I Commission</th></tr></thead>`+
+    `<tbody>${body}</tbody><tfoot><tr><th>Total</th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num">${fmtMoney(totComm)}</th></tr></tfoot></table></details>`;
+  el.querySelectorAll("input.firate").forEach(inp=>{
+    inp.addEventListener("input",()=>{ setFiOverride(inp.dataset.mgr, inp.value); setFiDirty(true); });
+    inp.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("fiRecalcBtn").click(); } });
+  });
+  document.getElementById("fiRecalcBtn").onclick=()=>{
+    readFiRateInputs(el); applyFiCommissions(REPORT_DATA); setFiDirty(false); renderReport();
+  };
+  document.getElementById("fiResetBtn").onclick=()=>{
+    FI_RATE_OVERRIDE={}; applyFiCommissions(REPORT_DATA); setFiDirty(false); renderReport();
+  };
+  setFiDirty(FI_DIRTY);
 }
 
 document.getElementById("genBtn").onclick=generateReport;
@@ -1791,16 +1856,9 @@ function loadDemoData(){
       _matched:matched,
     });
   }
-  // tiered F&I commission (mirrors the engine)
-  const dc=CONFIG[CURRENT_DEALER], tiers=(dc.fiComm&&dc.fiComm.tiers)||DEFAULT_TIERS;
-  FI_BASIS=[]; const groups={};
-  rows.forEach(r=>{ const k=normName(r.bizMgr); if(!k) return; (groups[k]=groups[k]||{name:r.bizMgr,deals:[]}).deals.push(r); });
-  Object.keys(groups).forEach(k=>{ const g=groups[k]; const total=g.deals.reduce((s,r)=>s+r.fiGross,0);
-    const avg=g.deals.length?total/g.deals.length:0, rate=tierRate(avg,tiers); let comm=0;
-    g.deals.forEach(r=>{ r.fiComm=round2(rate/100*r.fiGross); comm+=r.fiComm; });
-    FI_BASIS.push({name:g.name,count:g.deals.length,totalFiGross:total,avg,rate,commission:comm}); });
-  FI_BASIS.sort((a,b)=>b.count-a.count);
-  rows.forEach(r=>{ r.salesFiComm=round2(r.salesComm+r.fiComm); });
+  // tiered F&I commission (shared engine)
+  FI_RATE_OVERRIDE = {}; FI_DIRTY = false;
+  applyFiCommissions(rows);
 
   REPORT_DATA=rows;
   vehTypeFilter.setValues(rows); dealTypeFilter.setValues(rows);
