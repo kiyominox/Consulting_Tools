@@ -1,3 +1,4 @@
+
 "use strict";
 /* ----------------------------------------------------------------------------
    Vehicle Sales Report — standalone client-side tool
@@ -279,6 +280,7 @@ document.querySelectorAll("[data-toggle]").forEach(hd=>{
 /* ============================================================ FILE PARSING */
 let glRawRows = null, glHeaders = [], glFormat = null;
 let dkDeals = null;
+let glFileName = "", dkFileName = "";
 
 function readSpreadsheet(file){
   return new Promise((resolve,reject)=>{
@@ -422,7 +424,7 @@ function wireDrop(dropId,inputId,nameId,onFile){
 wireDrop("glDrop","glFile","glName", async (file)=>{
   const grid=await readSpreadsheet(file);
   const parsed=parseGL(grid);
-  glRawRows=parsed.rows; glHeaders=parsed.headers; glFormat=parsed.format;
+  glRawRows=parsed.rows; glHeaders=parsed.headers; glFormat=parsed.format; glFileName=file.name;
   showGLMapping(glHeaders, parsed.mapping);
   const note=document.getElementById("glFormatNote");
   if(parsed.format==="journal"){
@@ -433,7 +435,7 @@ wireDrop("glDrop","glFile","glName", async (file)=>{
     note.innerHTML="Flat GL layout detected — please confirm the column mapping below.";
   }
 });
-wireDrop("dkDrop","dkFile","dkName", async (file)=>{ dkDeals=parseDeskit(await readSpreadsheet(file)); });
+wireDrop("dkDrop","dkFile","dkName", async (file)=>{ dkDeals=parseDeskit(await readSpreadsheet(file)); dkFileName=file.name; });
 function maybeEnableGenerate(){ document.getElementById("genBtn").disabled = !glRawRows; }
 
 /* ============================================================ REPORT */
@@ -592,10 +594,14 @@ function generateReport(){
     + (haveAnyAccts?"":" · ⚠ no accounts configured for this dealership — money columns will be 0");
 
   renderReport();
-  const rc=document.getElementById("reportCard");
-  rc.classList.remove("hide"); rc.classList.remove("collapsed");
-  document.getElementById("reportDealerName").textContent=CURRENT_DEALER;
-  rc.scrollIntoView({behavior:"smooth"});
+  enterResultsView({
+    store: CURRENT_DEALER,
+    deals: rows.length,
+    missing,
+    glLabel: glFormat==="journal" ? "CDK Journal" : "Flat GL",
+    glFile: glFileName,
+    dkFile: dkDeals ? (dkFileName || "loaded") : null,
+  });
 }
 
 function sortReport(){
@@ -622,71 +628,136 @@ function rowVisible(r){
   return true;
 }
 
+/* Display schema — groups the 19 data columns into scannable bands.
+   "core" columns survive the "Essentials" layout; "emph" are bottom-line columns. */
+const REPORT_GROUPS = [
+  { key:"deal", label:"Deal", cols:[
+    {key:"soldDate",   label:"Sold",        type:"date", core:true, hint:"Sold date (from Deskit)"},
+    {key:"stock",      label:"Stock #",     type:"text", core:true},
+    {key:"vehicle",    label:"Vehicle",     type:"veh",  core:true, sort:"model", hint:"Year & model (from Deskit)"},
+    {key:"vehType",    label:"Type",        type:"text", core:true, hint:"New / Used / CPO"},
+    {key:"dealType",   label:"Deal",        type:"text", core:true, hint:"Finance / Lease / Cash"},
+    {key:"customer",   label:"Customer",    type:"text", core:true},
+    {key:"daysInStock",label:"Days",        type:"int",  hint:"Days in stock = Sold date − In-service date"},
+  ]},
+  { key:"front", label:"Front Gross", cls:"g-front", cols:[
+    {key:"price",      label:"Price",       type:"money"},
+    {key:"cost",       label:"Cost",        type:"money", full:"Veh Cost"},
+    {key:"frontGross", label:"Gross",       type:"money", emph:true, core:true, full:"Front Gross", hint:"Front Gross = Price − Cost"},
+  ]},
+  { key:"fi", label:"F&I", cls:"g-fi", cols:[
+    {key:"fiSale",     label:"Sales",       type:"money", full:"F&I Sales", hint:"F&I income (warranty, GAP, etc.)"},
+    {key:"fiCost",     label:"Cost",        type:"money", full:"F&I Cost"},
+    {key:"fiGross",    label:"Gross",       type:"money", emph:true, core:true, full:"F&I Gross", hint:"F&I Gross = F&I Sales − F&I Cost"},
+  ]},
+  { key:"comp", label:"People & Commission", cls:"g-comp", cols:[
+    {key:"salesperson",label:"Salesperson", type:"text", core:true},
+    {key:"salesComm",  label:"Sales Comm",  type:"money"},
+    {key:"bizMgr",     label:"Business Mgr",type:"text", core:true, hint:"F&I / business manager (Deskit FI MANAGER)"},
+    {key:"fiComm",     label:"F&I Comm",    type:"money", hint:"Tiered % of this manager's F&I gross"},
+    {key:"salesFiComm",label:"Total Comp",  type:"money", emph:true, core:true, hint:"Total Comp = Sales Comm + F&I Comm"},
+  ]},
+];
+
+function activeReportGroups(){
+  const layout = window.REPORT_LAYOUT || "grouped";
+  let groups = REPORT_GROUPS.map(g=>({ ...g, cols: g.cols.filter(c=> layout!=="essentials" || c.core) }))
+                            .filter(g=>g.cols.length);
+  return { groups, bands: layout==="grouped" };
+}
+
 function renderReport(){
   const table=document.getElementById("reportTable");
   const thead=table.querySelector("thead"), tbody=table.querySelector("tbody"), tfoot=table.querySelector("tfoot");
+  const { groups, bands } = activeReportGroups();
 
+  // flat column list with group-start flags
+  const flat=[]; groups.forEach((g,gi)=> g.cols.forEach((c,ci)=> flat.push({c, gstart: gi>0 && ci===0})));
+
+  // ---------- header ----------
   thead.innerHTML="";
-  const htr=document.createElement("tr");
-  REPORT_COLS.forEach(c=>{
+  if(bands){
+    const gtr=document.createElement("tr"); gtr.className="gband";
+    groups.forEach(g=>{ const th=document.createElement("th"); th.colSpan=g.cols.length;
+      if(g.cls) th.className=g.cls; th.textContent=g.label||""; gtr.appendChild(th); });
+    thead.appendChild(gtr);
+  }
+  const ctr=document.createElement("tr"); ctr.className="cols";
+  flat.forEach(({c,gstart})=>{
     const th=document.createElement("th");
-    if(c.type==="money"||c.type==="int") th.className="num";
-    th.textContent=c.label;
-    if(SORT.key===c.key){ const a=document.createElement("span"); a.className="arrow"; a.textContent=SORT.dir>0?"▲":"▼"; th.appendChild(a); }
-    th.onclick=()=>{ if(SORT.key===c.key) SORT.dir*=-1; else {SORT.key=c.key;SORT.dir=1;} sortReport(); renderReport(); };
-    htr.appendChild(th);
+    const cls=[]; if(c.type==="money"||c.type==="int") cls.push("num"); if(c.emph) cls.push("emph"); if(gstart) cls.push("gstart");
+    th.className=cls.join(" ");
+    th.appendChild(document.createTextNode((!bands && c.full) ? c.full : c.label));
+    if(c.hint) th.title=c.hint;
+    const sortKey=c.sort||c.key;
+    if(SORT.key===sortKey){ const a=document.createElement("span"); a.className="arrow"; a.textContent=SORT.dir>0?"▲":"▼"; th.appendChild(a); }
+    th.onclick=()=>{ if(SORT.key===sortKey) SORT.dir*=-1; else {SORT.key=sortKey;SORT.dir=1;} sortReport(); renderReport(); };
+    ctr.appendChild(th);
   });
-  thead.appendChild(htr);
+  thead.appendChild(ctr);
 
+  // ---------- body ----------
   tbody.innerHTML="";
   const totals={}; let shown=0; const vis=[];
   REPORT_DATA.forEach(r=>{
     if(!rowVisible(r)) return;
     shown++; vis.push(r);
-    const tr=document.createElement("tr"); if(!r._matched) tr.className="missing";
-    REPORT_COLS.forEach(c=>{
-      const td=document.createElement("td"); let v=r[c.key];
-      if(c.type==="date"){ td.textContent=fmtDate(v); }
-      else if(c.type==="money"){ td.className="num"; td.textContent=fmtMoney(v); if(v<0) td.classList.add("neg"); totals[c.key]=(totals[c.key]||0)+(+v||0); }
-      else if(c.type==="int"){ td.className="num"; td.textContent=(v===""?"":v); if(v!=="") totals[c.key]=(totals[c.key]||0)+(+v||0); }
-      else { td.textContent=v==null?"":v; if(c.key==="stock"&&!r._matched){ const p=document.createElement("span"); p.className="pill"; p.style.marginLeft="6px"; p.textContent="not in Deskit"; td.appendChild(p);} }
+    const tr=document.createElement("tr"); if(!r._matched) tr.classList.add("missing");
+    flat.forEach(({c,gstart})=>{
+      const td=document.createElement("td");
+      const cls=[]; if(gstart) cls.push("gstart"); if(c.emph) cls.push("emph");
+      const v=r[c.key];
+      if(c.type==="veh"){ cls.push("veh");
+        td.innerHTML=(r.year?`<span class="vyear">${escapeHtml(r.year)}</span>`:"")+escapeHtml(r.model||""); }
+      else if(c.type==="date"){ td.textContent=fmtDate(v); }
+      else if(c.type==="money"){ cls.push("num"); if(+v<0) cls.push("neg"); td.textContent=fmtMoney(v); totals[c.key]=(totals[c.key]||0)+(+v||0); }
+      else if(c.type==="int"){ cls.push("num"); td.textContent=(v===""||v==null?"":v); }
+      else { if(c.key==="stock") cls.push("ptext"); td.textContent=v==null?"":v; }
+      td.className=cls.join(" ");
+      if(c.key==="stock" && !r._matched){ const p=document.createElement("span"); p.className="pill"; p.style.marginLeft="7px"; p.textContent="not in Deskit"; td.appendChild(p); }
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
   });
 
+  // ---------- totals ----------
   tfoot.innerHTML="";
   const ftr=document.createElement("tr");
-  REPORT_COLS.forEach((c,i)=>{
+  flat.forEach(({c,gstart},i)=>{
     const td=document.createElement("td");
-    if(i===0){ td.textContent="TOTALS ("+shown+" deals)"; }
-    else if(c.type==="money"){ td.className="num"; td.textContent=fmtMoney(totals[c.key]||0); }
-    else if(c.type==="int"){ td.className="num"; td.textContent=totals[c.key]!=null?Math.round(totals[c.key]):""; }
+    const cls=[]; if(gstart) cls.push("gstart"); if(c.emph) cls.push("emph");
+    if(i===0){ td.textContent="Totals · "+shown+(shown===1?" deal":" deals"); }
+    else if(c.type==="money"){ cls.push("num"); td.textContent=fmtMoney(totals[c.key]||0); }
+    td.className=cls.join(" ");
     ftr.appendChild(td);
   });
   tfoot.appendChild(ftr);
 
+  // ---------- KPI band ----------
   const totFront=(totals.price||0)-(totals.cost||0);
+  const totFi=totals.fiGross||0;
   const cards=[
-    {lab:"Deals", val:shown},
-    {lab:"Total Price", val:fmtMoney(totals.price||0)},
-    {lab:"Front Gross", val:fmtMoney(totFront)},
-    {lab:"F&I Gross", val:fmtMoney(totals.fiGross||0)},
-    {lab:"Total Commission", val:fmtMoney(totals.salesFiComm||0)},
+    {lab:"Deals",            hint:"Unique vehicles from the GL, after filters", val:String(shown), accent:true},
+    {lab:"Front Gross",      hint:"Vehicle Price − Cost, summed",               val:fmtMoney(totFront), neg:totFront<0},
+    {lab:"F&I Gross",        hint:"F&I Sales − F&I Cost (warranty, GAP, etc.)", val:fmtMoney(totFi),    neg:totFi<0},
+    {lab:"Total Gross",      hint:"Front Gross + F&I Gross",                    val:fmtMoney(totFront+totFi), accent:true},
+    {lab:"Total Commission", hint:"Sales Commission + F&I Commission",          val:fmtMoney(totals.salesFiComm||0)},
   ];
-  document.getElementById("summaryCards").innerHTML=cards.map(c=>`<div class="scard"><div class="lab">${c.lab}</div><div class="val">${c.val}</div></div>`).join("");
+  document.getElementById("summaryCards").innerHTML=cards.map(c=>
+    `<div class="scard${c.accent?' accent':''}${c.neg?' neg':''}"><div class="lab">${c.lab}`+
+    `${c.hint?` <span class="hint" title="${c.hint}">i</span>`:''}</div><div class="val">${c.val}</div></div>`).join("");
 
+  // ---------- legend ----------
   const dc=CONFIG[CURRENT_DEALER];
   const counts=CATEGORIES.map(cat=>`${cat.name}: ${cat.key==="fiComm"&&dc.fiComm.method==="tiered"?"tiered":nonEmptyAccts(dc[cat.key]).length}`).join(" · ");
   document.getElementById("reportLegend").innerHTML=
-    `Money columns computed from <b>${CURRENT_DEALER}</b> account lists (${counts}). `+
-    `Highlighted rows are deals present in the GL but not found in Deskit. `+
-    `F&amp;I Gross = F&amp;I Sale − F&amp;I Cost. Sales F&amp;I Commission = Sales Commission + F&amp;I Commission.`;
+    `<b>How to read this:</b> amber rows tagged <span class="pill">not in deskit</span> are in the GL with no Deskit match &mdash; reconcile these first. `+
+    `Figures in <span class="neg">red</span> are negative. The bold <b>Gross</b> and <b>Total Comp</b> columns are the calculated bottom lines.`+
+    `<br>Money columns come from the <b>${CURRENT_DEALER}</b> account setup (${counts}). F&amp;I Gross = F&amp;I Sales − F&amp;I Cost · Total Comp = Sales Comm + F&amp;I Comm.`;
 
   renderFiBasis();
   renderDashboard(vis);
-  const dcard=document.getElementById("dashboardCard");
-  dcard.classList.remove("hide");
+  const cnt=document.getElementById("reportTabCount"); if(cnt) cnt.textContent=shown;
   document.getElementById("dashDealerName").textContent=CURRENT_DEALER;
 }
 
@@ -721,48 +792,91 @@ function groupSummary(rows, keyFn, blankLabel){
 }
 
 const DASH_TABLES = [
-  {title:"By Salesperson",       key:"salesperson", blank:"(no salesperson)"},
-  {title:"By Business Manager",  key:"bizMgr",      blank:"(no manager)"},
-  {title:"By Vehicle Type",      key:"vehType",     blank:"(blank)"},
-  {title:"By Deal Type",         key:"dealType",    blank:"(blank)"},
+  {title:"Salesperson",      key:"salesperson", blank:"(no salesperson)", unit:"sellers"},
+  {title:"Business Manager", key:"bizMgr",      blank:"(no manager)",     unit:"managers"},
+  {title:"Vehicle Type",     key:"vehType",     blank:"(blank)",          unit:"types"},
+  {title:"Deal Type",        key:"dealType",    blank:"(blank)",          unit:"types"},
 ];
+
+function dashGroupFoot(groups){
+  const tot=groups.reduce((a,g)=>({count:a.count+g.count,total:a.total+g.total}),{count:0,total:0});
+  tot.pvr=tot.count?tot.total/tot.count:0; return tot;
+}
+
+/* ---- leaderboard (default): ranked rows with proportional bars ---- */
+function dashLeaderboard(def, groups){
+  const maxAbs=Math.max(1, ...groups.map(g=>Math.abs(g.total)));
+  const tot=dashGroupFoot(groups);
+  const rows=groups.map((g,i)=>{
+    const w=Math.max(2, Math.abs(g.total)/maxAbs*100), neg=g.total<0;
+    return `<div class="lb-row"><div class="lb-rank">${i+1}</div>`+
+      `<div class="lb-main"><div class="lb-name" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>`+
+      `<div class="lb-meta">${g.count} deal${g.count===1?'':'s'} &middot; Front ${fmtMoney(g.front)} &middot; F&amp;I ${fmtMoney(g.fi)}</div>`+
+      `<div class="lb-bar" style="width:${w}%${neg?';background:var(--neg)':''}"></div></div>`+
+      `<div class="lb-val"><div class="lb-total${neg?' neg':''}">${fmtMoney(g.total)}</div>`+
+      `<div class="lb-pvr">${fmtMoney(g.avgTotal)} PVR</div></div></div>`;
+  }).join("");
+  return `<div class="dash-table"><h3>${def.title}<span class="h3-sub">${groups.length} ${def.unit}</span></h3>`+
+    `<div class="twrap"><div class="lb">${rows}</div></div>`+
+    `<div class="tfoot"><span>${tot.count} deals &middot; <b>${fmtMoney(tot.total)}</b> total gross</span>`+
+    `<span><b>${fmtMoney(tot.pvr)}</b> PVR</span></div></div>`;
+}
+
+/* ---- classic numeric table ---- */
+function dashGrpTable(def, groups){
+  const tot=groups.reduce((a,g)=>({count:a.count+g.count,front:a.front+g.front,fi:a.fi+g.fi,total:a.total+g.total}),{count:0,front:0,fi:0,total:0});
+  const body=groups.map(g=>`<tr><td>${escapeHtml(g.name)}</td><td>${g.count}</td>`+
+    `<td>${fmtMoney(g.front)}</td><td>${fmtMoney(g.avgFront)}</td>`+
+    `<td>${fmtMoney(g.fi)}</td><td>${fmtMoney(g.avgFi)}</td>`+
+    `<td>${fmtMoney(g.total)}</td><td>${fmtMoney(g.avgTotal)}</td></tr>`).join("");
+  const avgTot=tot.count?tot.total/tot.count:0;
+  return `<div class="dash-table"><h3>${def.title}<span class="h3-sub">${groups.length} ${def.unit}</span></h3>`+
+    `<div class="twrap"><table class="grp">`+
+    `<thead><tr><th>${def.title}</th><th>Deals</th><th>Front</th><th>Avg Front</th>`+
+    `<th>F&I</th><th>Avg F&I</th><th>Total</th><th>PVR</th></tr></thead>`+
+    `<tbody>${body}</tbody>`+
+    `<tfoot><tr><td>Total</td><td>${tot.count}</td><td>${fmtMoney(tot.front)}</td><td></td>`+
+    `<td>${fmtMoney(tot.fi)}</td><td></td><td>${fmtMoney(tot.total)}</td><td>${fmtMoney(avgTot)}</td></tr></tfoot>`+
+    `</table></div></div>`;
+}
+
+/* ---- compact ranked list (print-friendly, dense) ---- */
+function dashCompact(def, groups){
+  const tot=dashGroupFoot(groups);
+  const rows=groups.map((g,i)=>`<div class="lb-row" style="grid-template-columns:18px 1fr auto auto;gap:12px">`+
+    `<div class="lb-rank">${i+1}</div>`+
+    `<div class="lb-name" title="${escapeHtml(g.name)}">${escapeHtml(g.name)}</div>`+
+    `<div class="lb-pvr" style="align-self:center">${g.count} deals</div>`+
+    `<div class="lb-total${g.total<0?' neg':''}">${fmtMoney(g.total)}</div></div>`).join("");
+  return `<div class="dash-table"><h3>${def.title}<span class="h3-sub">${groups.length} ${def.unit}</span></h3>`+
+    `<div class="twrap"><div class="lb">${rows}</div></div>`+
+    `<div class="tfoot"><span>${tot.count} deals</span><span><b>${fmtMoney(tot.total)}</b> total gross</span></div></div>`;
+}
 
 function renderDashboard(rows){
   const t=summarize(rows);
-  const note=document.getElementById("dashScopeNote");
-  note.innerHTML = `Reflects the <b>${rows.length}</b> deal(s) currently shown (Veh Type / Deal Type / search / Deskit filters all apply). `+
-                   `Adjust the filters above to slice by new/used, manager, etc.`;
+  document.getElementById("dashScopeNote").innerHTML =
+    `Showing the <b>${rows.length}</b> deal${rows.length===1?'':'s'} currently in the report &mdash; every filter on the Deal report tab `+
+    `(vehicle type, deal type, search, Deskit match) flows through here. Slice the report to focus a breakdown.`;
 
   const cards=[
-    {lab:"Deals", val:t.count.toLocaleString(), sub:`New ${t.newCount} · Used ${t.usedCount} · CPO ${t.cpoCount}`, accent:true},
-    {lab:"Total Gross", val:fmtMoney(t.total), sub:`${fmtMoney(t.avgTotal)} / deal (PVR)`, accent:true},
+    {lab:"Total Gross", hint:"Front Gross + F&I Gross", val:fmtMoney(t.total), sub:`${fmtMoney(t.avgTotal)} per deal (PVR)`, accent:true},
+    {lab:"Deals",       hint:"Deals in scope", val:t.count.toLocaleString(), sub:`New ${t.newCount} &middot; Used ${t.usedCount} &middot; CPO ${t.cpoCount}`, accent:true},
     {lab:"Front Gross", val:fmtMoney(t.front), sub:`${fmtMoney(t.avgFront)} / deal`},
-    {lab:"F&I Gross", val:fmtMoney(t.fi), sub:`${fmtMoney(t.avgFi)} / deal`},
-    {lab:"Total Sales", val:fmtMoney(t.price), sub:`Cost ${fmtMoney(t.cost)}`},
+    {lab:"F&I Gross",   val:fmtMoney(t.fi), sub:`${fmtMoney(t.avgFi)} / deal`},
+    {lab:"Total Sales", hint:"Sum of vehicle selling price", val:fmtMoney(t.price), sub:`Cost ${fmtMoney(t.cost)}`},
     {lab:"Sales Commission", val:fmtMoney(t.salesComm)},
-    {lab:"F&I Commission", val:fmtMoney(t.fiComm), sub:`Total comp ${fmtMoney(t.totalComm)}`},
+    {lab:"F&I Commission",   val:fmtMoney(t.fiComm), sub:`Total comp ${fmtMoney(t.totalComm)}`},
   ];
   document.getElementById("dashCards").innerHTML = cards.map(c=>
-    `<div class="scard${c.accent?" accent":""}"><div class="lab">${c.lab}</div>`+
+    `<div class="scard${c.accent?" accent":""}"><div class="lab">${c.lab}`+
+    `${c.hint?` <span class="hint" title="${c.hint}">i</span>`:""}</div>`+
     `<div class="val">${c.val}</div>${c.sub?`<div class="sub">${c.sub}</div>`:""}</div>`).join("");
 
-  const wrap=document.getElementById("dashTables");
-  wrap.innerHTML = DASH_TABLES.map(def=>{
-    const groups=groupSummary(rows, r=>r[def.key], def.blank);
-    const tot=groups.reduce((a,g)=>({count:a.count+g.count,front:a.front+g.front,fi:a.fi+g.fi,total:a.total+g.total}),{count:0,front:0,fi:0,total:0});
-    const body=groups.map(g=>`<tr><td>${escapeHtml(g.name)}</td><td>${g.count}</td>`+
-      `<td>${fmtMoney(g.front)}</td><td>${fmtMoney(g.avgFront)}</td>`+
-      `<td>${fmtMoney(g.fi)}</td><td>${fmtMoney(g.avgFi)}</td>`+
-      `<td>${fmtMoney(g.total)}</td><td>${fmtMoney(g.avgTotal)}</td></tr>`).join("");
-    const avgTot=tot.count?tot.total/tot.count:0;
-    return `<div class="dash-table"><h3>${def.title}</h3><div class="twrap"><table class="grp">`+
-      `<thead><tr><th>${def.title.replace(/^By /,"")}</th><th>Deals</th><th>Front</th><th>Avg Front</th>`+
-      `<th>F&I</th><th>Avg F&I</th><th>Total</th><th>Avg Total</th></tr></thead>`+
-      `<tbody>${body}</tbody>`+
-      `<tfoot><tr><td>Total</td><td>${tot.count}</td><td>${fmtMoney(tot.front)}</td><td></td>`+
-      `<td>${fmtMoney(tot.fi)}</td><td></td><td>${fmtMoney(tot.total)}</td><td>${fmtMoney(avgTot)}</td></tr></tfoot>`+
-      `</table></div></div>`;
-  }).join("");
+  const layout = window.DASH_LAYOUT || "leaderboard";
+  const render = layout==="table" ? dashGrpTable : layout==="compact" ? dashCompact : dashLeaderboard;
+  document.getElementById("dashTables").innerHTML = DASH_TABLES.map(def=>
+    render(def, groupSummary(rows, r=>r[def.key], def.blank))).join("");
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
 
@@ -1005,5 +1119,197 @@ exportMenu.querySelectorAll(".menu-item").forEach(b=>{
 });
 document.addEventListener("click",(e)=>{ if(!exportMenu.classList.contains("hide") && !exportMenu.contains(e.target) && e.target!==exportBtn) exportMenu.classList.add("hide"); });
 
+/* ============================================================ WORKSPACE SHELL */
+function $(id){ return document.getElementById(id); }
+
+function enterResultsView(meta){
+  $("dataPanel").classList.add("hide");
+  $("sourceStrip").classList.remove("hide");
+  $("resultsArea").classList.remove("hide");
+  $("ssStore").textContent = meta.store;
+  $("ssDeals").textContent = meta.deals.toLocaleString();
+  $("ssGL").textContent = meta.glLabel + (meta.glFile?` · ${meta.glFile}`:"");
+  $("ssDeskit").textContent = meta.dkFile ? meta.dkFile : "not loaded";
+  const warnItem=$("ssWarnItem"), warn=$("ssWarn");
+  if(meta.dkFile && meta.missing>0){
+    warnItem.classList.remove("hide"); warn.innerHTML = `&#9888;&#65039; ${meta.missing} not in Deskit`;
+  } else if(!meta.dkFile){
+    warnItem.classList.remove("hide"); warn.innerHTML = `&#9888;&#65039; No Deskit — names blank`;
+  } else { warnItem.classList.add("hide"); }
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+function exitResultsView(){
+  $("resultsArea").classList.add("hide");
+  $("sourceStrip").classList.add("hide");
+  $("dataPanel").classList.remove("hide");
+  window.scrollTo({top:0, behavior:"smooth"});
+}
+
+/* tabs */
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.onclick=()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    const name=tab.dataset.tab;
+    $("reportPane").classList.toggle("active", name==="report");
+    $("dashboardPane").classList.toggle("active", name==="dashboard");
+  };
+});
+
+/* settings drawer */
+function openSettings(){ $("settingsOverlay").classList.remove("hide"); $("settingsDrawer").classList.remove("hide");
+  requestAnimationFrame(()=>{ $("settingsOverlay").classList.add("show"); $("settingsDrawer").classList.add("show"); }); }
+function closeSettings(){ $("settingsOverlay").classList.remove("show"); $("settingsDrawer").classList.remove("show");
+  setTimeout(()=>{ $("settingsOverlay").classList.add("hide"); $("settingsDrawer").classList.add("hide"); },240); }
+$("openSettingsBtn").onclick=openSettings;
+$("closeSettingsBtn").onclick=closeSettings;
+$("settingsOverlay").onclick=closeSettings;
+document.addEventListener("keydown",e=>{ if(e.key==="Escape" && $("settingsDrawer").classList.contains("show")) closeSettings(); });
+
+/* change data / regenerate */
+$("changeDataBtn").onclick=exitResultsView;
+$("regenBtn").onclick=()=>{ if(glRawRows) generateReport(); else exitResultsView(); };
+$("demoBtn").onclick=loadDemoData;
+
+/* ============================================================ SAMPLE DATA (preview) */
+function loadDemoData(){
+  const SP=["Alex Rivera","Jordan Kim","Sam Patel","Casey Brooks","Morgan Lee","Drew Santos"];
+  const BM=["Pat Nguyen","Robin Carter","Taylor Quinn"];
+  const MODELS=[["2024","Silverado 1500"],["2023","Equinox"],["2024","Tahoe"],["2022","Malibu"],
+    ["2024","Trailblazer"],["2023","Corvette"],["2021","Traverse"],["2024","Blazer EV"],["2020","Camaro"],["2023","Colorado"]];
+  const CUST=["John Carter","Maria Lopez","Wei Chen","Aisha Khan","Tom Becker","Nadia Ali","Greg Foster","Lena Park","Omar Diaz","Beth Ryan"];
+  const VT=["NEW","NEW","NEW","USED","USED","CPO"], DT=["Finance","Finance","Lease","Cash","Finance","Lease"];
+  const rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+  const rows=[]; const N=42;
+  for(let i=0;i<N;i++){
+    const ym=pick(MODELS), vt=pick(VT);
+    const price=Math.round(rnd(22000,78000)/10)*10;
+    const cost=Math.round(price*rnd(0.86,0.985));
+    const fiSale=Math.round(rnd(300,4200)), fiCost=Math.round(fiSale*rnd(0.08,0.45));
+    const sold=new Date(2026,4,1+Math.floor(rnd(0,28)));
+    const matched=Math.random()>0.07;
+    const frontGross=round2(price-cost);
+    rows.push({
+      stock:(vt==="NEW"?"N":vt==="CPO"?"C":"U")+(10000+Math.floor(rnd(0,8999))),
+      soldDate:matched?sold:null, postDate:sold,
+      year:ym[0], model:ym[1],
+      vehType:matched?vt:"", dealType:matched?pick(DT):"",
+      customer:matched?pick(CUST):"", daysInStock:matched?Math.round(rnd(3,120)):"",
+      price, cost, frontGross,
+      salesperson:matched?pick(SP):"", salesComm:Math.round(Math.max(150, frontGross*rnd(0.18,0.28))),
+      bizMgr:matched?pick(BM):"",
+      fiSale, fiCost, fiGross:round2(fiSale-fiCost), fiCommAcct:0, fiComm:0, salesFiComm:0,
+      _matched:matched,
+    });
+  }
+  // tiered F&I commission (mirrors the engine)
+  const dc=CONFIG[CURRENT_DEALER], tiers=(dc.fiComm&&dc.fiComm.tiers)||DEFAULT_TIERS;
+  FI_BASIS=[]; const groups={};
+  rows.forEach(r=>{ const k=normName(r.bizMgr); if(!k) return; (groups[k]=groups[k]||{name:r.bizMgr,deals:[]}).deals.push(r); });
+  Object.keys(groups).forEach(k=>{ const g=groups[k]; const total=g.deals.reduce((s,r)=>s+r.fiGross,0);
+    const avg=g.deals.length?total/g.deals.length:0, rate=tierRate(avg,tiers); let comm=0;
+    g.deals.forEach(r=>{ r.fiComm=round2(rate/100*r.fiGross); comm+=r.fiComm; });
+    FI_BASIS.push({name:g.name,count:g.deals.length,totalFiGross:total,avg,rate,commission:comm}); });
+  FI_BASIS.sort((a,b)=>b.count-a.count);
+  rows.forEach(r=>{ r.salesFiComm=round2(r.salesComm+r.fiComm); });
+
+  REPORT_DATA=rows;
+  vehTypeFilter.setValues(rows); dealTypeFilter.setValues(rows);
+  SORT={key:"soldDate",dir:1}; sortReport();
+  renderReport();
+  enterResultsView({ store:CURRENT_DEALER, deals:rows.length, missing:rows.filter(r=>!r._matched).length,
+    glLabel:"CDK Journal (sample)", glFile:"sample_journal.xlsx", dkFile:"sample_deskit.xlsx" });
+}
+window.loadDemoData=loadDemoData;
+
+/* ============================================================ TWEAKS */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "reportLayout": "grouped",
+  "dashLayout": "leaderboard",
+  "accent": "blue",
+  "density": "comfortable"
+}/*EDITMODE-END*/;
+
+const ACCENTS = {
+  blue:  {a:"#1f74cf", strong:"#175ca8", ink:"#0f4d8f", soft:"#e8f1fb", line:"#c4ddf5", label:"Classic"},
+  sky:   {a:"#1f93cf", strong:"#1576a8", ink:"#0c5e84", soft:"#e6f4fb", line:"#bbe0f1", label:"Sky"},
+  royal: {a:"#2a52b8", strong:"#1f3f93", ink:"#163374", soft:"#e9edfb", line:"#c5d1f2", label:"Royal"},
+  slate: {a:"#4d6079", strong:"#3b4a5e", ink:"#2c3848", soft:"#eef1f5", line:"#cfd7e1", label:"Slate"},
+};
+let TWEAKS = Object.assign({}, TWEAK_DEFAULTS);
+try{ const saved=JSON.parse(localStorage.getItem("vsr_tweaks_v5")||"{}"); TWEAKS=Object.assign(TWEAKS,saved); }catch(e){}
+
+function applyTweaks(re){
+  window.REPORT_LAYOUT=TWEAKS.reportLayout;
+  window.DASH_LAYOUT=TWEAKS.dashLayout;
+  document.body.dataset.density=TWEAKS.density;
+  const ac=ACCENTS[TWEAKS.accent]||ACCENTS.blue, s=document.documentElement.style;
+  s.setProperty("--accent",ac.a); s.setProperty("--accent-strong",ac.strong);
+  s.setProperty("--accent-ink",ac.ink); s.setProperty("--accent-soft",ac.soft); s.setProperty("--accent-line",ac.line);
+  if(re && REPORT_DATA && REPORT_DATA.length) renderReport();
+}
+function setTweak(k,v){
+  TWEAKS[k]=v;
+  try{ localStorage.setItem("vsr_tweaks_v5", JSON.stringify(TWEAKS)); }catch(e){}
+  try{ window.parent.postMessage({type:"__edit_mode_set_keys", edits:{[k]:v}}, "*"); }catch(e){}
+  applyTweaks(true);
+  buildTweaksPanel();
+}
+applyTweaks(false);
+
+/* ---- panel UI ---- */
+const tweaksRoot=document.createElement("div");
+tweaksRoot.id="tweaksRoot"; tweaksRoot.style.display="none";
+tweaksRoot.innerHTML=`<style>
+  #tweaksRoot{position:fixed;right:18px;bottom:18px;z-index:90;width:288px;background:#fff;
+    border:1px solid var(--line-2);border-radius:12px;box-shadow:var(--shadow-lg);font-family:var(--font)}
+  #tweaksRoot .tw-hd{display:flex;align-items:center;gap:8px;padding:13px 15px;border-bottom:1px solid var(--line)}
+  #tweaksRoot .tw-hd b{font-size:13.5px}
+  #tweaksRoot .tw-hd .tw-x{margin-left:auto;border:none;background:transparent;color:var(--muted);font-size:16px;padding:2px 6px;border-radius:6px;cursor:pointer}
+  #tweaksRoot .tw-hd .tw-x:hover{background:#f1f3f6}
+  #tweaksRoot .tw-bd{padding:13px 15px;display:flex;flex-direction:column;gap:15px;max-height:70vh;overflow:auto}
+  #tweaksRoot .tw-row .tw-lab{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:7px}
+  #tweaksRoot .seg{display:flex;gap:5px;flex-wrap:wrap}
+  #tweaksRoot .seg button{flex:1;min-width:fit-content;padding:7px 9px;font-size:12px;font-weight:600;border:1px solid var(--line-2);
+    background:#fff;border-radius:7px;color:var(--ink-2);cursor:pointer;white-space:nowrap}
+  #tweaksRoot .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  #tweaksRoot .sw{display:flex;gap:8px}
+  #tweaksRoot .sw button{width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px var(--line-2);cursor:pointer}
+  #tweaksRoot .sw button.on{box-shadow:0 0 0 2px var(--accent)}
+</style>
+<div class="tw-hd"><b>Tweaks</b><button class="tw-x" id="twClose">&times;</button></div>
+<div class="tw-bd" id="twBody"></div>`;
+document.body.appendChild(tweaksRoot);
+
+function segRow(label, key, opts){
+  const cur=TWEAKS[key];
+  const btns=opts.map(o=>`<button data-k="${key}" data-v="${o.v}" class="${cur===o.v?'on':''}">${o.t}</button>`).join("");
+  return `<div class="tw-row"><div class="tw-lab">${label}</div><div class="seg">${btns}</div></div>`;
+}
+function buildTweaksPanel(){
+  const body=$("twBody"); if(!body) return;
+  const sw=Object.keys(ACCENTS).map(k=>`<button data-k="accent" data-v="${k}" title="${ACCENTS[k].label}" `+
+    `class="${TWEAKS.accent===k?'on':''}" style="background:${ACCENTS[k].a}"></button>`).join("");
+  body.innerHTML =
+    segRow("Report layout","reportLayout",[{v:"grouped",t:"Grouped"},{v:"flat",t:"Flat"},{v:"essentials",t:"Essentials"}])+
+    segRow("Dashboard style","dashLayout",[{v:"leaderboard",t:"Leaderboard"},{v:"table",t:"Table"},{v:"compact",t:"Compact"}])+
+    `<div class="tw-row"><div class="tw-lab">Accent</div><div class="sw">${sw}</div></div>`+
+    segRow("Density","density",[{v:"comfortable",t:"Comfortable"},{v:"compact",t:"Compact"}]);
+  body.querySelectorAll("button[data-k]").forEach(b=>{
+    b.onclick=()=>setTweak(b.dataset.k, b.dataset.v);
+  });
+}
+$("twClose").onclick=()=>{ tweaksRoot.style.display="none"; try{ window.parent.postMessage({type:"__edit_mode_dismissed"},"*"); }catch(e){} };
+
+/* host protocol — register listener BEFORE announcing availability */
+window.addEventListener("message",(e)=>{
+  const d=e.data||{};
+  if(d.type==="__activate_edit_mode"){ buildTweaksPanel(); tweaksRoot.style.display="block"; }
+  else if(d.type==="__deactivate_edit_mode"){ tweaksRoot.style.display="none"; }
+});
+try{ window.parent.postMessage({type:"__edit_mode_available"},"*"); }catch(e){}
+
 /* init */
 refreshSettingsUI(); maybeEnableGenerate(); vehTypeFilter.init(); dealTypeFilter.init();
+if(/[?&]demo\b/.test(location.search)) loadDemoData();
+
