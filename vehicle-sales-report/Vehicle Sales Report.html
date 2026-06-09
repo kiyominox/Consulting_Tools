@@ -617,7 +617,7 @@ const CATEGORIES = [
   { key:"fiComm",    name:"F&I Commission",  sign:+1, desc:"Business-manager commission → F&I Commission column (tiered % of F&I gross, or from GL accounts)." },
 ];
 const DEALERSHIPS = ["MacDonald","Hillside"];
-const LS_KEY = "vsr_config_v4";
+const LS_KEY = "vsr_config_v5";
 const DEFAULT_TIERS = { t1:2000, r1:16, t2:2250, r2:18, r3:20 };
 
 /* ---------- config model: accounts = [{n:"acct", d:"description"}] ---------- */
@@ -638,7 +638,8 @@ function macDealerCfg(){
   return c;
 }
 function defaultConfig(){
-  return { MacDonald: macDealerCfg(), Hillside: blankDealerCfg() };
+  // Hillside starts with the same accounts/signs/F&I tiers as MacDonald (independent copy).
+  return { MacDonald: macDealerCfg(), Hillside: macDealerCfg() };
 }
 function coerceAccounts(arr){
   return (arr||[]).map(a => (typeof a==="object" && a!==null) ? {n:String(a.n||""),d:String(a.d||"")} : {n:String(a),d:""});
@@ -838,7 +839,7 @@ document.getElementById("saveCfgBtn").onclick = ()=>{
   refreshSettingsUI();
 };
 document.getElementById("resetCfgBtn").onclick = ()=>{
-  if(!confirm("Reset ALL account settings for BOTH dealerships back to the built-in defaults? (MacDonald accounts will be restored; Hillside will be emptied.)")) return;
+  if(!confirm("Reset ALL account settings for BOTH dealerships back to the built-in defaults? (Both MacDonald and Hillside will be restored to the default account lists.)")) return;
   CONFIG = defaultConfig(); saveConfig(); refreshSettingsUI();
 };
 document.getElementById("exportCfgBtn").onclick = ()=>{

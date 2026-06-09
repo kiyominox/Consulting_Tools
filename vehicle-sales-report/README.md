@@ -15,8 +15,9 @@ plain flat GL (one row per entry with Account/Amount columns) also works — the
 mapping is auto-detected and adjustable.
 
 **MacDonald's chart of accounts is pre-loaded** (Sale 299, Cost 299, F&I Sale 46,
-F&I Cost 31, Sales Commission 4, F&I Commission 3). Hillside starts empty until those
-accounts are provided. Everything is editable in Step 1 and saved in the browser.
+F&I Cost 31, Sales Commission 4, F&I Commission 3). **Hillside starts with the same
+account lists, signs and F&I tiers as MacDonald** (an independent copy — edit either
+without affecting the other). Everything is editable in Step 1 and saved in the browser.
 
 Everything runs in the browser. No server, no internet connection required — the
 SheetJS spreadsheet parser is embedded directly in the file. **No data ever leaves the
