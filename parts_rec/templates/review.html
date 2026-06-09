@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block title %}Review – {{ label }}{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <div class="ph-left">
+    <h1>Review GL Entries – {{ label }}</h1>
+    <p class="page-sub">
+      These GL entries posted after {{ label }} but have a non-month control value
+      (e.g.&nbsp;a JE reference or invoice number).  Decide whether each belongs in
+      Step&nbsp;11, Step&nbsp;13, or should be ignored.
+    </p>
+  </div>
+  <div class="ph-right">
+    <a href="{{ url_for('month_detail', mkey=mkey) }}" class="btn btn-link">← Back to rec</a>
+  </div>
+</div>
+
+{% if not rows %}
+  <section class="card">
+    <div class="card-body">
+      <p class="empty">No entries to review for this month.</p>
+    </div>
+  </section>
+{% else %}
+
+<form method="post" action="{{ url_for('review', mkey=mkey) }}">
+  <section class="card">
+    <div class="card-header">
+      <h2>{{ rows | length }} flagged entries</h2>
+      <div class="legend">
+        <span class="lg lg-step11">Step 11 (add)</span>
+        <span class="lg lg-step13">Step 13 (subtract)</span>
+        <span class="lg lg-ignore">Ignore</span>
+        <span class="lg lg-review">Leave for review</span>
+      </div>
+    </div>
+    <div class="card-body">
+
+    <table class="data-table compact review-table">
+      <thead>
+        <tr>
+          <th>Acctg. Date</th>
+          <th>Acct</th>
+          <th>Jrnl</th>
+          <th>Reference</th>
+          <th class="r">Amount</th>
+          <th>Control</th>
+          <th>Control2</th>
+          <th>Description</th>
+          <th>Decision</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="dec-{{ r.decision }}">
+          <td>{{ r.acctg_date.strftime('%b %d, %Y') if r.acctg_date else '' }}</td>
+          <td>{{ r.account }}</td>
+          <td>{{ r.journal }}</td>
+          <td class="mono">{{ r.reference }}</td>
+          <td class="r">{{ r.amount | money }}</td>
+          <td>{{ r.control }}</td>
+          <td>{{ r.control2 }}</td>
+          <td class="muted">{{ r.posting_description }}</td>
+          <td>
+            <select name="row_{{ r.row_id }}" class="dec-select">
+              <option value="review"  {% if r.decision == 'review' %}selected{% endif %}>· review later</option>
+              <option value="step11"  {% if r.decision == 'step11' %}selected{% endif %}>+ Step 11 (add to GL)</option>
+              <option value="step13"  {% if r.decision == 'step13' %}selected{% endif %}>− Step 13 (subtract)</option>
+              <option value="ignore"  {% if r.decision == 'ignore' %}selected{% endif %}>✗ ignore</option>
+            </select>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save decisions</button>
+    <a href="{{ url_for('month_detail', mkey=mkey) }}" class="btn btn-link">Cancel</a>
+  </div>
+</form>
+{% endif %}
+
+{% endblock %}

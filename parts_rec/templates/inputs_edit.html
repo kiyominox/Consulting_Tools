@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}{% if is_new %}Add Month{% else %}{{ mkey | mlabel }}{% endif %}{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>{% if is_new %}Add Reconciliation Month{% else %}Edit Inputs – {{ mkey | mlabel }}{% endif %}</h1>
+  <p class="page-sub">
+    Values come from CDK PDF reports (MGR / Value by Source, physical recap, Fast Lane, GL balance inquiry).
+    All amounts are auto-formatted; enter plain numbers (e.g. <code>131301.68</code>).
+  </p>
+</div>
+
+<form method="post" action="{{ url_for('inputs_edit', mkey=mkey if mkey else 'new') }}" class="inputs-form">
+
+  <section class="card">
+    <div class="card-header"><h2>Header</h2></div>
+    <div class="card-body">
+      <div class="form-grid two">
+        <label>
+          <span>Month  <em>(YYYY-MM)</em></span>
+          <input name="month" value="{{ mkey }}"
+                 placeholder="2025-11" pattern="\d{4}-\d{2}" required
+                 {% if not is_new %}readonly{% endif %}>
+        </label>
+        <label>
+          <span>Dealership</span>
+          <input name="dealership" value="{{ existing.get('dealership', '') }}" placeholder="HML Burin">
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><h2>Parts Side  (Inventory System)</h2></div>
+    <div class="card-body">
+
+      <h3 class="grp">Step 1 – Month End Inventory  (MGR / Value by Source PDF)</h3>
+      <div class="form-grid three">
+        <label><span>Inventory</span><input name="inventory" type="number" step="0.01" value="{{ existing.get('inventory', '') }}"></label>
+        <label><span>Tires</span><input name="tires" type="number" step="0.01" value="{{ existing.get('tires', '') }}"></label>
+        <label><span>Oil</span><input name="oil" type="number" step="0.01" value="{{ existing.get('oil', '') }}"></label>
+      </div>
+
+      <h3 class="grp">Steps 2 – 4  (Cores / Recap Sheet)</h3>
+      <div class="form-grid three">
+        <label><span>Paint on Mixer</span><input name="paint" type="number" step="0.01" value="{{ existing.get('paint', '') }}"></label>
+        <label><span>Cores in Stock (New)  – MGR</span><input name="cores_new" type="number" step="0.01" value="{{ existing.get('cores_new', '') }}"></label>
+        <label><span>Cores in Stock (Used)  – Recap</span><input name="cores_used" type="number" step="0.01" value="{{ existing.get('cores_used', '') }}"></label>
+        <label><span>NPN Parts  – Recap</span><input name="npn" type="number" step="0.01" value="{{ existing.get('npn', '') }}"></label>
+        <label><span>Bowman  – Recap</span><input name="bowman" type="number" step="0.01" value="{{ existing.get('bowman', '') }}"></label>
+      </div>
+
+      <h3 class="grp">Steps 5 – 7  (Returns / Claims / Open ROs)</h3>
+      <div class="form-grid three">
+        <label><span>Returns – Acct 11933</span><input name="returns_11933" type="number" step="0.01" value="{{ existing.get('returns_11933', '') }}"></label>
+        <label><span>Claims  – MGR</span><input name="claims" type="number" step="0.01" value="{{ existing.get('claims', '') }}"></label>
+        <label><span>Open ROs – Service (Fast Lane)</span><input name="open_ros_service" type="number" step="0.01" value="{{ existing.get('open_ros_service', '') }}"></label>
+        <label><span>Counter Tickets – Parts (Fast Lane)</span><input name="counter_tickets_parts" type="number" step="0.01" value="{{ existing.get('counter_tickets_parts', '') }}"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><h2>GL Side</h2></div>
+    <div class="card-body">
+
+      <h3 class="grp">Step 9 – GL Account Balances  (as-of month end)</h3>
+      <div class="form-grid four">
+        <label><span>Acct. 24200 – Inventory</span><input name="gl_24200" type="number" step="0.01" value="{{ existing.get('gl_24200', '') }}"></label>
+        <label><span>Acct. 24300 – Tires</span><input name="gl_24300" type="number" step="0.01" value="{{ existing.get('gl_24300', '') }}"></label>
+        <label><span>Acct. 24401 – Oil</span><input name="gl_24401" type="number" step="0.01" value="{{ existing.get('gl_24401', '') }}"></label>
+        <label><span>Other Account  (optional)</span><input name="gl_other" type="number" step="0.01" value="{{ existing.get('gl_other', '') }}"></label>
+      </div>
+
+      <h3 class="grp">Steps 10 – 16  (GL Adjustments)</h3>
+
+      <div class="auto-note">
+        <strong>Auto-calculated from GL Detail:</strong>  Step 11 (In Physical, Not in GL)
+        and Step 13 (Posted Not Received) are derived from the GL export and displayed on
+        the rec detail page.  Use the fields below for any manual additions.
+      </div>
+
+      <div class="form-grid three">
+        <label><span>Step 10 – Manufacturer Packing Slips</span><input name="mfg_packing_slips" type="number" step="0.01" value="{{ existing.get('mfg_packing_slips', '') }}"></label>
+        <label><span>Step 12 – Prepaid Special Orders</span><input name="prepaid_special_orders" type="number" step="0.01" value="{{ existing.get('prepaid_special_orders', '') }}"></label>
+        <label><span>Step 14 – Inventory Adj. (RPM)</span><input name="inv_adjustments_rpm" type="number" step="0.01" value="{{ existing.get('inv_adjustments_rpm', '') }}"></label>
+        <label><span>Step 15 – Oil &amp; Shop Supply Adj.</span><input name="oil_shop_supply_adj" type="number" step="0.01" value="{{ existing.get('oil_shop_supply_adj', '') }}"></label>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><h2>Step 16 – RAD (Appreciation / Depreciation)  for this month only</h2></div>
+    <div class="card-body">
+      <div class="form-grid two">
+        <label>
+          <span>RAD – {{ mkey | mlabel if mkey else 'this month' }}</span>
+          <input name="rad" type="number" step="0.01" value="{{ rad_val or '' }}">
+        </label>
+        <div class="hint-block">
+          The reconciliation uses the <strong>year-to-date sum</strong> of RAD
+          (Jan&nbsp;1 through the end of this month).  Each month's value is stored
+          separately and can also be edited on the <a href="{{ url_for('rad_edit') }}">RAD page</a>.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-link">Cancel</a>
+    {% if not is_new %}
+      <form method="post" action="{{ url_for('inputs_delete', mkey=mkey) }}" class="inline-form"
+            onsubmit="return confirm('Delete inputs for {{ mkey }}?');">
+        <button type="submit" class="btn btn-danger">Delete this month</button>
+      </form>
+    {% endif %}
+  </div>
+</form>
+
+{% endblock %}

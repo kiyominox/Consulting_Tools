@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}RAD (Appreciation / Depreciation){% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Appreciation / Depreciation (RAD)</h1>
+  <p class="page-sub">
+    Enter the monthly RAD value once per month.  The reconciliation uses the
+    <strong>year-to-date sum</strong> (Jan&nbsp;1 through the rec month).  Year
+    resets every January.
+  </p>
+</div>
+
+<form method="post" action="{{ url_for('rad_edit') }}">
+  <section class="card">
+    <div class="card-header"><h2>Monthly RAD</h2></div>
+    <div class="card-body">
+      <table class="data-table rad-table">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="r">RAD this month</th>
+            <th class="r">YTD running total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(running=0.0, year=0) %}
+          {% for mk in months %}
+            {% set y = mk[:4] | int %}
+            {% if y != ns.year %}
+              {% set ns.year = y %}
+              {% set ns.running = 0.0 %}
+            {% endif %}
+            {% set v = rad.get(mk, 0) | float %}
+            {% set ns.running = ns.running + v %}
+            <tr>
+              <td><strong>{{ mk | mlabel }}</strong></td>
+              <td class="r">
+                <input name="rad_{{ mk }}" type="number" step="0.01"
+                       value="{{ '%.2f' % v if v else '' }}" class="rad-input">
+              </td>
+              <td class="r mono">{{ ns.running | money }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-link">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

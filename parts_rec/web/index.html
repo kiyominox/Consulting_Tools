@@ -1,0 +1,2463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parts Inventory Reconciliation</title>
+<script src="xlsx.full.min.js"></script>
+<style>
+/* ────────────────────────────────────────────────────────────
+   Parts Rec — dashboard CSS (same look as Flask version)
+   ──────────────────────────────────────────────────────────── */
+:root {
+  --bg:#f5f7fa; --surface:#fff; --border:#dde3ec; --border-soft:#eef1f6;
+  --text:#1e2533; --text-soft:#5a6478; --muted:#8c95a8;
+  --primary:#1f4e79; --primary-2:#2e74b5; --accent:#375623;
+  --warn:#c47200; --danger:#b03030; --ok:#2f7d3a;
+  --auto:#fffacd; --auto-bd:#e6d870; --row-hi:#f1f6fb;
+  --var-zero-bg:#e2efda; --var-small-bg:#fff5e0;
+  --var-med-bg:#ffe4d6; --var-large-bg:#ffcccc;
+  --radius:6px;
+  --shadow:0 1px 2px rgba(20,30,50,.05), 0 0 0 1px var(--border);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  background:var(--bg); color:var(--text); font-size:14px; line-height:1.45;
+}
+a{color:var(--primary-2); text-decoration:none; cursor:pointer;}
+a:hover{text-decoration:underline;}
+code,.mono{font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.92em;}
+
+/* Top nav */
+.topnav{background:var(--primary); color:#fff; border-bottom:3px solid var(--primary-2);}
+.topnav-inner{
+  max-width:1500px; margin:0 auto; padding:10px 20px;
+  display:flex; align-items:center; justify-content:space-between; gap:16px;
+}
+.brand{display:flex; align-items:center; gap:10px; color:#fff !important; font-weight:600; font-size:15px; text-decoration:none !important;}
+.brand-mark{background:#fff; color:var(--primary); font-weight:700; font-size:11px; padding:4px 7px; border-radius:4px; letter-spacing:.5px;}
+.topnav-links{display:flex; gap:14px; align-items:center;}
+.topnav-links a{color:#cfdbed !important; font-size:13px; padding:4px 8px; border-radius:4px;}
+.topnav-links a:hover{background:rgba(255,255,255,.1); color:#fff !important; text-decoration:none;}
+.topnav-links a.active{background:rgba(255,255,255,.15); color:#fff !important;}
+
+.container{max-width:1500px; margin:0 auto; padding:20px;}
+
+.page-header{display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; gap:16px;}
+.page-header h1{margin:0 0 4px 0; font-size:22px; font-weight:600;}
+.page-sub{margin:0; color:var(--text-soft); font-size:13px;}
+.ph-left{flex:1;}
+.ph-right{display:flex; gap:8px; align-items:center;}
+
+/* Flash */
+#toast-area{position:fixed; top:70px; right:20px; z-index:1000; display:flex; flex-direction:column; gap:6px; max-width:380px;}
+.toast{
+  padding:10px 14px; border-radius:var(--radius); font-size:13px;
+  border:1px solid; box-shadow:0 4px 10px rgba(0,0,0,.06);
+  animation:slideIn .25s ease-out;
+}
+.toast.success{background:#eaf5e8; color:var(--ok); border-color:#b9dfb3;}
+.toast.error  {background:#fbe9e9; color:var(--danger); border-color:#ebbcbc;}
+.toast.info   {background:#e8f0fb; color:var(--primary); border-color:#b9cdeb;}
+@keyframes slideIn{from{transform:translateX(20px); opacity:0;} to{transform:translateX(0); opacity:1;}}
+
+/* Cards */
+.card{background:var(--surface); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:18px; overflow:hidden;}
+.card-quiet{box-shadow:0 0 0 1px var(--border);}
+.card-header{background:#f8fafc; border-bottom:1px solid var(--border-soft); padding:10px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px;}
+.card-header h2{margin:0; font-size:14px; font-weight:600; color:var(--text); text-transform:uppercase; letter-spacing:.4px;}
+.card-body{padding:16px;}
+
+/* Buttons & badges */
+.btn{display:inline-block; padding:7px 14px; border-radius:var(--radius); font-size:13px; font-weight:500; border:1px solid transparent; cursor:pointer; text-decoration:none !important; font-family:inherit;}
+.btn-sm{padding:4px 9px; font-size:12px;}
+.btn-primary{background:var(--primary); color:#fff !important;}
+.btn-primary:hover{background:var(--primary-2);}
+.btn-link{background:transparent; color:var(--primary-2) !important;}
+.btn-link:hover{background:#eef3fa; text-decoration:none;}
+.btn-warn{background:var(--warn); color:#fff !important;}
+.btn-warn:hover{background:#b06800;}
+.btn-danger{background:var(--danger); color:#fff !important;}
+.btn-danger:hover{background:#952626;}
+
+.badge{display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.3px;}
+.badge-ok{background:#e2efda; color:var(--ok); border:1px solid #b9dfb3;}
+.badge-warn{background:#fff3e0; color:var(--warn); border:1px solid #f1c98c;}
+.badge-review{background:#fff3e0; color:var(--warn); border:1px solid #f1c98c; cursor:pointer;}
+.badge-review:hover{background:#ffeacc;}
+.badge-ok-small{background:#f0f4f0; color:var(--muted); padding:2px 6px; font-size:10px; border-radius:10px;}
+
+.auto-tag{background:var(--auto); border:1px solid var(--auto-bd); color:#6b5800; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:700; margin-left:6px; vertical-align:1px;}
+.ytd-tag{background:#e8f0fb; color:var(--primary); border:1px solid #b9cdeb; padding:1px 6px; border-radius:3px; font-size:10px; font-weight:600; margin-left:6px; vertical-align:1px;}
+
+/* Tables */
+.data-table{width:100%; border-collapse:collapse; font-size:13px;}
+.data-table th,.data-table td{padding:8px 10px; border-bottom:1px solid var(--border-soft); text-align:left; vertical-align:top;}
+.data-table thead th{background:#f3f6fa; font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-soft); font-weight:600; border-bottom:1px solid var(--border);}
+.data-table tfoot th{background:#f3f6fa; font-weight:600; border-top:2px solid var(--border); border-bottom:0;}
+.data-table tbody tr:hover{background:var(--row-hi);}
+.data-table .r{text-align:right; font-variant-numeric:tabular-nums;}
+.data-table .c{text-align:center;}
+.data-table .muted{color:var(--muted); font-size:12px;}
+.data-table .actions a{padding:3px 6px; color:var(--text-soft); font-size:14px;}
+.data-table.compact th,.data-table.compact td{padding:5px 8px; font-size:12px;}
+.summary tbody tr td:first-child a{font-weight:600;}
+
+.var-zero{background:var(--var-zero-bg);}
+.var-small{background:var(--var-small-bg);}
+.var-medium{background:var(--var-med-bg);}
+.var-large{background:var(--var-large-bg);}
+
+/* GL upload */
+.gl-row{display:grid; grid-template-columns:1fr 1.5fr; gap:24px; align-items:start;}
+.gl-form{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+.gl-form input[type=file]{font-size:12px;}
+.gl-info{font-size:12px; line-height:1.7; color:var(--text-soft); padding:8px 12px; background:#f8fafc; border-radius:var(--radius);}
+.gl-info strong{color:var(--text);}
+.hint{font-size:12px; color:var(--text-soft); margin:0;}
+.empty{color:var(--muted); padding:14px; text-align:center; font-style:italic;}
+
+/* Inputs form */
+.form-grid{display:grid; gap:10px 14px; margin-bottom:12px;}
+.form-grid.two{grid-template-columns:repeat(2,1fr);}
+.form-grid.three{grid-template-columns:repeat(3,1fr);}
+.form-grid.four{grid-template-columns:repeat(4,1fr);}
+.form-grid label{display:block;}
+.form-grid label > span{display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:3px; text-transform:uppercase; letter-spacing:.3px;}
+.form-grid label > span em{color:var(--muted); font-weight:400; text-transform:none;}
+.form-grid input,.form-grid select,.form-select{width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;}
+.form-grid input:focus,.form-grid select:focus{outline:none; border-color:var(--primary-2); box-shadow:0 0 0 2px rgba(46,116,181,.15);}
+.form-grid input[type=number]{font-variant-numeric:tabular-nums;}
+
+h3.grp{margin:18px 0 8px 0; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--primary); padding-bottom:4px; border-bottom:1px solid var(--border-soft);}
+h3.grp:first-child{margin-top:0;}
+
+.auto-note{background:#fffbe5; border:1px solid var(--auto-bd); padding:8px 12px; border-radius:var(--radius); font-size:12px; color:#6b5800; margin:8px 0 12px 0;}
+.hint-block{font-size:12px; color:var(--text-soft); padding:6px 0;}
+
+.form-actions{display:flex; gap:10px; align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border-soft);}
+.inline-form{display:inline-flex; gap:8px; align-items:center; margin-left:auto;}
+
+/* Variance banner */
+.variance-banner{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border-radius:var(--radius); overflow:hidden; margin-bottom:18px;}
+.vb-item{background:#fff; padding:12px 16px;}
+.vb-label{font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-soft); font-weight:600;}
+.vb-value{font-size:18px; font-weight:600; margin-top:4px; font-variant-numeric:tabular-nums;}
+.variance-banner.var-zero .vb-primary{background:var(--var-zero-bg);}
+.variance-banner.var-small .vb-primary{background:var(--var-small-bg);}
+.variance-banner.var-medium .vb-primary{background:var(--var-med-bg);}
+.variance-banner.var-large .vb-primary{background:var(--var-large-bg);}
+
+/* Two-col layout */
+.two-col{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+@media(max-width:1100px){.two-col{grid-template-columns:1fr;}}
+
+.side.parts-side .card-header{background:#eaf2fb;}
+.side.gl-side .card-header{background:#eaf3e3;}
+
+.rec-table{width:100%; border-collapse:collapse; font-size:13px;}
+.rec-table td{padding:5px 8px; border-bottom:1px solid var(--border-soft); vertical-align:top;}
+.rec-table td.step{width:32px; font-size:11px; color:var(--muted); font-weight:600;}
+.rec-table td.r{text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;}
+.rec-table td.ind{padding-left:22px; color:var(--text-soft);}
+.rec-table tr.sub td{background:#f6f9fc; font-size:12px;}
+.rec-table tr.total td{background:#e6eef8; border-top:2px solid var(--primary-2); border-bottom:0; font-size:13px; padding-top:8px; padding-bottom:8px;}
+.side.gl-side .rec-table tr.total td{background:#e3eed7; border-top-color:var(--accent);}
+.rec-table .auto-row td{background:#fffbe5;}
+.rec-table .drill{font-size:11px; margin-left:6px; color:var(--primary-2);}
+
+/* Chart */
+.chart-wrap{display:flex; gap:8px; align-items:flex-end; padding:20px 4px 4px; height:220px; border-bottom:1px solid var(--border);}
+.chart-col{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end;}
+.chart-amt{font-size:10px; color:var(--text-soft); font-variant-numeric:tabular-nums;}
+.chart-bar-wrap{flex:1; display:flex; align-items:flex-end; width:70%; max-width:60px;}
+.chart-bar{width:100%; border-radius:3px 3px 0 0; transition:height .2s;}
+.chart-bar.pos{background:linear-gradient(180deg,#d36e6e,#b03030);}
+.chart-bar.neg{background:linear-gradient(180deg,#6ec07d,#2f7d3a);}
+.chart-label{font-size:11px; color:var(--text-soft); white-space:nowrap;}
+
+/* Review */
+.legend{display:flex; gap:10px; font-size:11px; align-items:center;}
+.lg{padding:2px 8px; border-radius:10px; font-weight:600; text-transform:uppercase; letter-spacing:.3px;}
+.lg-step11{background:#e2efda; color:var(--ok);}
+.lg-step13{background:#ffe4d6; color:#b04200;}
+.lg-ignore{background:#ececec; color:var(--muted);}
+.lg-review{background:#fff3e0; color:var(--warn);}
+
+/* Review table — sortable / filterable */
+.review-wrap{overflow:auto; border:1px solid var(--border); border-radius:var(--radius); background:#fff; max-height:72vh;}
+.rev-table{border-collapse:separate; border-spacing:0; width:100%; font-size:12px;}
+.rev-table th,.rev-table td{padding:5px 8px; border-bottom:1px solid var(--border-soft); white-space:nowrap; text-align:left; vertical-align:middle;}
+.rev-table thead th{position:sticky; background:#f3f6fa; z-index:2;}
+.rev-table thead .hdr-row th{top:0; cursor:pointer; user-select:none; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--text-soft); border-bottom:1px solid var(--border);}
+.rev-table thead .hdr-row th:hover{background:#e9eff7;}
+.rev-table thead .hdr-row th.sorted{color:var(--primary);}
+.rev-table thead .flt-row th{top:28px; padding:3px 6px; z-index:1;}
+.rev-table thead .flt-row input{width:100%; min-width:54px; padding:3px 5px; border:1px solid var(--border); border-radius:3px; font-size:11px; font-family:inherit; font-weight:400; text-transform:none; letter-spacing:0;}
+.rev-table td.r,.rev-table th.r{text-align:right; font-variant-numeric:tabular-nums;}
+.rev-table tbody tr:hover td{background:var(--row-hi);}
+.rev-table .sort-arrow{font-size:9px; margin-left:3px;}
+.rev-table td.muted{color:var(--muted); max-width:280px; overflow:hidden; text-overflow:ellipsis;}
+
+.st-badge{display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; white-space:nowrap;}
+.st-11{background:#e2efda; color:var(--ok);}
+.st-13{background:#ffe4d6; color:#b04200;}
+.st-rev{background:#fff3e0; color:var(--warn);}
+.st-none{background:#eef0f3; color:var(--muted);}
+.st-forced{box-shadow:0 0 0 2px rgba(31,78,121,.4);}
+
+.dec-btns{display:inline-flex; gap:3px;}
+.dec-btn{padding:3px 7px; border:1px solid var(--border); border-radius:4px; background:#fff; font-size:11px; font-weight:600; cursor:pointer; color:var(--text-soft); font-family:inherit; line-height:1.2;}
+.dec-btn:hover{border-color:var(--primary-2); color:var(--primary);}
+.dec-btn.active-11{background:var(--ok); color:#fff; border-color:var(--ok);}
+.dec-btn.active-13{background:#b04200; color:#fff; border-color:#b04200;}
+.dec-btn.active-ig{background:var(--muted); color:#fff; border-color:var(--muted);}
+.dec-btn.active-auto{background:var(--primary); color:#fff; border-color:var(--primary);}
+
+.rev-toggle{display:inline-flex; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;}
+.rev-toggle button{padding:6px 12px; border:0; background:#fff; font-size:12px; font-weight:600; cursor:pointer; color:var(--text-soft); font-family:inherit;}
+.rev-toggle button.active{background:var(--primary); color:#fff;}
+.rev-toggle button + button{border-left:1px solid var(--border);}
+
+/* RAD */
+.rad-input{width:130px; text-align:right;}
+.rad-table{max-width:600px;}
+.rad-table td,.rad-table th{padding:6px 12px;}
+
+/* Bulk entry grid */
+.bulk-controls{display:flex; gap:18px; align-items:flex-end; flex-wrap:wrap; margin-bottom:14px;}
+.bulk-controls .field{display:flex; flex-direction:column; gap:3px;}
+.bulk-controls .field span{font-size:11px; font-weight:600; color:var(--text-soft); text-transform:uppercase; letter-spacing:.3px;}
+.bulk-controls input{padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px;}
+.bulk-controls .yr{width:90px;} .bulk-controls .mo{width:120px;}
+.bulk-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:var(--radius); background:#fff; max-height:70vh;}
+.bulk-table{border-collapse:separate; border-spacing:0; font-size:12px;}
+.bulk-table th,.bulk-table td{padding:4px 6px; border-bottom:1px solid var(--border-soft); border-right:1px solid var(--border-soft); white-space:nowrap;}
+.bulk-table thead th{position:sticky; top:0; z-index:2;}
+.bulk-table thead .grp-row th{background:#eef3fa; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--primary); text-align:center; font-weight:700; top:0;}
+.bulk-table thead .fld-row th{background:#f3f6fa; font-size:10px; color:var(--text-soft); font-weight:600; top:23px;}
+.bulk-table td input{width:88px; padding:3px 5px; border:1px solid transparent; border-radius:3px; font-size:12px; text-align:right; font-variant-numeric:tabular-nums; background:transparent;}
+.bulk-table td input:hover{border-color:var(--border);}
+.bulk-table td input:focus{outline:none; border-color:var(--primary-2); box-shadow:0 0 0 2px rgba(46,116,181,.15); background:#fff;}
+.bulk-table td input.deal{width:120px; text-align:left;}
+.bulk-table .mcol{position:sticky; left:0; z-index:3; background:#fff; font-weight:600; box-shadow:1px 0 0 var(--border);}
+.bulk-table thead .mcol{z-index:5; background:#f3f6fa;}
+.bulk-table .grp-start{border-left:2px solid var(--border);}
+.bulk-table tbody tr:hover .mcol{background:var(--row-hi);}
+.bulk-table tbody tr:hover td{background:var(--row-hi);}
+
+/* Store switcher in top nav */
+.store-switcher{display:flex; align-items:center; gap:7px; background:rgba(255,255,255,.1); border-radius:var(--radius); padding:4px 10px; margin-right:6px;}
+.store-label{color:#cfdbed; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; white-space:nowrap;}
+.store-select{background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.2); border-radius:4px; font-size:13px; padding:3px 22px 3px 7px; cursor:pointer; font-family:inherit; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23cfdbed'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 7px center;}
+.store-select option{background:#1f4e79; color:#fff;}
+.store-select:focus{outline:none; border-color:rgba(255,255,255,.5);}
+.store-mgr-link{color:#cfdbed !important; font-size:11px; white-space:nowrap;}
+.store-mgr-link:hover{color:#fff !important;}
+
+/* Store management page */
+.store-list{display:flex; flex-direction:column; gap:8px; margin-bottom:20px;}
+.store-card{display:flex; align-items:center; gap:10px; padding:10px 14px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface);}
+.store-card.active-store{border-color:var(--primary-2); background:#f0f5fb;}
+.store-card .store-name-input{flex:1; padding:5px 8px; border:1px solid transparent; border-radius:4px; font-size:13px; font-weight:500; font-family:inherit; background:transparent; color:var(--text);}
+.store-card .store-name-input:hover{border-color:var(--border);}
+.store-card .store-name-input:focus{outline:none; border-color:var(--primary-2); background:#fff; box-shadow:0 0 0 2px rgba(46,116,181,.15);}
+.store-card .store-meta{font-size:11px; color:var(--muted); white-space:nowrap;}
+.store-card .active-badge{font-size:11px; font-weight:700; color:var(--primary); background:#d9e6f7; padding:2px 8px; border-radius:10px; white-space:nowrap;}
+.site-footer .dot{margin:0 6px;}
+
+.hidden{display:none !important;}
+
+/* Loading spinner */
+.spinner{display:inline-block; width:14px; height:14px; border:2px solid rgba(46,116,181,.3); border-top-color:var(--primary-2); border-radius:50%; animation:spin .8s linear infinite; vertical-align:middle; margin-right:6px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="#/" class="brand">
+      <span class="brand-mark">P/R</span>
+      Parts Inventory Reconciliation
+    </a>
+    <div id="store-nav"></div>
+    <div class="topnav-links">
+      <a href="#/" data-nav="dashboard">Dashboard</a>
+      <a href="#/bulk" data-nav="bulk">Bulk Entry</a>
+      <a href="#/inputs" data-nav="inputs">Monthly Inputs</a>
+      <a href="#/rad" data-nav="rad">RAD (App/Dep)</a>
+      <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+  </div>
+</nav>
+
+<div id="toast-area"></div>
+
+<main class="container" id="app"></main>
+
+<footer class="site-footer">
+  <span>Parts Inventory / GL Reconciliation</span>
+  <span class="dot">·</span>
+  <span>All data stays in your browser (localStorage) — nothing uploaded</span>
+</footer>
+
+<script>
+/* =============================================================
+   PARTS REC — pure browser app
+   No backend, no install.  All data in localStorage.
+   ============================================================= */
+
+'use strict';
+
+// ── State management (multi-store) ───────────────────────────
+// Meta key: store registry.  Per-store keys hold state & GL separately.
+const META_KEY   = 'partsRecMeta_v1';
+const LEGACY_STATE_KEY = 'partsRecState_v1';   // migration only
+const LEGACY_GL_KEY    = 'partsRecGL_v1';      // migration only
+
+let _activeStoreId = null;   // set by initStores() before first route()
+
+function stateKeyFor(id) { return 'partsRecStore_' + id; }
+function glKeyFor(id)    { return 'partsRecGL_' + id; }
+
+function _blankState() {
+  return {
+    inputs:              {},
+    rad:                 {},
+    reviewDecisions:     {},
+    glFilename:          null,
+    glUploadedAt:        null,
+    acctHistFilename:    null,
+    acctHistImportedAt:  null,
+    radCycleStartMonth:  1,    // 1-12; RAD accumulates from this month forward each cycle
+  };
+}
+
+function _blankMeta(sid) {
+  return { activeStore: sid, stores: { [sid]: { id: sid, name: 'Store 1' } } };
+}
+
+function loadMeta() {
+  try { const r = localStorage.getItem(META_KEY); if (r) { const m = JSON.parse(r); if (m.stores) return m; } } catch(e) {}
+  return null;
+}
+function saveMeta(meta) { localStorage.setItem(META_KEY, JSON.stringify(meta)); }
+
+function initStores() {
+  let meta = loadMeta();
+  if (!meta) {
+    const sid = 's1';
+    meta = _blankMeta(sid);
+    // Migrate legacy single-store data if it exists
+    const oldState = localStorage.getItem(LEGACY_STATE_KEY);
+    const oldGL    = localStorage.getItem(LEGACY_GL_KEY);
+    if (oldState) {
+      try {
+        const p = JSON.parse(oldState);
+        const dealer = Object.values(p.inputs || {})[0]?.dealership;
+        if (dealer) meta.stores[sid].name = dealer;
+      } catch(e) {}
+      localStorage.setItem(stateKeyFor(sid), oldState);
+    }
+    if (oldGL) localStorage.setItem(glKeyFor(sid), oldGL);
+    saveMeta(meta);
+  }
+  _activeStoreId = meta.activeStore;
+}
+
+function updateStoreNav() {
+  const nav = document.getElementById('store-nav');
+  if (!nav) return;
+  const meta = loadMeta();
+  if (!meta) return;
+  const stores = Object.values(meta.stores).sort((a, b) => a.name.localeCompare(b.name));
+  const opts = stores.map(s =>
+    `<option value="${escapeHTML(s.id)}"${s.id === meta.activeStore ? ' selected' : ''}>${escapeHTML(s.name)}</option>`
+  ).join('');
+  nav.innerHTML = `
+    <div class="store-switcher">
+      <span class="store-label">Store:</span>
+      <select class="store-select" onchange="switchStore(this.value)">${opts}</select>
+      <a href="#/stores" class="store-mgr-link" title="Manage stores">manage</a>
+    </div>`;
+}
+
+window.switchStore = function(id) {
+  const meta = loadMeta();
+  if (!meta || !meta.stores[id]) return;
+  meta.activeStore = id;
+  _activeStoreId = id;
+  saveMeta(meta);
+  bulkExtraMonths = [];   // reset bulk grid for new store
+  updateStoreNav();
+  location.hash = '#/';
+  route();
+};
+
+function loadState() {
+  try { const r = localStorage.getItem(stateKeyFor(_activeStoreId)); if (r) return JSON.parse(r); } catch(e) {}
+  return _blankState();
+}
+function saveState(state) {
+  localStorage.setItem(stateKeyFor(_activeStoreId), JSON.stringify(state));
+}
+function loadGL() {
+  try { const r = localStorage.getItem(glKeyFor(_activeStoreId)); if (r) return JSON.parse(r); } catch(e) {}
+  return null;
+}
+function saveGL(rows) {
+  try { localStorage.setItem(glKeyFor(_activeStoreId), JSON.stringify(rows)); return true; }
+  catch(e) { toast('GL too large for browser storage. Try a narrower date range.', 'error'); return false; }
+}
+
+// ── Formatting ────────────────────────────────────────────────
+function fmtMoney(v) {
+  if (v == null || v === '' || isNaN(v)) return '';
+  const n = Number(v);
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function fmtPct(v) {
+  if (v == null || v === '' || isNaN(v)) return '';
+  return (Number(v) * 100).toFixed(2) + '%';
+}
+function fmtDate(d) {
+  if (!d) return '';
+  const dt = d instanceof Date ? d : new Date(d);
+  if (isNaN(dt)) return '';
+  return dt.toLocaleString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+}
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function monthLabel(year, month) { return MONTH_NAMES[month-1] + ' ' + year; }
+function monthKey(year, month) { return String(year).padStart(4,'0') + '-' + String(month).padStart(2,'0'); }
+function parseMonthKey(s) {
+  const m = /^(\d{4})-(\d{1,2})/.exec(String(s).trim());
+  if (!m) throw new Error('Bad month key: ' + s);
+  return {year: +m[1], month: +m[2]};
+}
+function varClass(v) {
+  if (v == null) return '';
+  const a = Math.abs(Number(v));
+  if (a < 1)    return 'var-zero';
+  if (a < 100)  return 'var-small';
+  if (a < 1000) return 'var-medium';
+  return 'var-large';
+}
+function lastDay(year, month) { return new Date(year, month, 0).getDate(); }
+
+// ── Toast ─────────────────────────────────────────────────────
+function toast(msg, type) {
+  type = type || 'info';
+  const area = document.getElementById('toast-area');
+  const div = document.createElement('div');
+  div.className = 'toast ' + type;
+  div.textContent = msg;
+  area.appendChild(div);
+  setTimeout(() => div.remove(), 4000);
+}
+
+// ── Month parsing for Control field ───────────────────────────
+const MONTH_MAP = {
+  JAN:1, FEB:2, MAR:3, APR:4, MAY:5, JUN:6, JUL:7, AUG:8,
+  SEP:9, SEPT:9, OCT:10, NOV:11, DEC:12,
+  JANUARY:1, FEBRUARY:2, MARCH:3, APRIL:4, JUNE:6, JULY:7,
+  AUGUST:8, SEPTEMBER:9, OCTOBER:10, NOVEMBER:11, DECEMBER:12,
+};
+const ABBR_LIST = Object.keys(MONTH_MAP).sort((a,b) => b.length - a.length);
+
+function inferYear(controlMonth, acctgDate) {
+  const refDays = acctgDate.getTime() / 86400000;
+  let bestYr = null, bestDiff = Infinity;
+  for (let off = -1; off <= 1; off++) {
+    const yr = acctgDate.getFullYear() + off;
+    const cand = new Date(yr, controlMonth - 1, 1);
+    const days = cand.getTime() / 86400000;
+    const delta = days - refDays;
+    if (delta >= -550 && delta <= 62) {
+      if (Math.abs(delta) < bestDiff) {
+        bestDiff = Math.abs(delta);
+        bestYr = yr;
+      }
+    }
+  }
+  return bestYr;
+}
+
+function parseControlMonth(controlVal, acctgDate) {
+  if (controlVal == null) return null;
+  let s = String(controlVal).trim().toUpperCase();
+  if (s === '' || s === 'NONE' || s === '0' || s === 'N/A' || s === 'NAN') return null;
+  for (const abbr of ABBR_LIST) {
+    if (!s.startsWith(abbr)) continue;
+    const rest = s.slice(abbr.length);
+    const monthNum = MONTH_MAP[abbr];
+    if (rest === '') {
+      const yr = inferYear(monthNum, acctgDate);
+      return yr ? {year: yr, month: monthNum} : null;
+    }
+    if (/^\d+$/.test(rest)) {
+      if (rest.length === 2) return {year: 2000 + parseInt(rest, 10), month: monthNum};
+      if (rest.length === 4) return {year: parseInt(rest, 10),         month: monthNum};
+    }
+    break;
+  }
+  return null;
+}
+
+function getControlYm(row, acctgDate) {
+  return parseControlMonth(row.Control, acctgDate) ||
+         parseControlMonth(row.Control2, acctgDate);
+}
+
+function hasNontrivialControl(row) {
+  for (const f of ['Control', 'Control2']) {
+    const v = row[f];
+    if (v == null) continue;
+    const s = String(v).trim().toUpperCase();
+    if (s !== '' && s !== 'NONE' && s !== '0' && s !== 'N/A' && s !== 'NAN') return true;
+  }
+  return false;
+}
+
+// ── GL classification ─────────────────────────────────────────
+const SALES_JOURNALS = new Set(['60', '61', '62']);
+
+function rowId(row) {
+  const ref = String(row.Reference || '');
+  let dtS = '';
+  if (row['Acctg. Date']) {
+    const d = new Date(row['Acctg. Date']);
+    if (!isNaN(d)) dtS = d.toISOString().slice(0, 10);
+  }
+  const amt = Number(row['Amount $'] || 0).toFixed(2);
+  const ctrl = String(row.Control || '');
+  return ref + '|' + dtS + '|' + amt + '|' + ctrl;
+}
+
+// Calendar-day integer (YYYYMMDD) from local date components. Comparing at
+// day granularity avoids time-of-day artifacts: SheetJS bakes a small
+// offset (e.g. 00:00:52) into each date, which would otherwise push entries
+// posted on the last day of the rec month past a midnight recEnd boundary.
+function localDayNum(d) {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+function classifyRow(r, recYear, recMonth) {
+  if (!r['Acctg. Date']) return null;
+  const acctgDate = new Date(r['Acctg. Date']);
+  if (isNaN(acctgDate)) return null;
+  const aDay     = localDayNum(acctgDate);
+  const startDay = recYear * 10000 + recMonth * 100 + 1;
+  const endDay   = recYear * 10000 + recMonth * 100 + lastDay(recYear, recMonth);
+  const journal  = String(r.Journal || '').trim();
+  const isSales  = SALES_JOURNALS.has(journal);
+  const ym = getControlYm(r, acctgDate);
+  let auto = 'none';
+  if (!isSales) {
+    if (aDay >= startDay && aDay <= endDay) {
+      if (ym && (ym.year > recYear || (ym.year === recYear && ym.month > recMonth))) auto = 'step13';
+    } else if (aDay > endDay) {
+      if (ym && (ym.year < recYear || (ym.year === recYear && ym.month <= recMonth))) auto = 'step11';
+      else if (!ym && hasNontrivialControl(r)) auto = 'review';
+    }
+  }
+  return {auto, ym, acctgDate, aDay, startDay, endDay, isSales};
+}
+
+// Classify every GL row for a rec month, applying per-row decisions as overrides.
+// Returns effective Step 13 (s1), Step 11 (s2), still-needs-review (rv), and the
+// full reconcilable universe (rec month onward, non-sales) for the review page.
+function classifyAll(rows, recYear, recMonth, decisions) {
+  decisions = decisions || {};
+  const s1 = [], s2 = [], rv = [], universe = [];
+  for (const r of rows) {
+    const cl = classifyRow(r, recYear, recMonth);
+    if (!cl) continue;
+    const rid = rowId(r);
+    const rawDec = decisions[rid];
+    const dec = (rawDec && rawDec !== 'auto') ? rawDec : null;
+    const rec = Object.assign({}, r, {_row_id: rid, _auto: cl.auto, _decision: dec});
+    const eff = dec || cl.auto;
+    rec._effective = (eff === 'review') ? 'none' : eff;
+    if (eff === 'step13')      s1.push(rec);
+    else if (eff === 'step11') s2.push(rec);
+    else if (eff === 'review') rv.push(rec);
+    if ((!cl.isSales && cl.aDay >= cl.startDay) || dec) universe.push(rec);
+  }
+  return {s1, s2, rv, universe};
+}
+
+// ── Reconciliation calculation ────────────────────────────────
+function safe(v) {
+  if (v == null || v === '') return 0;
+  const n = Number(v);
+  return isNaN(n) ? 0 : n;
+}
+
+function ytdRad(radMap, recYear, recMonth, cycleStart) {
+  cycleStart = cycleStart || 1;
+  let tot = 0;
+  if (recMonth >= cycleStart) {
+    // Cycle is entirely within recYear: sum cycleStart..recMonth
+    for (let m = cycleStart; m <= recMonth; m++) tot += safe(radMap[monthKey(recYear, m)]);
+  } else {
+    // Cycle spans the year boundary: sum cycleStart..Dec of prior year, then Jan..recMonth of recYear
+    for (let m = cycleStart; m <= 12; m++) tot += safe(radMap[monthKey(recYear - 1, m)]);
+    for (let m = 1; m <= recMonth; m++) tot += safe(radMap[monthKey(recYear, m)]);
+  }
+  return tot;
+}
+
+const INPUT_FIELDS = [
+  'inventory', 'tires', 'oil', 'paint', 'cores_new', 'cores_used',
+  'npn', 'bowman', 'returns_11933', 'claims',
+  'open_ros_service', 'counter_tickets_parts',
+  'mfg_packing_slips', 'prepaid_special_orders',
+  'inv_adjustments_rpm', 'oil_shop_supply_adj',
+  'gl_24200', 'gl_24300', 'gl_24401', 'gl_other',
+];
+
+function calculateRec(inputs, s1Total, s2Total, ytdRadValue) {
+  const I = (k) => safe(inputs[k]);
+  const inventory = I('inventory'), tires = I('tires'), oil = I('oil');
+  const totalInv  = inventory + tires + oil;
+  const paint     = I('paint'),    coresNew = I('cores_new'), coresUsed = I('cores_used');
+  const npn       = I('npn'),      bowman   = I('bowman');
+  const returns_  = I('returns_11933'), claims = I('claims');
+  const roSvc     = I('open_ros_service'), roCtr = I('counter_tickets_parts');
+  const openROs   = roSvc + roCtr;
+  const step8     = totalInv + paint + coresNew + coresUsed + npn + bowman
+                  + returns_ + claims + openROs;
+  const gl24200 = I('gl_24200'), gl24300 = I('gl_24300'),
+        gl24401 = I('gl_24401'), glOther = I('gl_other');
+  const glTotal = gl24200 + gl24300 + gl24401 + glOther;
+  const mfgSlips = I('mfg_packing_slips'), prepaid = I('prepaid_special_orders');
+  const invAdj   = I('inv_adjustments_rpm'), oilAdj = I('oil_shop_supply_adj');
+  const step17 = glTotal + mfgSlips + s2Total + prepaid - s1Total
+               + invAdj + oilAdj + ytdRadValue;
+  const step19 = step17 - step8;
+  const step19Pct = glTotal ? step19 / glTotal : null;
+  return {
+    inventory, tires, oil, totalInv, paint, coresNew, coresUsed, npn, bowman,
+    returns_, claims, roSvc, roCtr, openROs, step8,
+    gl24200, gl24300, gl24401, glOther, glTotal,
+    mfgSlips, s2Total, prepaid, s1Total, invAdj, oilAdj, radYTD: ytdRadValue,
+    step17, step19, step19Pct,
+  };
+}
+
+function buildRec(state, glRows, mkey) {
+  const inputs = state.inputs[mkey];
+  if (!inputs) return null;
+  const {year, month} = parseMonthKey(mkey);
+  let s1 = [], s2 = [], rv = [];
+  if (glRows) {
+    const decisions = (state.reviewDecisions || {})[mkey] || {};
+    const c = classifyAll(glRows, year, month, decisions);
+    s1 = c.s1; s2 = c.s2; rv = c.rv;
+  }
+  const s1Total = s1.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
+  const s2Total = s2.reduce((t, r) => t + Number(r['Amount $'] || 0), 0);
+  const cycleStart = state.radCycleStartMonth || 1;
+  const radY    = ytdRad(state.rad || {}, year, month, cycleStart);
+  const calc    = calculateRec(inputs, s1Total, s2Total, radY);
+  return {
+    year, month, label: monthLabel(year, month), calc, inputs,
+    s1, s2, rv, reviewCount: rv.length, radYTD: radY, cycleStart,
+  };
+}
+
+function buildAllRecs(state, glRows) {
+  const keys = Object.keys(state.inputs).sort();
+  return keys.map(k => buildRec(state, glRows, k)).filter(Boolean);
+}
+
+// ── GL upload (SheetJS) ───────────────────────────────────────
+function readExcelFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb   = XLSX.read(data, {type: 'array', cellDates: true});
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        // raw:true keeps numbers as numbers and Dates as Date objects.
+        const rows = XLSX.utils.sheet_to_json(ws, {defval: null, raw: true});
+        // Normalize column names (strip whitespace) and serialize dates for localStorage.
+        const cleaned = rows.map(r => {
+          const out = {};
+          for (const k in r) out[k.trim()] = r[k];
+          if (!('Control2' in out)) out.Control2 = '';
+          // Numbers come back as numbers.  Dates come back as Date objects;
+          // JSON.stringify turns them into ISO strings for storage.
+          // Force string for textual columns that might come back as numbers (Account, Journal, Control).
+          for (const k of ['Account', 'Journal', 'Control', 'Control2']) {
+            if (out[k] != null && typeof out[k] !== 'string') out[k] = String(out[k]);
+          }
+          if (out['Acctg. Date'] instanceof Date) {
+            out['Acctg. Date'] = out['Acctg. Date'].toISOString();
+          }
+          // Coerce Amount $ to a number defensively
+          if (out['Amount $'] != null) {
+            const n = Number(out['Amount $']);
+            out['Amount $'] = isNaN(n) ? 0 : n;
+          }
+          return out;
+        });
+        resolve(cleaned);
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+// ── Account Balance History parser ───────────────────────────
+function parseAcctHist(data) {
+  const wb = XLSX.read(data, {type: 'array', cellDates: false});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  // Use raw row arrays so we can detect structure by column position, not header names.
+  const rawRows = XLSX.utils.sheet_to_json(ws, {header: 1, defval: null});
+  const result = {}; // {accountNum: {'YYYY-MM': balance}}
+  let currentAccount = null;
+  let inDataSection  = false;
+  for (const row of rawRows) {
+    if (!Array.isArray(row)) continue;
+    const colB = row[1], colC = row[2], colD = row[3], colE = row[4];
+    // Account number row: col B is a 4-6 digit string or number (e.g. '24200' or 24200)
+    if (colB != null) {
+      const bStr = String(colB).trim();
+      if (/^\d{4,6}$/.test(bStr)) {
+        currentAccount = bStr;
+        inDataSection  = false;
+        continue;
+      }
+    }
+    // Period header row: col C = 'Period-Month'
+    if (colC != null && String(colC).trim() === 'Period-Month') {
+      inDataSection = true;
+      continue;
+    }
+    // Empty row resets the data section (each account block ends with an empty row)
+    if (colB == null && colC == null && colD == null && colE == null) {
+      inDataSection = false;
+      continue;
+    }
+    // Data row: col C = month int (1-12), col D = year int, col E = balance
+    if (inDataSection && currentAccount && colC != null && colD != null && colE != null) {
+      const m = Number(colC), y = Number(colD), b = Number(colE);
+      if (!isNaN(m) && m >= 1 && m <= 12 && !isNaN(y) && y >= 2000 && y <= 2100 && !isNaN(b)) {
+        if (!result[currentAccount]) result[currentAccount] = {};
+        result[currentAccount][monthKey(y, m)] = b;
+      }
+    }
+  }
+  return result;
+}
+
+// ── Excel export (xlsx-js-style) ──────────────────────────────
+const XLC = {
+  navy:'1F4E79', blue:'2E74B5', green:'375623',
+  white:'FFFFFF', partsHdr:'DDEBF7', glHdr:'E2EFDA',
+  subBg:'F2F6FB', glSubBg:'EAF3E0', totBg:'D9E1F2', glTotBg:'D6E4C8',
+  band:'F7F9FC', redText:'C00000', greenText:'2F7D3A', soft:'5A6478',
+};
+const MONEY_FMT = '$#,##0.00;[Red](-$#,##0.00)';
+const PCT_FMT   = '0.00%';
+function _border(c){ c = c || 'D0D7E2'; const s={style:'thin',color:{rgb:c}}; return {top:s,bottom:s,left:s,right:s}; }
+function styTitle(){ return {font:{bold:true,sz:15,color:{rgb:XLC.navy}}}; }
+function stySub(){ return {font:{italic:true,sz:10,color:{rgb:XLC.soft}}}; }
+function styColHdr(fill){ return {font:{bold:true,sz:10,color:{rgb:XLC.white}}, fill:{fgColor:{rgb:fill||XLC.navy}}, alignment:{horizontal:'center',vertical:'center',wrapText:true}, border:_border(fill||XLC.navy)}; }
+function stySection(fill){ return {font:{bold:true,sz:11,color:{rgb:XLC.navy}}, fill:{fgColor:{rgb:fill||XLC.partsHdr}}, border:_border()}; }
+function styLabel(){ return {font:{sz:10}, border:_border()}; }
+function styStep(){ return {font:{sz:9,bold:true,color:{rgb:XLC.soft}}, alignment:{horizontal:'center'}, border:_border()}; }
+function styMoney(opts){ opts=opts||{}; return {font:{sz:10,bold:!!opts.bold}, numFmt:MONEY_FMT, alignment:{horizontal:'right'}, fill:opts.fill?{fgColor:{rgb:opts.fill}}:undefined, border:_border()}; }
+function styTotal(fill){ return {font:{bold:true,sz:10}, fill:{fgColor:{rgb:fill||XLC.totBg}}, border:_border()}; }
+function styTotalMoney(fill){ return {font:{bold:true,sz:10}, numFmt:MONEY_FMT, alignment:{horizontal:'right'}, fill:{fgColor:{rgb:fill||XLC.totBg}}, border:_border()}; }
+
+// Build a worksheet from a grid of cell specs.
+// Each cell is a primitive (value) or {v, s, z, t, f} object.
+function makeSheet(grid) {
+  const aoa = grid.map(row => row.map(c => (c && typeof c === 'object' && 'v' in c) ? c.v : (c === undefined ? null : c)));
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  grid.forEach((row, ri) => row.forEach((c, ci) => {
+    if (c && typeof c === 'object') {
+      const addr = XLSX.utils.encode_cell({r: ri, c: ci});
+      if (!ws[addr]) ws[addr] = {t: 's', v: ''};
+      if (c.s) ws[addr].s = c.s;
+      if (c.z) ws[addr].z = c.z;
+      if (c.t) ws[addr].t = c.t;
+    }
+  }));
+  return ws;
+}
+
+function moneyCell(v, sty) {
+  const n = safe(v);
+  return {v: n, t: 'n', z: MONEY_FMT, s: sty || styMoney()};
+}
+
+// GL detail rows → grid (used for per-section export and embedded in month sheets)
+const GL_DETAIL_COLS = ['Account','Journal','Reference','Acctg. Date','Amount','Control','Control2','Description'];
+function glDetailGrid(rows, headerFill) {
+  const grid = [GL_DETAIL_COLS.map(h => ({v: h, s: styColHdr(headerFill || XLC.navy)}))];
+  for (const r of rows) {
+    let dt = '';
+    if (r['Acctg. Date']) { const d = new Date(r['Acctg. Date']); if (!isNaN(d)) dt = d.toISOString().slice(0,10); }
+    grid.push([
+      {v: String(r.Account || ''),  s: styLabel()},
+      {v: String(r.Journal || ''),  s: styLabel()},
+      {v: String(r.Reference || ''),s: styLabel()},
+      {v: dt,                        s: styLabel()},
+      moneyCell(r['Amount $']),
+      {v: String(r.Control || ''),  s: styLabel()},
+      {v: String(r.Control2 || ''), s: styLabel()},
+      {v: String(r['Posting Description'] || ''), s: styLabel()},
+    ]);
+  }
+  return grid;
+}
+const GL_DETAIL_WIDTHS = [{wch:10},{wch:8},{wch:16},{wch:13},{wch:15},{wch:12},{wch:12},{wch:42}];
+
+// One reconciliation month → worksheet
+function recSheet(rec) {
+  const c = rec.calc;
+  const g = [];
+  const blank = () => g.push([]);
+  g.push([{v: 'Parts Inventory Reconciliation — ' + rec.label, s: styTitle()}]);
+  g.push([{v: rec.inputs.dealership || '', s: stySub()}]);
+  blank();
+  // Parts side
+  g.push([{v:'', s:stySection(XLC.partsHdr)}, {v:'PARTS SIDE (Inventory System)', s:stySection(XLC.partsHdr)}, {v:'', s:stySection(XLC.partsHdr)}]);
+  const pRow = (step, label, val, opt) => g.push([{v:step,s:styStep()},{v:label,s:(opt&&opt.lblSty)||styLabel()}, moneyCell(val, opt&&opt.moneySty)]);
+  pRow('1','Inventory (MGR)', c.inventory);
+  pRow('','Tires', c.tires);
+  pRow('','Oil', c.oil);
+  pRow('','Total Inventory', c.totalInv, {lblSty:styTotal(XLC.subBg), moneySty:styTotalMoney(XLC.subBg)});
+  pRow('2','Paint on Mixer', c.paint);
+  pRow('2','Cores in Stock (New) — MGR', c.coresNew);
+  pRow('3','Cores in Stock (Used) — Recap', c.coresUsed);
+  pRow('','NPN Parts — Recap', c.npn);
+  pRow('4','Bowman — Recap', c.bowman);
+  pRow('5','Normal/Scheduled Returns (Acct 11933)', c.returns_);
+  pRow('6','Claims — MGR', c.claims);
+  pRow('7','Open ROs — Service (Fast Lane)', c.roSvc);
+  pRow('','Counter Tickets — Parts (Fast Lane)', c.roCtr);
+  pRow('','Subtotal Open ROs', c.openROs, {lblSty:styTotal(XLC.subBg), moneySty:styTotalMoney(XLC.subBg)});
+  pRow('8','TOTAL PARTS ADJUSTED INVENTORY VALUE', c.step8, {lblSty:styTotal(), moneySty:styTotalMoney()});
+  blank();
+  // GL side
+  g.push([{v:'', s:stySection(XLC.glHdr)}, {v:'GL SIDE (Accounting)', s:stySection(XLC.glHdr)}, {v:'', s:stySection(XLC.glHdr)}]);
+  pRow('9','Acct. 24200 — Inventory', c.gl24200);
+  pRow('','Acct. 24300 — Tires', c.gl24300);
+  pRow('','Acct. 24401 — Oil', c.gl24401);
+  if (c.glOther) pRow('','Other Account', c.glOther);
+  pRow('','Total GL Balance', c.glTotal, {lblSty:styTotal(XLC.glSubBg), moneySty:styTotalMoney(XLC.glSubBg)});
+  pRow('10','Mfg. Packing Slips', c.mfgSlips);
+  pRow('11','Misc. Vendor Purchases — In Physical, Not GL  (AUTO, add)', c.s2Total);
+  pRow('12','Prepaid Special Orders Not Received', c.prepaid);
+  pRow('13','Posted Not Received  (AUTO, subtract)', -c.s1Total);
+  pRow('14','Inventory Adjustments (RPM)', c.invAdj);
+  pRow('15','Oil & Shop Supply Adj.', c.oilAdj);
+  pRow('16','Appreciation / Depreciation (RAD)  — YTD Jan→' + rec.label, c.radYTD);
+  pRow('17','GL ADJUSTED TOTAL', c.step17, {lblSty:styTotal(XLC.glTotBg), moneySty:styTotalMoney(XLC.glTotBg)});
+  blank();
+  // Variance
+  const vfill = Math.abs(c.step19) < 1 ? XLC.glHdr : (Math.abs(c.step19) < 100 ? 'FFF5E0' : (Math.abs(c.step19) < 1000 ? 'FFE4D6' : 'FFCCCC'));
+  g.push([{v:'18',s:styStep()},{v:'Total Parts Adjusted (Step 8)',s:styLabel()}, moneyCell(c.step8)]);
+  g.push([{v:'17',s:styStep()},{v:'GL Adjusted Total',s:styLabel()}, moneyCell(c.step17)]);
+  g.push([{v:'19',s:styStep()},{v:'VARIANCE (Step 17 − Step 8)',s:styTotal(vfill)}, moneyCell(c.step19, styTotalMoney(vfill))]);
+  g.push([{v:'',s:styStep()},{v:'Variance %  (÷ GL Balance)',s:styLabel()}, {v:(c.step19Pct==null?'':c.step19Pct), t:'n', z:PCT_FMT, s:{font:{sz:10},numFmt:PCT_FMT,alignment:{horizontal:'right'},border:_border()}}]);
+
+  // Embedded detail tables
+  if (rec.s1.length) {
+    blank(); blank();
+    g.push([{v:'STEP 13 DETAIL — Posted Not Received (subtract ' + fmtMoney(c.s1Total) + ' from GL)', s:{font:{bold:true,sz:11,color:{rgb:'B04200'}}}}]);
+    const dg = glDetailGrid(rec.s1, 'C47200');
+    for (const r of dg) g.push(r);
+  }
+  if (rec.s2.length) {
+    blank(); blank();
+    g.push([{v:'STEP 11 DETAIL — In Physical, Not in GL (add ' + fmtMoney(c.s2Total) + ' to GL)', s:{font:{bold:true,sz:11,color:{rgb:XLC.greenText}}}}]);
+    const dg = glDetailGrid(rec.s2, XLC.green);
+    for (const r of dg) g.push(r);
+  }
+
+  const ws = makeSheet(g);
+  ws['!cols'] = [{wch:5},{wch:46},{wch:16},{wch:6},{wch:8},{wch:16},{wch:13},{wch:15},{wch:12},{wch:12},{wch:42}];
+  return ws;
+}
+
+function summarySheet(recs) {
+  const hdr = ['Month','Parts Adj. (Step 8)','GL Balance (Raw)','GL Adjusted (Step 17)','Variance $','Variance %','Posted Not Received (13)','In Phys. Not GL (11)','RAD YTD','Review'];
+  const g = [];
+  g.push([{v:'Reconciliation Summary', s:styTitle()}]);
+  g.push([{v:'Generated ' + new Date().toLocaleString(), s:stySub()}]);
+  g.push([]);
+  g.push(hdr.map(h => ({v:h, s:styColHdr()})));
+  let t8=0,tgl=0,t17=0,tv=0,ts1=0,ts2=0,sp=0,pc=0;
+  recs.forEach((r, i) => {
+    const c = r.calc;
+    t8+=c.step8; tgl+=c.glTotal; t17+=c.step17; tv+=c.step19; ts1+=c.s1Total; ts2+=c.s2Total;
+    if (c.step19Pct!=null){sp+=c.step19Pct;pc++;}
+    const band = i % 2 ? XLC.band : null;
+    const vfill = Math.abs(c.step19) < 1 ? XLC.glHdr : (Math.abs(c.step19) < 100 ? 'FFF5E0' : (Math.abs(c.step19) < 1000 ? 'FFE4D6' : 'FFCCCC'));
+    g.push([
+      {v:r.label, s:{font:{bold:true,sz:10}, fill:band?{fgColor:{rgb:band}}:undefined, border:_border()}},
+      moneyCell(c.step8, styMoney({fill:band})),
+      moneyCell(c.glTotal, styMoney({fill:band})),
+      moneyCell(c.step17, styMoney({fill:band})),
+      moneyCell(c.step19, styMoney({bold:true, fill:vfill})),
+      {v:(c.step19Pct==null?'':c.step19Pct), t:'n', z:PCT_FMT, s:{font:{sz:10},numFmt:PCT_FMT,alignment:{horizontal:'right'},fill:{fgColor:{rgb:vfill}},border:_border()}},
+      moneyCell(c.s1Total, styMoney({fill:band})),
+      moneyCell(c.s2Total, styMoney({fill:band})),
+      moneyCell(c.radYTD, styMoney({fill:band})),
+      {v:r.reviewCount||0, t:'n', s:{font:{sz:10},alignment:{horizontal:'center'},fill:band?{fgColor:{rgb:band}}:undefined,border:_border()}},
+    ]);
+  });
+  const avgPct = pc ? sp/pc : '';
+  g.push([
+    {v:'Totals / Avg', s:styTotal()},
+    moneyCell(t8, styTotalMoney()), moneyCell(tgl, styTotalMoney()), moneyCell(t17, styTotalMoney()),
+    moneyCell(tv, styTotalMoney()),
+    {v:avgPct, t:'n', z:PCT_FMT, s:{font:{bold:true,sz:10},numFmt:PCT_FMT,alignment:{horizontal:'right'},fill:{fgColor:{rgb:XLC.totBg}},border:_border()}},
+    moneyCell(ts1, styTotalMoney()), moneyCell(ts2, styTotalMoney()),
+    {v:'',s:styTotal()},{v:'',s:styTotal()},
+  ]);
+  const ws = makeSheet(g);
+  ws['!cols'] = [{wch:14},{wch:16},{wch:15},{wch:16},{wch:14},{wch:11},{wch:15},{wch:15},{wch:13},{wch:9}];
+  ws['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}}, {s:{r:1,c:0},e:{r:1,c:5}}];
+  return ws;
+}
+
+function sheetNameFor(used, base) {
+  let name = base.replace(/[\\/?*\[\]:]/g, ' ').slice(0, 28).trim();
+  let n = name, i = 2;
+  while (used.has(n)) { n = (name.slice(0, 25) + ' ' + i); i++; }
+  used.add(n);
+  return n;
+}
+
+window.exportAllExcel = function() {
+  const state = loadState();
+  const glRows = loadGL();
+  const recs = buildAllRecs(state, glRows);
+  if (!recs.length) { toast('Add at least one month before exporting.', 'error'); return; }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, summarySheet(recs), 'Summary');
+  const used = new Set(['Summary']);
+  for (const r of recs) {
+    XLSX.utils.book_append_sheet(wb, recSheet(r), sheetNameFor(used, r.label));
+  }
+  const fname = 'parts_rec_' + new Date().toISOString().slice(0,10) + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  toast('Exported ' + recs.length + ' month' + (recs.length>1?'s':'') + ' to ' + fname, 'success');
+};
+
+function _glSectionRows(mkey, which) {
+  const state = loadState();
+  const glRows = loadGL();
+  const rec = buildRec(state, glRows, mkey);
+  if (!rec) return null;
+  return {rec, rows: which === 's1' ? rec.s1 : rec.s2};
+}
+
+window.exportGLSection = function(mkey, which) {
+  const r = _glSectionRows(mkey, which);
+  if (!r || !r.rows.length) { toast('No entries to export.', 'info'); return; }
+  const fill = which === 's1' ? 'C47200' : XLC.green;
+  const ws = makeSheet(glDetailGrid(r.rows, fill));
+  ws['!cols'] = GL_DETAIL_WIDTHS;
+  const wb = XLSX.utils.book_new();
+  const label = which === 's1' ? 'Step13 PostedNotReceived' : 'Step11 InPhysNotGL';
+  XLSX.utils.book_append_sheet(wb, ws, which === 's1' ? 'Step13' : 'Step11');
+  const fname = label.replace(/\s+/g,'_') + '_' + mkey + '.xlsx';
+  XLSX.writeFile(wb, fname);
+  toast('Exported ' + r.rows.length + ' entries to ' + fname, 'success');
+};
+
+window.copyGLSection = async function(mkey, which) {
+  const r = _glSectionRows(mkey, which);
+  if (!r || !r.rows.length) { toast('No entries to copy.', 'info'); return; }
+  const lines = [GL_DETAIL_COLS.join('\t')];
+  for (const row of r.rows) {
+    let dt = '';
+    if (row['Acctg. Date']) { const d = new Date(row['Acctg. Date']); if (!isNaN(d)) dt = d.toISOString().slice(0,10); }
+    lines.push([
+      row.Account||'', row.Journal||'', row.Reference||'', dt,
+      Number(row['Amount $']||0).toFixed(2),
+      row.Control||'', row.Control2||'', (row['Posting Description']||'').replace(/\t/g,' '),
+    ].join('\t'));
+  }
+  const tsv = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(tsv);
+    toast('Copied ' + r.rows.length + ' rows — paste into Excel.', 'success');
+  } catch (e) {
+    // Fallback for browsers/contexts without clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = tsv; ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('Copied ' + r.rows.length + ' rows — paste into Excel.', 'success'); }
+    catch (e2) { toast('Could not copy automatically. Use Export instead.', 'error'); }
+    ta.remove();
+  }
+};
+
+// ── Renderers ─────────────────────────────────────────────────
+const app = document.getElementById('app');
+
+function setActiveNav(name) {
+  document.querySelectorAll('.topnav-links a[data-nav]').forEach(a => {
+    a.classList.toggle('active', a.dataset.nav === name);
+  });
+}
+
+function escapeHTML(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function renderDashboard() {
+  setActiveNav('dashboard');
+  const state = loadState();
+  const glRows = loadGL();
+  const recs = buildAllRecs(state, glRows);
+  let glInfo = null;
+  if (glRows) {
+    const dates = glRows.map(r => new Date(r['Acctg. Date'])).filter(d => !isNaN(d));
+    const accts = [...new Set(glRows.map(r => r.Account).filter(Boolean))].sort();
+    glInfo = {
+      filename:  state.glFilename || 'gl_uploaded.xlsx',
+      uploaded:  state.glUploadedAt || '',
+      rowCount:  glRows.length,
+      dateMin:   dates.length ? fmtDate(new Date(Math.min(...dates))) : 'n/a',
+      dateMax:   dates.length ? fmtDate(new Date(Math.max(...dates))) : 'n/a',
+      accounts:  accts,
+    };
+  }
+
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Reconciliation Dashboard</h1>
+      <p class="page-sub">Multi-month parts inventory to GL reconciliation overview</p>
+    </div>
+    <div class="ph-right">
+      ${recs.length ? '<button class="btn btn-primary" onclick="exportAllExcel()">Export to Excel</button>' : ''}
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>1.  GL Detail Export</h2>
+      ${glInfo
+        ? '<span class="badge badge-ok">Loaded</span>'
+        : '<span class="badge badge-warn">Not loaded</span>'}
+    </div>
+    <div class="card-body">
+      <div class="gl-row">
+        <div>
+          <form class="gl-form" onsubmit="return handleGLUpload(event)">
+            <input type="file" id="gl-file" accept=".xlsx,.xls" required>
+            <button type="submit" class="btn btn-primary" id="gl-upload-btn">Upload GL Detail (.xlsx)</button>
+          </form>
+          ${glInfo
+            ? `<p class="hint" style="margin-top:10px;">
+                 <a onclick="clearGL()" style="color:var(--danger)">Clear loaded GL file</a>
+               </p>` : ''}
+        </div>
+        ${glInfo
+          ? `<div class="gl-info">
+              <div><strong>File:</strong> ${escapeHTML(glInfo.filename)}</div>
+              <div><strong>Uploaded:</strong> ${escapeHTML(glInfo.uploaded)}</div>
+              <div><strong>Rows:</strong> ${glInfo.rowCount.toLocaleString()}</div>
+              <div><strong>Date range:</strong> ${glInfo.dateMin} → ${glInfo.dateMax}</div>
+              <div><strong>Accounts:</strong> ${glInfo.accounts.map(escapeHTML).join(', ')}</div>
+             </div>`
+          : `<p class="hint">
+              Export the GL Detail from Drive for all inventory accounts (24200, 24300, 24401)
+              from the start of your earliest rec month through today.
+             </p>`}
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>2.  Account Balance History</h2>
+      ${state.acctHistImportedAt
+        ? '<span class="badge badge-ok">Imported</span>'
+        : '<span class="badge badge-warn">Not imported</span>'}
+    </div>
+    <div class="card-body">
+      <div class="gl-row">
+        <div>
+          <form class="gl-form" onsubmit="return handleAcctHistUpload(event)">
+            <input type="file" id="accthist-file" accept=".xlsx,.xls" required>
+            <button type="submit" class="btn btn-primary" id="accthist-upload-btn">Import GL Balances (.xlsx)</button>
+          </form>
+          ${state.acctHistImportedAt
+            ? `<p class="hint" style="margin-top:10px;">
+                 Last import: <strong>${escapeHTML(state.acctHistFilename || '')}</strong>
+                 on ${escapeHTML(state.acctHistImportedAt)}.
+               </p>` : ''}
+        </div>
+        <p class="hint">
+          Upload the <strong>Account Balance History</strong> export from Drive
+          (the <code>BUR_ACCTHIST.xlsx</code> export).  The tool reads month-end balances
+          for accounts 24200, 24300, and 24401 and fills in the GL balance fields for each
+          rec month automatically.  For months not yet entered, a new stub is created so you
+          just need to fill in the inventory-side values.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header">
+      <h2>3.  Monthly Reconciliations</h2>
+      <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+    <div class="card-body">`;
+
+  if (!recs.length) {
+    html += `<p class="empty">No reconciliations yet.  <a href="#/inputs/new">Add your first month →</a></p>`;
+  } else {
+    html += `
+      <table class="data-table summary">
+        <thead>
+          <tr>
+            <th>Month</th>
+            <th class="r">Parts Adj.<br>(Step 8)</th>
+            <th class="r">GL Balance<br>(Raw)</th>
+            <th class="r">GL Adjusted<br>(Step 17)</th>
+            <th class="r">Variance $</th>
+            <th class="r">Variance %</th>
+            <th class="r">Posted Not<br>Received (13)</th>
+            <th class="r">In Phys.<br>Not GL (11)</th>
+            <th class="r">RAD YTD</th>
+            <th class="c">Review</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>`;
+    let tStep8 = 0, tGL = 0, tStep17 = 0, tVar = 0, tS1 = 0, tS2 = 0, sumPct = 0, pctCount = 0;
+    for (const r of recs) {
+      const mk = monthKey(r.year, r.month);
+      const vc = varClass(r.calc.step19);
+      tStep8  += r.calc.step8;
+      tGL     += r.calc.glTotal;
+      tStep17 += r.calc.step17;
+      tVar    += r.calc.step19;
+      tS1     += r.calc.s1Total;
+      tS2     += r.calc.s2Total;
+      if (r.calc.step19Pct != null) { sumPct += r.calc.step19Pct; pctCount++; }
+      html += `
+        <tr>
+          <td><a href="#/month/${mk}"><strong>${r.label}</strong></a></td>
+          <td class="r">${fmtMoney(r.calc.step8)}</td>
+          <td class="r">${fmtMoney(r.calc.glTotal)}</td>
+          <td class="r">${fmtMoney(r.calc.step17)}</td>
+          <td class="r ${vc}"><strong>${fmtMoney(r.calc.step19)}</strong></td>
+          <td class="r ${vc}">${fmtPct(r.calc.step19Pct)}</td>
+          <td class="r mono">${fmtMoney(r.calc.s1Total)}</td>
+          <td class="r mono">${fmtMoney(r.calc.s2Total)}</td>
+          <td class="r">${fmtMoney(r.calc.radYTD)}</td>
+          <td class="c">
+            <a href="#/review/${mk}" class="badge ${r.reviewCount > 0 ? 'badge-review' : 'badge-ok-small'}">${r.reviewCount}</a>
+          </td>
+          <td class="actions">
+            <a href="#/inputs/${mk}" title="Edit inputs">✎</a>
+          </td>
+        </tr>`;
+    }
+    const avgPct = pctCount ? sumPct / pctCount : null;
+    html += `
+        </tbody>
+        <tfoot>
+          <tr>
+            <th>Totals / Avg</th>
+            <th class="r">${fmtMoney(tStep8)}</th>
+            <th class="r">${fmtMoney(tGL)}</th>
+            <th class="r">${fmtMoney(tStep17)}</th>
+            <th class="r">${fmtMoney(tVar)}</th>
+            <th class="r">${fmtPct(avgPct)}</th>
+            <th class="r">${fmtMoney(tS1)}</th>
+            <th class="r">${fmtMoney(tS2)}</th>
+            <th></th><th></th><th></th>
+          </tr>
+        </tfoot>
+      </table>`;
+  }
+  html += `</div></section>`;
+
+  // Variance trend chart
+  if (recs.length > 1) {
+    const maxAbs = Math.max(...recs.map(r => Math.abs(r.calc.step19))) || 1;
+    let chartHTML = `
+    <section class="card">
+      <div class="card-header"><h2>4.  Variance Trend</h2></div>
+      <div class="card-body">
+        <div class="chart-wrap">`;
+    for (const r of recs) {
+      const h = Math.max(4, Math.round(Math.abs(r.calc.step19) / maxAbs * 140));
+      const cls = r.calc.step19 >= 0 ? 'pos' : 'neg';
+      chartHTML += `
+          <div class="chart-col">
+            <div class="chart-amt">${fmtMoney(r.calc.step19)}</div>
+            <div class="chart-bar-wrap">
+              <div class="chart-bar ${cls}" style="height: ${h}px"></div>
+            </div>
+            <div class="chart-label">${r.label}</div>
+          </div>`;
+    }
+    chartHTML += `
+        </div>
+        <p class="hint" style="margin-top:8px;">
+          Bars show variance $ (Step 17 − Step 8).  Look for a consistent direction or growing magnitude — those usually indicate a missing adjustment.
+        </p>
+      </div>
+    </section>`;
+    html += chartHTML;
+  }
+
+  // Reset
+  html += `
+  <section class="card card-quiet">
+    <div class="card-header"><h2>Reset</h2></div>
+    <div class="card-body">
+      <p class="hint">Clears all saved inputs, RAD values, review decisions, and the uploaded GL file from this browser.</p>
+      <div style="display:flex; gap:8px; align-items:center; margin-top:8px;">
+        <button class="btn btn-danger" onclick="confirmReset()">Reset all data</button>
+        <button class="btn btn-link" onclick="exportData()">Export data (JSON)</button>
+        <label class="btn btn-link" style="cursor:pointer; margin:0;">
+          Import data (JSON)
+          <input type="file" accept=".json" onchange="importData(event)" style="display:none">
+        </label>
+      </div>
+    </div>
+  </section>`;
+
+  app.innerHTML = html;
+}
+
+window.handleGLUpload = async function(ev) {
+  ev.preventDefault();
+  const fileInput = document.getElementById('gl-file');
+  const btn = document.getElementById('gl-upload-btn');
+  const f = fileInput.files[0];
+  if (!f) return false;
+  btn.innerHTML = '<span class="spinner"></span>Reading…';
+  btn.disabled = true;
+  try {
+    const rows = await readExcelFile(f);
+    if (!rows.length) throw new Error('No rows found in file');
+    const need = ['Acctg. Date', 'Amount $', 'Control'];
+    const missing = need.filter(c => !(c in rows[0]));
+    if (missing.length) throw new Error('Missing columns: ' + missing.join(', '));
+    if (!saveGL(rows)) return false;
+    const state = loadState();
+    state.glFilename = f.name;
+    state.glUploadedAt = new Date().toLocaleString();
+    saveState(state);
+    toast(`GL Detail uploaded: ${rows.length.toLocaleString()} rows`, 'success');
+    renderDashboard();
+  } catch (err) {
+    toast('Could not parse GL file: ' + err.message, 'error');
+  } finally {
+    btn.innerHTML = 'Upload GL Detail (.xlsx)';
+    btn.disabled = false;
+  }
+  return false;
+};
+
+window.clearGL = function() {
+  if (!confirm('Remove the loaded GL file? Your inputs and RAD will stay.')) return;
+  localStorage.removeItem(glKeyFor(_activeStoreId));
+  const state = loadState();
+  state.glFilename = null;
+  state.glUploadedAt = null;
+  saveState(state);
+  toast('GL file cleared', 'success');
+  renderDashboard();
+};
+
+window.handleAcctHistUpload = async function(ev) {
+  ev.preventDefault();
+  const fileInput = document.getElementById('accthist-file');
+  const btn = document.getElementById('accthist-upload-btn');
+  const f = fileInput.files[0];
+  if (!f) return false;
+  btn.innerHTML = '<span class="spinner"></span>Reading…';
+  btn.disabled = true;
+  try {
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(new Uint8Array(e.target.result));
+      reader.onerror = reject;
+      reader.readAsArrayBuffer(f);
+    });
+    const acctHist = parseAcctHist(data);
+    const ACCTS = ['24200', '24300', '24401'];
+    const found = ACCTS.filter(a => acctHist[a] && Object.keys(acctHist[a]).length > 0);
+    if (!found.length) throw new Error('No balances found for accounts 24200, 24300, or 24401');
+    const state = loadState();
+    const allMonths = new Set();
+    for (const a of found) Object.keys(acctHist[a]).forEach(mk => allMonths.add(mk));
+    let updated = 0, created = 0;
+    for (const mk of [...allMonths].sort()) {
+      const isNew = !state.inputs[mk];
+      if (isNew) {
+        state.inputs[mk] = {dealership: ''};
+        for (const field of INPUT_FIELDS) state.inputs[mk][field] = 0;
+        created++;
+      } else {
+        updated++;
+      }
+      if (acctHist['24200']?.[mk] != null) state.inputs[mk].gl_24200 = acctHist['24200'][mk];
+      if (acctHist['24300']?.[mk] != null) state.inputs[mk].gl_24300 = acctHist['24300'][mk];
+      if (acctHist['24401']?.[mk] != null) state.inputs[mk].gl_24401 = acctHist['24401'][mk];
+    }
+    state.acctHistFilename   = f.name;
+    state.acctHistImportedAt = new Date().toLocaleString();
+    saveState(state);
+    const parts = [];
+    if (updated) parts.push(`updated ${updated} existing month${updated > 1 ? 's' : ''}`);
+    if (created) parts.push(`created ${created} new month stub${created > 1 ? 's' : ''}`);
+    toast(`GL balances imported from ${f.name} — ${parts.join(', ')}.`, 'success');
+    renderDashboard();
+  } catch (err) {
+    toast('Could not parse Account Balance History: ' + err.message, 'error');
+  } finally {
+    btn.innerHTML = 'Import GL Balances (.xlsx)';
+    btn.disabled = false;
+  }
+  return false;
+};
+
+window.confirmReset = function() {
+  const meta = loadMeta();
+  const storeName = meta.stores[_activeStoreId]?.name || 'this store';
+  const c = prompt(`Type "reset" to clear ALL data for "${storeName}" (inputs, RAD, review decisions, GL file). Other stores are not affected. This cannot be undone.`);
+  if (c !== 'reset') return;
+  localStorage.removeItem(stateKeyFor(_activeStoreId));
+  localStorage.removeItem(glKeyFor(_activeStoreId));
+  toast('All data cleared for ' + storeName, 'success');
+  renderDashboard();
+};
+
+window.exportData = function() {
+  const blob = new Blob([JSON.stringify({
+    state: loadState(),
+    gl:    loadGL(),
+    exportedAt: new Date().toISOString(),
+  }, null, 2)], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'parts_rec_backup_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+window.importData = function(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  if (!confirm('Overwrite all current data with imported file?')) { ev.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.state) saveState(data.state);
+      if (data.gl) saveGL(data.gl);
+      toast('Data imported', 'success');
+      route();
+    } catch (err) {
+      toast('Could not parse import file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(f);
+};
+
+// ── Inputs list ───────────────────────────────────────────────
+function renderInputsList() {
+  setActiveNav('inputs');
+  const state = loadState();
+  const keys = Object.keys(state.inputs).sort();
+  let html = `
+  <div class="page-header">
+    <h1>Monthly Inputs</h1>
+    <p class="page-sub">Saved input values for each rec month.</p>
+  </div>
+  <section class="card">
+    <div class="card-header">
+      <h2>Saved Months</h2>
+      <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+    </div>
+    <div class="card-body">`;
+  if (!keys.length) {
+    html += `<p class="empty">No saved inputs yet.  <a href="#/inputs/new">Add one →</a></p>`;
+  } else {
+    html += `
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Month</th><th>Dealership</th>
+          <th class="r">Inventory</th><th class="r">Tires</th><th class="r">Oil</th>
+          <th class="r">Cores New</th><th class="r">Cores Used</th>
+          <th class="r">RAD (this month)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>`;
+    for (const mk of keys) {
+      const v = state.inputs[mk];
+      html += `
+        <tr>
+          <td><a href="#/month/${mk}"><strong>${escapeHTML(monthLabelForKey(mk))}</strong></a></td>
+          <td>${escapeHTML(v.dealership || '')}</td>
+          <td class="r">${fmtMoney(v.inventory)}</td>
+          <td class="r">${fmtMoney(v.tires)}</td>
+          <td class="r">${fmtMoney(v.oil)}</td>
+          <td class="r">${fmtMoney(v.cores_new)}</td>
+          <td class="r">${fmtMoney(v.cores_used)}</td>
+          <td class="r">${fmtMoney((state.rad||{})[mk])}</td>
+          <td class="actions"><a href="#/inputs/${mk}">Edit</a></td>
+        </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div></section>`;
+  app.innerHTML = html;
+}
+
+function monthLabelForKey(mk) {
+  try { const {year, month} = parseMonthKey(mk); return monthLabel(year, month); }
+  catch { return mk; }
+}
+
+// ── Inputs edit form ──────────────────────────────────────────
+function renderInputsEdit(mkey) {
+  setActiveNav('inputs');
+  const state = loadState();
+  const isNew = !mkey || mkey === 'new';
+  const existing = isNew ? {} : (state.inputs[mkey] || {});
+  const radVal = isNew ? '' : ((state.rad || {})[mkey] || '');
+  const titleLabel = isNew ? 'Add Reconciliation Month' : ('Edit Inputs – ' + monthLabelForKey(mkey));
+
+  const inputField = (name, label, sub) => {
+    const v = existing[name];
+    const vStr = (v != null && v !== 0) ? v : '';
+    const subHTML = sub ? ` <em>${sub}</em>` : '';
+    return `<label><span>${label}${subHTML}</span><input name="${name}" type="number" step="0.01" value="${vStr}"></label>`;
+  };
+
+  let html = `
+  <div class="page-header">
+    <h1>${escapeHTML(titleLabel)}</h1>
+    <p class="page-sub">
+      Values come from CDK PDF reports (MGR / Value by Source, physical recap, Fast Lane, GL balance inquiry).
+      Enter plain numbers (e.g. <code>131301.68</code>).
+    </p>
+  </div>
+
+  <form id="inputs-form" onsubmit="return saveInputs(event, ${isNew ? "''" : `'${mkey}'`})">
+
+    <section class="card">
+      <div class="card-header"><h2>Header</h2></div>
+      <div class="card-body">
+        <div class="form-grid two">
+          <label>
+            <span>Month  <em>(YYYY-MM)</em></span>
+            <input name="month" value="${escapeHTML(mkey || '')}" placeholder="2025-11" pattern="\\d{4}-\\d{2}" required ${isNew ? '' : 'readonly'}>
+          </label>
+          <label>
+            <span>Dealership</span>
+            <input name="dealership" value="${escapeHTML(existing.dealership || '')}" placeholder="HML Burin">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Parts Side  (Inventory System)</h2></div>
+      <div class="card-body">
+        <h3 class="grp">Step 1 – Month End Inventory  (MGR / Value by Source PDF)</h3>
+        <div class="form-grid three">
+          ${inputField('inventory', 'Inventory')}
+          ${inputField('tires',     'Tires')}
+          ${inputField('oil',       'Oil')}
+        </div>
+
+        <h3 class="grp">Steps 2 – 4  (Cores / Recap Sheet)</h3>
+        <div class="form-grid three">
+          ${inputField('paint',      'Paint on Mixer')}
+          ${inputField('cores_new',  'Cores in Stock (New) – MGR')}
+          ${inputField('cores_used', 'Cores in Stock (Used) – Recap')}
+          ${inputField('npn',        'NPN Parts – Recap')}
+          ${inputField('bowman',     'Bowman – Recap')}
+        </div>
+
+        <h3 class="grp">Steps 5 – 7  (Returns / Claims / Open ROs)</h3>
+        <div class="form-grid three">
+          ${inputField('returns_11933',         'Returns – Acct 11933')}
+          ${inputField('claims',                'Claims – MGR')}
+          ${inputField('open_ros_service',      'Open ROs – Service (Fast Lane)')}
+          ${inputField('counter_tickets_parts', 'Counter Tickets – Parts (Fast Lane)')}
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>GL Side</h2></div>
+      <div class="card-body">
+        <h3 class="grp">Step 9 – GL Account Balances  (as-of month end)</h3>
+        ${(state.acctHistImportedAt && !isNew && (existing.gl_24200 || existing.gl_24300 || existing.gl_24401))
+          ? `<p class="auto-note" style="margin-bottom:10px;">
+               Balances below were imported from <strong>${escapeHTML(state.acctHistFilename || 'Account Balance History')}</strong>.
+               Edit any value here to override.
+             </p>` : ''}
+        <div class="form-grid four">
+          ${inputField('gl_24200', 'Acct. 24200 – Inventory')}
+          ${inputField('gl_24300', 'Acct. 24300 – Tires')}
+          ${inputField('gl_24401', 'Acct. 24401 – Oil')}
+          ${inputField('gl_other', 'Other Account (optional)')}
+        </div>
+
+        <h3 class="grp">Steps 10 – 16  (GL Adjustments)</h3>
+        <div class="auto-note">
+          <strong>Auto-calculated from GL Detail:</strong> Step 11 (In Physical, Not in GL)
+          and Step 13 (Posted Not Received) are derived from the GL export and displayed on
+          the rec detail page.  Use the fields below for any manual additions.
+        </div>
+        <div class="form-grid three">
+          ${inputField('mfg_packing_slips',      'Step 10 – Mfg Packing Slips')}
+          ${inputField('prepaid_special_orders', 'Step 12 – Prepaid Special Orders')}
+          ${inputField('inv_adjustments_rpm',    'Step 14 – Inventory Adj. (RPM)')}
+          ${inputField('oil_shop_supply_adj',    'Step 15 – Oil &amp; Shop Supply Adj.')}
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Step 16 – RAD (Appreciation / Depreciation) for this month only</h2></div>
+      <div class="card-body">
+        <div class="form-grid two">
+          <label>
+            <span>RAD – ${isNew ? 'this month' : monthLabelForKey(mkey)}</span>
+            <input name="rad" type="number" step="0.01" value="${radVal || ''}">
+          </label>
+          <div class="hint-block">
+            The reconciliation uses the <strong>year-to-date sum</strong> of RAD
+            (Jan&nbsp;1 through the end of this month).  Each month's value is stored
+            separately and can also be edited on the <a href="#/rad">RAD page</a>.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="#/" class="btn btn-link">Cancel</a>
+      ${isNew ? '' : `<button type="button" class="btn btn-danger" style="margin-left:auto" onclick="deleteMonth('${mkey}')">Delete this month</button>`}
+    </div>
+  </form>`;
+  app.innerHTML = html;
+}
+
+window.saveInputs = function(ev, currentMkey) {
+  ev.preventDefault();
+  const form = ev.target;
+  const fd = new FormData(form);
+  const newMkey = String(fd.get('month') || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(newMkey)) {
+    toast('Month must be in YYYY-MM format', 'error');
+    return false;
+  }
+  const data = {dealership: String(fd.get('dealership') || '').trim()};
+  for (const f of INPUT_FIELDS) {
+    const v = fd.get(f);
+    data[f] = (v == null || v === '') ? 0 : safe(v);
+  }
+  const state = loadState();
+  if (currentMkey && currentMkey !== newMkey && state.inputs[currentMkey]) {
+    delete state.inputs[currentMkey];
+  }
+  state.inputs[newMkey] = data;
+  const radV = String(fd.get('rad') || '').trim();
+  if (radV !== '') {
+    state.rad = state.rad || {};
+    state.rad[newMkey] = safe(radV);
+  }
+  saveState(state);
+  toast('Saved inputs for ' + monthLabelForKey(newMkey), 'success');
+  location.hash = '#/month/' + newMkey;
+  return false;
+};
+
+window.deleteMonth = function(mkey) {
+  if (!confirm('Delete inputs for ' + mkey + '?')) return;
+  const state = loadState();
+  delete state.inputs[mkey];
+  if (state.rad) delete state.rad[mkey];
+  if (state.reviewDecisions) delete state.reviewDecisions[mkey];
+  saveState(state);
+  toast('Deleted ' + mkey, 'success');
+  location.hash = '#/';
+};
+
+// ── Month detail ──────────────────────────────────────────────
+function renderMonthDetail(mkey) {
+  setActiveNav('dashboard');
+  const state = loadState();
+  const glRows = loadGL();
+  const rec = buildRec(state, glRows, mkey);
+  if (!rec) {
+    toast('No inputs saved for ' + mkey, 'error');
+    location.hash = '#/inputs/' + mkey;
+    return;
+  }
+  const vc = varClass(rec.calc.step19);
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Reconciliation – ${rec.label}</h1>
+      <p class="page-sub">${escapeHTML(rec.inputs.dealership || '')}</p>
+    </div>
+    <div class="ph-right">
+      <a href="#/inputs/${mkey}" class="btn btn-link">✎ Edit Inputs</a>
+      <a href="#/review/${mkey}" class="btn ${rec.reviewCount ? 'btn-warn' : 'btn-link'}">${rec.reviewCount ? `Review ${rec.reviewCount} flagged GL entries` : 'Review GL entries'}</a>
+    </div>
+  </div>
+
+  <section class="variance-banner ${vc}">
+    <div class="vb-item">
+      <div class="vb-label">Parts Adjusted (Step 8)</div>
+      <div class="vb-value">${fmtMoney(rec.calc.step8)}</div>
+    </div>
+    <div class="vb-item">
+      <div class="vb-label">GL Adjusted (Step 17)</div>
+      <div class="vb-value">${fmtMoney(rec.calc.step17)}</div>
+    </div>
+    <div class="vb-item vb-primary">
+      <div class="vb-label">Variance $</div>
+      <div class="vb-value">${fmtMoney(rec.calc.step19)}</div>
+    </div>
+    <div class="vb-item vb-primary">
+      <div class="vb-label">Variance %</div>
+      <div class="vb-value">${fmtPct(rec.calc.step19Pct)}</div>
+    </div>
+  </section>
+
+  <div class="two-col">
+    <section class="card side parts-side">
+      <div class="card-header"><h2>Parts Side  (Inventory)</h2></div>
+      <div class="card-body">
+        <table class="rec-table"><tbody>
+          <tr><td class="step">1.</td><td>Inventory  (MGR)</td><td class="r">${fmtMoney(rec.calc.inventory)}</td></tr>
+          <tr><td></td><td class="ind">Tires</td><td class="r">${fmtMoney(rec.calc.tires)}</td></tr>
+          <tr><td></td><td class="ind">Oil</td><td class="r">${fmtMoney(rec.calc.oil)}</td></tr>
+          <tr class="sub"><td></td><td><strong>Total Inventory</strong></td><td class="r"><strong>${fmtMoney(rec.calc.totalInv)}</strong></td></tr>
+          <tr><td class="step">2.</td><td>Paint on Mixer</td><td class="r">${fmtMoney(rec.calc.paint)}</td></tr>
+          <tr><td class="step">2.</td><td>Cores in Stock (New) – MGR</td><td class="r">${fmtMoney(rec.calc.coresNew)}</td></tr>
+          <tr><td class="step">3.</td><td>Cores in Stock (Used) – Recap</td><td class="r">${fmtMoney(rec.calc.coresUsed)}</td></tr>
+          <tr><td></td><td>NPN Parts – Recap</td><td class="r">${fmtMoney(rec.calc.npn)}</td></tr>
+          <tr><td class="step">4.</td><td>Bowman – Recap</td><td class="r">${fmtMoney(rec.calc.bowman)}</td></tr>
+          <tr><td class="step">5.</td><td>Normal/Scheduled Returns (Acct 11933)</td><td class="r">${fmtMoney(rec.calc.returns_)}</td></tr>
+          <tr><td class="step">6.</td><td>Claims – MGR</td><td class="r">${fmtMoney(rec.calc.claims)}</td></tr>
+          <tr><td class="step">7.</td><td>Open ROs &amp; Invoices  (Fast Lane)</td><td></td></tr>
+          <tr><td></td><td class="ind">Service: Repair Orders</td><td class="r">${fmtMoney(rec.calc.roSvc)}</td></tr>
+          <tr><td></td><td class="ind">Parts: Counter Tickets</td><td class="r">${fmtMoney(rec.calc.roCtr)}</td></tr>
+          <tr class="sub"><td></td><td><strong>Subtotal Open</strong></td><td class="r"><strong>${fmtMoney(rec.calc.openROs)}</strong></td></tr>
+          <tr class="total"><td class="step">8.</td><td><strong>Total Parts Adjusted Inventory Value</strong></td><td class="r"><strong>${fmtMoney(rec.calc.step8)}</strong></td></tr>
+        </tbody></table>
+      </div>
+    </section>
+
+    <section class="card side gl-side">
+      <div class="card-header"><h2>GL Side  (Accounting)</h2></div>
+      <div class="card-body">
+        <table class="rec-table"><tbody>
+          <tr><td class="step">9.</td><td>GL Balances  (as of ${rec.label})</td><td></td></tr>
+          <tr><td></td><td class="ind">Acct. 24200 – Inventory</td><td class="r">${fmtMoney(rec.calc.gl24200)}</td></tr>
+          <tr><td></td><td class="ind">Acct. 24300 – Tires</td><td class="r">${fmtMoney(rec.calc.gl24300)}</td></tr>
+          <tr><td></td><td class="ind">Acct. 24401 – Oil</td><td class="r">${fmtMoney(rec.calc.gl24401)}</td></tr>
+          ${rec.calc.glOther ? `<tr><td></td><td class="ind">Other Account</td><td class="r">${fmtMoney(rec.calc.glOther)}</td></tr>` : ''}
+          <tr class="sub"><td></td><td><strong>Total GL Balance</strong></td><td class="r"><strong>${fmtMoney(rec.calc.glTotal)}</strong></td></tr>
+          <tr><td class="step">10.</td><td>Mfg. Packing Slips (In Phys., Not GL)</td><td class="r">${fmtMoney(rec.calc.mfgSlips)}</td></tr>
+          <tr class="auto-row">
+            <td class="step">11.</td>
+            <td>Misc. Vendor Purchases (In Phys., Not GL) <span class="auto-tag">AUTO</span>
+              ${rec.s2.length ? `<a class="drill" href="#sec-s2">${rec.s2.length} entries ↓</a>` : ''}
+            </td>
+            <td class="r"><strong>${fmtMoney(rec.calc.s2Total)}</strong></td>
+          </tr>
+          <tr><td class="step">12.</td><td>Prepaid Special Orders Not Received</td><td class="r">${fmtMoney(rec.calc.prepaid)}</td></tr>
+          <tr class="auto-row">
+            <td class="step">13.</td>
+            <td>Parts in Accounting, Not in Inventory (Posted Not Received) <span class="auto-tag">AUTO</span> (subtract)
+              ${rec.s1.length ? `<a class="drill" href="#sec-s1">${rec.s1.length} entries ↓</a>` : ''}
+            </td>
+            <td class="r"><strong>−${fmtMoney(rec.calc.s1Total)}</strong></td>
+          </tr>
+          <tr><td class="step">14.</td><td>Inventory Adjustments (RPM)</td><td class="r">${fmtMoney(rec.calc.invAdj)}</td></tr>
+          <tr><td class="step">15.</td><td>Oil &amp; Shop Supply Adj.</td><td class="r">${fmtMoney(rec.calc.oilAdj)}</td></tr>
+          <tr><td class="step">16.</td><td>Appreciation / Depreciation (RAD) <span class="ytd-tag">YTD ${MONTH_NAMES[rec.cycleStart-1]} → ${rec.label}</span></td><td class="r">${fmtMoney(rec.calc.radYTD)}</td></tr>
+          <tr class="total"><td class="step">17.</td><td><strong>GL Adjusted Total</strong></td><td class="r"><strong>${fmtMoney(rec.calc.step17)}</strong></td></tr>
+        </tbody></table>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><h2>Variance</h2></div>
+    <div class="card-body">
+      <table class="data-table"><tbody>
+        <tr><td>18.</td><td>Total Parts Adjusted Inventory Value (= Step 8)</td><td class="r">${fmtMoney(rec.calc.step8)}</td></tr>
+        <tr><td>17.</td><td>GL Adjusted Total</td><td class="r">${fmtMoney(rec.calc.step17)}</td></tr>
+        <tr><td>19.</td><td><strong>Difference (Step 17 − Step 8)</strong></td><td class="r ${vc}"><strong>${fmtMoney(rec.calc.step19)}</strong></td></tr>
+        <tr><td></td><td>Variance %  (÷ GL Balance)</td><td class="r">${fmtPct(rec.calc.step19Pct)}</td></tr>
+      </tbody></table>
+    </div>
+  </section>`;
+
+  // Detail tables
+  const renderGLDetailTable = (rows) => {
+    let h = `<table class="data-table compact"><thead><tr>
+      <th>Account</th><th>Reference</th><th>Acctg. Date</th><th class="r">Amount</th><th>Control</th><th>Control2</th><th>Description</th>
+    </tr></thead><tbody>`;
+    for (const r of rows) {
+      h += `<tr>
+        <td>${escapeHTML(r.Account || '')}</td>
+        <td class="mono">${escapeHTML(r.Reference || '')}</td>
+        <td>${fmtDate(r['Acctg. Date'])}</td>
+        <td class="r">${fmtMoney(r['Amount $'])}</td>
+        <td>${escapeHTML(r.Control || '')}</td>
+        <td>${escapeHTML(r.Control2 || '')}</td>
+        <td class="muted">${escapeHTML(r['Posting Description'] || '')}</td>
+      </tr>`;
+    }
+    h += `</tbody></table>`;
+    return h;
+  };
+
+  if (rec.s1.length) {
+    html += `
+    <section class="card" id="sec-s1">
+      <div class="card-header">
+        <h2>Step 13 Detail – Posted Not Received</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-link btn-sm" onclick="copyGLSection('${mkey}','s1')">Copy</button>
+          <button class="btn btn-link btn-sm" onclick="exportGLSection('${mkey}','s1')">Export .xlsx</button>
+          <span class="badge badge-warn">${rec.s1.length} entries · subtract ${fmtMoney(rec.calc.s1Total)} from GL</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="hint">Posted in ${rec.label} but the inventory receipt belongs to a future month (per Control field).</p>
+        ${renderGLDetailTable(rec.s1)}
+      </div>
+    </section>`;
+  }
+  if (rec.s2.length) {
+    html += `
+    <section class="card" id="sec-s2">
+      <div class="card-header">
+        <h2>Step 11 Detail – Misc. Vendor Purchases (In Physical, Not in GL)</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-link btn-sm" onclick="copyGLSection('${mkey}','s2')">Copy</button>
+          <button class="btn btn-link btn-sm" onclick="exportGLSection('${mkey}','s2')">Export .xlsx</button>
+          <span class="badge badge-ok">${rec.s2.length} entries · add ${fmtMoney(rec.calc.s2Total)} to GL</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <p class="hint">Posted after ${rec.label} but the inventory receipt belongs to ${rec.label} or earlier (per Control field).</p>
+        ${renderGLDetailTable(rec.s2)}
+      </div>
+    </section>`;
+  }
+  app.innerHTML = html;
+}
+
+// ── Review page ───────────────────────────────────────────────
+let _rev = null;   // {mkey, year, month, rows, sort:{col,dir}, filters:{}, view}
+
+const REVIEW_COLS = [
+  {key:'date',     label:'Acctg. Date', disp:r=>fmtDate(r['Acctg. Date']), sv:r=>{const d=new Date(r['Acctg. Date']); return isNaN(d)?-Infinity:d.getTime();}},
+  {key:'account',  label:'Acct',        disp:r=>r.Account || ''},
+  {key:'journal',  label:'Jrnl',        disp:r=>r.Journal || ''},
+  {key:'wip',      label:'WIP',         disp:r=>r.WIP || ''},
+  {key:'ref',      label:'Reference',   cls:'mono', disp:r=>r.Reference || ''},
+  {key:'amount',   label:'Amount',      cls:'r', disp:r=>fmtMoney(r['Amount $']), sv:r=>Number(r['Amount $'] || 0)},
+  {key:'control',  label:'Control',     disp:r=>r.Control || ''},
+  {key:'control2', label:'Control2',    disp:r=>r.Control2 || ''},
+  {key:'desc',     label:'Description', cls:'muted', disp:r=>r['Posting Description'] || ''},
+  {key:'status',   label:'Status',      disp:r=>_reviewStatus(r).txt, sv:r=>({'Step 11 (add)':1,'Step 13 (subtract)':2,'Needs review':3,'Not included':4}[_reviewStatus(r).txt]||9)},
+];
+
+function _reviewStatus(r) {
+  const eff = (r._decision || r._auto);
+  const e = (eff === 'review') ? 'none' : eff;
+  const forced = !!r._decision;
+  if (e === 'step11') return {txt:'Step 11 (add)', cls:'st-11', forced};
+  if (e === 'step13') return {txt:'Step 13 (subtract)', cls:'st-13', forced};
+  if (r._auto === 'review' && !r._decision) return {txt:'Needs review', cls:'st-rev', forced};
+  return {txt:'Not included', cls:'st-none', forced};
+}
+
+function _reviewCounts() {
+  let needs = 0, s11 = 0, s13 = 0;
+  for (const r of _rev.rows) {
+    const shown = r._decision || r._auto;
+    if (r._auto === 'review' && !r._decision) needs++;
+    if (shown === 'step11') s11++;
+    else if (shown === 'step13') s13++;
+  }
+  return {needs, s11, s13, total: _rev.rows.length};
+}
+
+function _reviewVisibleRows() {
+  let rows = _rev.rows;
+  if (_rev.view === 'needs') rows = rows.filter(r => r._auto === 'review' && !r._decision);
+  for (const col of REVIEW_COLS) {
+    const f = (_rev.filters[col.key] || '').trim().toLowerCase();
+    if (f) rows = rows.filter(r => String(col.disp(r)).toLowerCase().includes(f));
+  }
+  const col = REVIEW_COLS.find(c => c.key === _rev.sort.col) || REVIEW_COLS[0];
+  const dir = _rev.sort.dir === 'desc' ? -1 : 1;
+  const sv = r => col.sv ? col.sv(r) : String(col.disp(r)).toLowerCase();
+  return rows.slice().sort((a, b) => { const x = sv(a), y = sv(b); return (x < y ? -1 : x > y ? 1 : 0) * dir; });
+}
+
+function _reviewHeaderRow() {
+  let h = '';
+  for (const col of REVIEW_COLS) {
+    const sorted = _rev.sort.col === col.key;
+    const arrow = sorted ? (_rev.sort.dir === 'asc' ? '▲' : '▼') : '';
+    h += `<th class="${col.cls === 'r' ? 'r ' : ''}${sorted ? 'sorted' : ''}" onclick="reviewSort('${col.key}')">${escapeHTML(col.label)}<span class="sort-arrow">${arrow}</span></th>`;
+  }
+  return h + `<th>Classify</th>`;
+}
+
+function _reviewFilterRow() {
+  let h = '';
+  for (const col of REVIEW_COLS) {
+    h += `<th><input type="text" placeholder="filter" value="${escapeHTML(_rev.filters[col.key] || '')}" oninput="reviewFilter('${col.key}', this.value)"></th>`;
+  }
+  return h + `<th></th>`;
+}
+
+function renderReviewBody() {
+  const tbody = document.getElementById('review-tbody');
+  if (!tbody) return;
+  const rows = _reviewVisibleRows();
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="${REVIEW_COLS.length + 1}" class="empty">No entries match the current filters.</td></tr>`;
+    return;
+  }
+  let h = '';
+  for (const r of rows) {
+    const st = _reviewStatus(r);
+    const shown = r._decision || r._auto;
+    h += '<tr>';
+    for (const col of REVIEW_COLS) {
+      if (col.key === 'status') {
+        h += `<td><span class="st-badge ${st.cls}${st.forced ? ' st-forced' : ''}">${escapeHTML(st.txt)}</span></td>`;
+      } else {
+        h += `<td class="${col.cls || ''}">${escapeHTML(String(col.disp(r)))}</td>`;
+      }
+    }
+    h += `<td><div class="dec-btns">
+        <button type="button" class="dec-btn${shown === 'step11' ? ' active-11' : ''}" title="Include in Step 11 (add to GL)" onclick="setReviewDecision(${r._idx},'step11')">+11</button>
+        <button type="button" class="dec-btn${shown === 'step13' ? ' active-13' : ''}" title="Include in Step 13 (subtract from GL)" onclick="setReviewDecision(${r._idx},'step13')">&minus;13</button>
+        <button type="button" class="dec-btn${r._decision === 'ignore' ? ' active-ig' : ''}" title="Exclude this entry" onclick="setReviewDecision(${r._idx},'ignore')">Ign</button>
+        <button type="button" class="dec-btn${!r._decision ? ' active-auto' : ''}" title="Use automatic classification" onclick="setReviewDecision(${r._idx},'auto')">Auto</button>
+      </div></td>`;
+    h += '</tr>';
+  }
+  tbody.innerHTML = h;
+}
+
+function updateReviewCounts() {
+  const c = _reviewCounts();
+  const e = document.getElementById('rev-counts');
+  if (e) e.innerHTML = `<strong>${c.s11}</strong> in Step 11 &middot; <strong>${c.s13}</strong> in Step 13 &middot; <strong>${c.needs}</strong> still need review`;
+  const nb = document.getElementById('rev-toggle-needs'); if (nb) nb.textContent = `Needs review (${c.needs})`;
+  const ab = document.getElementById('rev-toggle-all');   if (ab) ab.textContent = `All entries (${c.total})`;
+}
+
+window.reviewSort = function(col) {
+  if (_rev.sort.col === col) _rev.sort.dir = _rev.sort.dir === 'asc' ? 'desc' : 'asc';
+  else { _rev.sort.col = col; _rev.sort.dir = 'asc'; }
+  const hr = document.getElementById('review-hdr-row'); if (hr) hr.innerHTML = _reviewHeaderRow();
+  renderReviewBody();
+};
+
+window.reviewFilter = function(col, val) { _rev.filters[col] = val; renderReviewBody(); };
+
+window.reviewSetView = function(v) {
+  _rev.view = v;
+  document.querySelectorAll('.rev-toggle button').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  renderReviewBody();
+};
+
+window.setReviewDecision = function(idx, val) {
+  const row = _rev.rows[idx];
+  if (!row) return;
+  const state = loadState();
+  state.reviewDecisions = state.reviewDecisions || {};
+  const md = state.reviewDecisions[_rev.mkey] = state.reviewDecisions[_rev.mkey] || {};
+  if (val === 'auto') { delete md[row._row_id]; row._decision = null; }
+  else { md[row._row_id] = val; row._decision = val; }
+  saveState(state);
+  renderReviewBody();
+  updateReviewCounts();
+};
+
+function renderReview(mkey) {
+  setActiveNav('dashboard');
+  const glRows = loadGL();
+  if (!glRows) {
+    toast('Upload a GL Detail file first', 'error');
+    location.hash = '#/';
+    return;
+  }
+  const state = loadState();
+  const {year, month} = parseMonthKey(mkey);
+  const decisions = (state.reviewDecisions || {})[mkey] || {};
+  const c = classifyAll(glRows, year, month, decisions);
+  const rows = c.universe;
+  rows.forEach((r, i) => r._idx = i);
+  const needs = rows.filter(r => r._auto === 'review' && !r._decision).length;
+  _rev = {mkey, year, month, rows, sort:{col:'date', dir:'asc'}, filters:{}, view: needs ? 'needs' : 'all'};
+
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Review GL Entries – ${monthLabel(year, month)}</h1>
+      <p class="page-sub">
+        Sort or filter any column.  Use the buttons on each row to force an entry into
+        <strong>Step&nbsp;11</strong> (add to GL), <strong>Step&nbsp;13</strong> (subtract), ignore it,
+        or return it to automatic.  For example, a March entry with a blank Control that should have
+        been Feb can be set to Step&nbsp;11 so it gets included.  Changes save automatically.
+      </p>
+    </div>
+    <div class="ph-right"><a href="#/month/${mkey}" class="btn btn-link">← Back to rec</a></div>
+  </div>
+
+  <section class="card">
+    <div class="card-header" style="gap:16px; flex-wrap:wrap;">
+      <div class="rev-toggle">
+        <button type="button" id="rev-toggle-needs" data-v="needs" class="${_rev.view === 'needs' ? 'active' : ''}" onclick="reviewSetView('needs')">Needs review (${needs})</button>
+        <button type="button" id="rev-toggle-all" data-v="all" class="${_rev.view === 'all' ? 'active' : ''}" onclick="reviewSetView('all')">All entries (${rows.length})</button>
+      </div>
+      <div class="legend">
+        <span class="st-badge st-11">Step 11</span>
+        <span class="st-badge st-13">Step 13</span>
+        <span class="st-badge st-rev">Needs review</span>
+        <span class="st-badge st-none">Not included</span>
+      </div>
+      <span id="rev-counts" class="hint" style="margin-left:auto;"></span>
+    </div>
+    <div class="card-body">`;
+
+  if (!rows.length) {
+    html += `<p class="empty">No reconcilable GL entries dated ${monthLabel(year, month)} or later.</p></div></section>`;
+    app.innerHTML = html;
+    return;
+  }
+
+  html += `
+      <div class="review-wrap">
+        <table class="rev-table">
+          <thead>
+            <tr class="hdr-row" id="review-hdr-row">${_reviewHeaderRow()}</tr>
+            <tr class="flt-row">${_reviewFilterRow()}</tr>
+          </thead>
+          <tbody id="review-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>`;
+  app.innerHTML = html;
+  renderReviewBody();
+  updateReviewCounts();
+}
+
+// ── RAD page ──────────────────────────────────────────────────
+function renderRad() {
+  setActiveNav('rad');
+  const state = loadState();
+  const cycleStart = state.radCycleStartMonth || 1;
+  const monthsSet = new Set([...Object.keys(state.rad || {}), ...Object.keys(state.inputs || {})]);
+  let monthsToShow = [];
+  if (monthsSet.size) {
+    const years = [...new Set([...monthsSet].map(m => parseInt(m.slice(0, 4), 10)))].sort();
+    for (const y of years) for (let m = 1; m <= 12; m++) monthsToShow.push(monthKey(y, m));
+  } else {
+    const today = new Date();
+    for (let m = 1; m <= 12; m++) monthsToShow.push(monthKey(today.getFullYear(), m));
+  }
+
+  const cycleOpts = MONTH_NAMES.map((n, i) =>
+    `<option value="${i+1}"${(i+1)===cycleStart?' selected':''}>${n}</option>`
+  ).join('');
+
+  const cycleEndM = cycleStart === 1 ? 12 : cycleStart - 1;
+  const cycleDesc = cycleStart === 1
+    ? 'Jan → Dec (calendar year)'
+    : `${MONTH_NAMES[cycleStart-1]} → ${MONTH_NAMES[cycleEndM-1]} (spans the calendar year boundary)`;
+
+  let html = `
+  <div class="page-header">
+    <h1>Appreciation / Depreciation (RAD)</h1>
+    <p class="page-sub">
+      Enter the monthly RAD value once per month.  The reconciliation uses the
+      <strong>running total</strong> from the cycle start month through the rec month.
+    </p>
+  </div>
+
+  <form onsubmit="return saveRad(event)">
+    <section class="card">
+      <div class="card-header"><h2>RAD Cycle Settings</h2></div>
+      <div class="card-body">
+        <div class="form-grid two" style="max-width:600px;">
+          <label>
+            <span>Cycle starts in <em>(month after physical inventory)</em></span>
+            <select name="radCycleStartMonth" class="form-select" onchange="onRadCycleChange(this.value)">${cycleOpts}</select>
+          </label>
+          <div class="hint-block" style="padding-top:22px;">
+            Current cycle: <strong id="rad-cycle-desc">${cycleDesc}</strong>.
+            If your physical inventory is in November, set this to <strong>December</strong>
+            so RAD accumulates Dec → Nov.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-header"><h2>Monthly RAD Values</h2></div>
+      <div class="card-body">
+        <table class="data-table rad-table">
+          <thead><tr>
+            <th>Month</th>
+            <th class="r">RAD this month</th>
+            <th class="r" id="rad-running-hdr">Running total (${MONTH_NAMES[cycleStart-1]} cycle)</th>
+          </tr></thead>
+          <tbody>`;
+
+  let running = 0;
+  for (const mk of monthsToShow) {
+    const {month} = parseMonthKey(mk);
+    if (month === cycleStart) running = 0;   // reset at cycle start
+    const v = safe((state.rad || {})[mk]);
+    running += v;
+    html += `<tr>
+      <td><strong>${monthLabelForKey(mk)}</strong></td>
+      <td class="r"><input name="rad_${mk}" type="number" step="0.01" value="${v || ''}" class="rad-input"></td>
+      <td class="r mono">${fmtMoney(running)}</td>
+    </tr>`;
+  }
+  html += `
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="#/" class="btn btn-link">Cancel</a>
+    </div>
+  </form>`;
+  app.innerHTML = html;
+}
+
+window.onRadCycleChange = function(v) {
+  const m = parseInt(v, 10);
+  if (m < 1 || m > 12) return;
+  const end = m === 1 ? 12 : m - 1;
+  const desc = m === 1
+    ? 'Jan → Dec (calendar year)'
+    : `${MONTH_NAMES[m-1]} → ${MONTH_NAMES[end-1]} (spans the calendar year boundary)`;
+  const d = document.getElementById('rad-cycle-desc'); if (d) d.textContent = desc;
+  const h = document.getElementById('rad-running-hdr'); if (h) h.textContent = `Running total (${MONTH_NAMES[m-1]} cycle)`;
+};
+
+window.saveRad = function(ev) {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const state = loadState();
+  const newCycle = parseInt(fd.get('radCycleStartMonth') || '1', 10);
+  state.radCycleStartMonth = (newCycle >= 1 && newCycle <= 12) ? newCycle : 1;
+  state.rad = {};
+  for (const [k, v] of fd.entries()) {
+    if (k.startsWith('rad_')) {
+      const mk = k.slice(4);
+      const trimmed = String(v).trim();
+      if (trimmed !== '') state.rad[mk] = safe(trimmed);
+    }
+  }
+  saveState(state);
+  toast('RAD settings saved', 'success');
+  renderRad();
+  return false;
+};
+
+// ── Bulk entry grid ───────────────────────────────────────────
+const BULK_GROUPS = [
+  {name:'MGR / Value by Source', fields:[['inventory','Inventory'],['tires','Tires'],['oil','Oil']]},
+  {name:'Cores / Recap',         fields:[['paint','Paint'],['cores_new','Cores New'],['cores_used','Cores Used'],['npn','NPN'],['bowman','Bowman']]},
+  {name:'Returns / Claims / ROs',fields:[['returns_11933','Returns 11933'],['claims','Claims'],['open_ros_service','Open ROs Svc'],['counter_tickets_parts','Counter Tkts']]},
+  {name:'GL Balances',           fields:[['gl_24200','24200 Inv'],['gl_24300','24300 Tires'],['gl_24401','24401 Oil'],['gl_other','Other']]},
+  {name:'GL Adjustments',        fields:[['mfg_packing_slips','Mfg Slips'],['prepaid_special_orders','Prepaid SO'],['inv_adjustments_rpm','Inv Adj RPM'],['oil_shop_supply_adj','Oil/Shop Adj']]},
+  {name:'RAD',                   fields:[['__rad','RAD (this mo)']]},
+];
+
+let bulkExtraMonths = [];
+
+function _caretAtStart(inp) { try { return inp.selectionStart === 0 && inp.selectionEnd === 0; } catch (e) { return true; } }
+function _caretAtEnd(inp)   { try { return inp.selectionStart === inp.value.length && inp.selectionEnd === inp.value.length; } catch (e) { return true; } }
+
+window.bulkKeyNav = function(e) {
+  const inp = e.target;
+  if (!inp || inp.tagName !== 'INPUT') return;
+  const td = inp.closest('td'), tr = inp.closest('tr');
+  if (!td || !tr) return;
+  const ci = td.cellIndex;
+  const focusCell = (row, colIdx) => {
+    if (!row || colIdx < 0) return false;
+    const cell = row.cells[colIdx];
+    if (!cell) return false;
+    const t = cell.querySelector('input');
+    if (!t) return false;
+    t.focus();
+    try { t.select(); } catch (_) {}
+    return true;
+  };
+  switch (e.key) {
+    case 'ArrowDown':
+    case 'Enter':
+      if (focusCell(tr.nextElementSibling, ci)) e.preventDefault();
+      break;
+    case 'ArrowUp':
+      if (focusCell(tr.previousElementSibling, ci)) e.preventDefault();
+      break;
+    case 'ArrowLeft':
+      if (_caretAtStart(inp) && focusCell(tr, ci - 1)) e.preventDefault();
+      break;
+    case 'ArrowRight':
+      if (_caretAtEnd(inp) && focusCell(tr, ci + 1)) e.preventDefault();
+      break;
+  }
+};
+
+function bulkMonthList(state) {
+  const s = new Set([...Object.keys(state.inputs || {}), ...Object.keys(state.rad || {}), ...bulkExtraMonths]);
+  return [...s].sort();
+}
+
+function bulkRowHTML(mkey, inp, radVal) {
+  inp = inp || {};
+  let tds = `<td class="mcol" data-mk="${mkey}">${escapeHTML(monthLabelForKey(mkey))}</td>`;
+  tds += `<td class="grp-start"><input class="deal" name="b_${mkey}_dealership" value="${escapeHTML(inp.dealership || '')}"></td>`;
+  for (const g of BULK_GROUPS) {
+    g.fields.forEach(([f], i) => {
+      const cls = i === 0 ? ' class="grp-start"' : '';
+      if (f === '__rad') {
+        tds += `<td${cls}><input type="text" inputmode="decimal" name="b_${mkey}___rad" value="${(radVal != null && radVal !== '') ? radVal : ''}"></td>`;
+      } else {
+        const v = inp[f];
+        tds += `<td${cls}><input type="text" inputmode="decimal" name="b_${mkey}_${f}" value="${(v != null && v !== 0) ? v : ''}"></td>`;
+      }
+    });
+  }
+  return `<tr data-mk="${mkey}">${tds}</tr>`;
+}
+
+function renderBulk() {
+  setActiveNav('bulk');
+  const state = loadState();
+  const months = bulkMonthList(state);
+  const thisYear = new Date().getFullYear();
+
+  // Header rows
+  let grpRow = `<th class="mcol" rowspan="2">Month</th><th class="grp-start" rowspan="2">Dealership</th>`;
+  let fldRow = '';
+  for (const g of BULK_GROUPS) {
+    grpRow += `<th colspan="${g.fields.length}" class="grp-start">${escapeHTML(g.name)}</th>`;
+    g.fields.forEach(([f, label], i) => {
+      fldRow += `<th${i === 0 ? ' class="grp-start"' : ''}>${escapeHTML(label)}</th>`;
+    });
+  }
+
+  let bodyRows = '';
+  for (const mk of months) {
+    bodyRows += bulkRowHTML(mk, state.inputs[mk], (state.rad || {})[mk]);
+  }
+
+  let html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Bulk Entry</h1>
+      <p class="page-sub">
+        Enter values for many months on one page — fill straight down a column while
+        reading a year of balances off the MGR, WIP, or cores report.  Use
+        <strong>↑ ↓ or Enter</strong> to move down a column and <strong>← →</strong> (or Tab)
+        to move across.  GL balance columns are pre-filled if you imported the Account Balance
+        History.  Click <strong>Save all</strong> when done.
+      </p>
+    </div>
+  </div>
+
+  <section class="card">
+    <div class="card-body">
+      <div class="bulk-controls">
+        <div class="field">
+          <span>Add full year</span>
+          <div style="display:flex; gap:6px;">
+            <input type="number" class="yr" id="bulk-year" placeholder="${thisYear}" value="${thisYear}">
+            <button type="button" class="btn btn-link btn-sm" onclick="addBulkYear()">+ Add Jan–Dec</button>
+          </div>
+        </div>
+        <div class="field">
+          <span>Add single month</span>
+          <div style="display:flex; gap:6px;">
+            <input type="text" class="mo" id="bulk-month" placeholder="2025-11" pattern="\\d{4}-\\d{2}">
+            <button type="button" class="btn btn-link btn-sm" onclick="addBulkMonth()">+ Add</button>
+          </div>
+        </div>
+      </div>`;
+
+  if (!months.length) {
+    html += `<p class="empty">No months yet.  Use “Add full year” or “Add single month” above to start a grid.</p>`;
+  } else {
+    html += `
+      <form id="bulk-form" onsubmit="return saveBulk(event)">
+        <div class="bulk-wrap">
+          <table class="bulk-table" onkeydown="bulkKeyNav(event)">
+            <thead>
+              <tr class="grp-row">${grpRow}</tr>
+              <tr class="fld-row">${fldRow}</tr>
+            </thead>
+            <tbody id="bulk-tbody">${bodyRows}</tbody>
+          </table>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save all</button>
+          <a href="#/" class="btn btn-link">Done</a>
+        </div>
+      </form>`;
+  }
+  html += `</div></section>`;
+  app.innerHTML = html;
+}
+
+function _bulkHasRow(mk) {
+  return !!document.querySelector(`#bulk-tbody tr[data-mk="${mk}"]`);
+}
+function _bulkAppendRow(mk) {
+  const tbody = document.getElementById('bulk-tbody');
+  if (!tbody) { bulkExtraMonths.push(mk); renderBulk(); return; }
+  if (_bulkHasRow(mk)) return false;
+  if (!bulkExtraMonths.includes(mk)) bulkExtraMonths.push(mk);
+  // Insert in sorted position
+  const rows = [...tbody.querySelectorAll('tr')];
+  const next = rows.find(r => r.dataset.mk > mk);
+  const html = bulkRowHTML(mk, loadState().inputs[mk], (loadState().rad || {})[mk]);
+  if (next) next.insertAdjacentHTML('beforebegin', html);
+  else tbody.insertAdjacentHTML('beforeend', html);
+  return true;
+}
+
+window.addBulkYear = function() {
+  const y = parseInt(document.getElementById('bulk-year').value, 10);
+  if (!y || y < 2000 || y > 2100) { toast('Enter a valid year', 'error'); return; }
+  const had = document.getElementById('bulk-tbody');
+  let added = 0;
+  for (let m = 1; m <= 12; m++) {
+    const mk = monthKey(y, m);
+    if (had) { if (_bulkAppendRow(mk)) added++; }
+    else { if (!bulkExtraMonths.includes(mk)) { bulkExtraMonths.push(mk); added++; } }
+  }
+  if (!had) renderBulk();
+  toast(added ? `Added ${added} month${added>1?'s':''} for ${y}` : `All months for ${y} already shown`, added ? 'success' : 'info');
+};
+
+window.addBulkMonth = function() {
+  const mk = String(document.getElementById('bulk-month').value || '').trim();
+  if (!/^\d{4}-\d{2}$/.test(mk)) { toast('Month must be YYYY-MM', 'error'); return; }
+  const had = document.getElementById('bulk-tbody');
+  if (!had) { if (!bulkExtraMonths.includes(mk)) bulkExtraMonths.push(mk); renderBulk(); toast('Added ' + mk, 'success'); return; }
+  if (_bulkAppendRow(mk)) toast('Added ' + monthLabelForKey(mk), 'success');
+  else toast(monthLabelForKey(mk) + ' already shown', 'info');
+  document.getElementById('bulk-month').value = '';
+};
+
+window.saveBulk = function(ev) {
+  ev.preventDefault();
+  const fd = new FormData(ev.target);
+  const state = loadState();
+  state.rad = state.rad || {};
+  const byMonth = {};
+  for (const [name, val] of fd.entries()) {
+    if (!name.startsWith('b_')) continue;
+    const rest = name.slice(2);
+    const mk = rest.slice(0, 7);
+    const field = rest.slice(8);
+    (byMonth[mk] = byMonth[mk] || {})[field] = val;
+  }
+  let saved = 0;
+  for (const mk of Object.keys(byMonth)) {
+    const fields = byMonth[mk];
+    const existing = state.inputs[mk];
+    const rec = existing ? Object.assign({}, existing) : {dealership: ''};
+    for (const f of INPUT_FIELDS) if (!(f in rec)) rec[f] = 0;
+    let hasContent = !!existing;
+    if ('dealership' in fields) { rec.dealership = String(fields.dealership || '').trim(); if (rec.dealership) hasContent = true; }
+    for (const f of INPUT_FIELDS) {
+      if (f in fields) { const v = fields[f]; rec[f] = (v === '' || v == null) ? 0 : safe(v); }
+      if (rec[f] !== 0) hasContent = true;
+    }
+    // RAD
+    if ('__rad' in fields) {
+      const v = String(fields.__rad || '').trim();
+      if (v !== '') { state.rad[mk] = safe(v); hasContent = true; }
+      else if (mk in state.rad) delete state.rad[mk];
+    }
+    if (hasContent) { state.inputs[mk] = rec; saved++; }
+  }
+  saveState(state);
+  toast(`Saved ${saved} month${saved !== 1 ? 's' : ''}`, 'success');
+  renderBulk();
+  return false;
+};
+
+// ── Store management ──────────────────────────────────────────
+function renderStores() {
+  setActiveNav('');
+  const meta = loadMeta();
+  const stores = Object.values(meta.stores).sort((a, b) => a.name.localeCompare(b.name));
+
+  let storeCards = '';
+  for (const s of stores) {
+    const isActive = s.id === meta.activeStore;
+    // Peek at the store's state without switching
+    let months = 0, hasGL = false;
+    try { const st = JSON.parse(localStorage.getItem(stateKeyFor(s.id)) || '{}'); months = Object.keys(st.inputs || {}).length; } catch(e) {}
+    hasGL = !!localStorage.getItem(glKeyFor(s.id));
+    storeCards += `
+      <div class="store-card${isActive ? ' active-store' : ''}">
+        <input class="store-name-input" value="${escapeHTML(s.name)}" onchange="renameStore('${s.id}', this.value)" title="Click to rename">
+        <span class="store-meta">${months} month${months !== 1 ? 's' : ''}${hasGL ? ' · GL loaded' : ''}</span>
+        ${isActive
+          ? '<span class="active-badge">Active</span>'
+          : `<button class="btn btn-primary btn-sm" onclick="switchStore('${s.id}')">Switch to this store</button>
+             <button class="btn btn-danger btn-sm" onclick="deleteStore('${s.id}')">Delete</button>`}
+      </div>`;
+  }
+
+  const html = `
+  <div class="page-header">
+    <div class="ph-left">
+      <h1>Manage Stores</h1>
+      <p class="page-sub">Each store has its own inputs, GL file, RAD values, and cycle settings. Switch between them without losing any data.</p>
+    </div>
+    <div class="ph-right"><a href="#/" class="btn btn-link">← Dashboard</a></div>
+  </div>
+
+  <section class="card">
+    <div class="card-header"><h2>Your Stores</h2></div>
+    <div class="card-body">
+      <div class="store-list">${storeCards}</div>
+      <p class="hint">Click a store name to rename it. Renaming takes effect immediately.</p>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><h2>Add a New Store</h2></div>
+    <div class="card-body">
+      <form onsubmit="return createStore(event)" style="display:flex; gap:10px; align-items:flex-end;">
+        <label style="flex:1;">
+          <span style="display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:3px; text-transform:uppercase; letter-spacing:.3px;">Store name</span>
+          <input id="new-store-name" type="text" placeholder="e.g. HML Clarenville" style="width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px;" required>
+        </label>
+        <button type="submit" class="btn btn-primary">Create store &amp; switch to it</button>
+      </form>
+    </div>
+  </section>`;
+
+  app.innerHTML = html;
+}
+
+window.createStore = function(ev) {
+  ev.preventDefault();
+  const name = String(document.getElementById('new-store-name').value || '').trim();
+  if (!name) return false;
+  const meta = loadMeta();
+  const id = 's' + Date.now().toString(36);
+  meta.stores[id] = { id, name };
+  saveMeta(meta);
+  toast('Created store: ' + name, 'success');
+  window.switchStore(id);
+  return false;
+};
+
+window.renameStore = function(id, newName) {
+  newName = String(newName || '').trim();
+  if (!newName) return;
+  const meta = loadMeta();
+  if (!meta.stores[id]) return;
+  meta.stores[id].name = newName;
+  saveMeta(meta);
+  updateStoreNav();
+};
+
+window.deleteStore = function(id) {
+  const meta = loadMeta();
+  if (!meta.stores[id] || id === meta.activeStore) return;
+  const name = meta.stores[id].name;
+  if (!confirm(`Delete store "${name}"? All inputs, GL data, and RAD values for this store will be permanently removed.`)) return;
+  localStorage.removeItem(stateKeyFor(id));
+  localStorage.removeItem(glKeyFor(id));
+  delete meta.stores[id];
+  saveMeta(meta);
+  toast('Deleted store: ' + name, 'success');
+  renderStores();
+  updateStoreNav();
+};
+
+// ── Router ────────────────────────────────────────────────────
+function route() {
+  const h = location.hash || '#/';
+  if (h === '#/' || h === '') {
+    renderDashboard();
+  } else if (h === '#/inputs') {
+    renderInputsList();
+  } else if (h === '#/inputs/new') {
+    renderInputsEdit('');
+  } else if (h.startsWith('#/inputs/')) {
+    renderInputsEdit(h.slice('#/inputs/'.length));
+  } else if (h.startsWith('#/month/')) {
+    renderMonthDetail(h.slice('#/month/'.length));
+  } else if (h.startsWith('#/review/')) {
+    renderReview(h.slice('#/review/'.length));
+  } else if (h === '#/rad') {
+    renderRad();
+  } else if (h === '#/bulk') {
+    renderBulk();
+  } else if (h === '#/stores') {
+    renderStores();
+  } else {
+    renderDashboard();
+  }
+  window.scrollTo(0, 0);
+}
+
+window.addEventListener('hashchange', route);
+window.addEventListener('DOMContentLoaded', () => { initStores(); updateStoreNav(); route(); });
+</script>
+
+</body>
+</html>

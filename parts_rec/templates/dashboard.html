@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+  <h1>Reconciliation Dashboard</h1>
+  <p class="page-sub">Multi-month parts inventory to GL reconciliation overview</p>
+</div>
+
+<!-- GL upload card -->
+<section class="card">
+  <div class="card-header">
+    <h2>1.  GL Detail Export</h2>
+    {% if gl_info %}
+      <span class="badge badge-ok">Loaded</span>
+    {% else %}
+      <span class="badge badge-warn">Not loaded</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="gl-row">
+      <form action="{{ url_for('upload_gl') }}" method="post" enctype="multipart/form-data" class="gl-form">
+        <input type="file" name="gl_file" accept=".xlsx,.xls" required>
+        <button type="submit" class="btn btn-primary">Upload GL Detail (.xlsx)</button>
+      </form>
+      {% if gl_info %}
+      <div class="gl-info">
+        <div><strong>File:</strong> {{ gl_info.filename or 'gl_uploaded.xlsx' }}</div>
+        <div><strong>Uploaded:</strong> {{ gl_info.uploaded }}</div>
+        <div><strong>Rows:</strong> {{ '{:,}'.format(gl_info.row_count) }}</div>
+        <div><strong>Date range:</strong> {{ gl_info.date_min }} → {{ gl_info.date_max }}</div>
+        <div><strong>Accounts:</strong> {{ gl_info.accounts | join(', ') }}</div>
+      </div>
+      {% else %}
+      <p class="hint">
+        Export the GL Detail from Drive for all inventory accounts (24200, 24300, 24401)
+        from the start of your earliest rec month through today.
+      </p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- Summary table -->
+<section class="card">
+  <div class="card-header">
+    <h2>2.  Monthly Reconciliations</h2>
+    <a href="{{ url_for('inputs_new') }}" class="btn btn-primary btn-sm">+ Add Month</a>
+  </div>
+  <div class="card-body">
+  {% if not recs %}
+    <p class="empty">
+      No reconciliations yet.
+      <a href="{{ url_for('inputs_new') }}">Add your first month →</a>
+    </p>
+  {% else %}
+    <table class="data-table summary">
+      <thead>
+        <tr>
+          <th>Month</th>
+          <th class="r">Parts Adj.<br>(Step 8)</th>
+          <th class="r">GL Balance<br>(Raw)</th>
+          <th class="r">GL Adjusted<br>(Step 17)</th>
+          <th class="r">Variance $</th>
+          <th class="r">Variance %</th>
+          <th class="r">Posted Not<br>Received (13)</th>
+          <th class="r">In Phys.<br>Not GL (11)</th>
+          <th class="r">RAD YTD</th>
+          <th class="c">Review</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recs %}
+        <tr>
+          <td><a href="{{ url_for('month_detail', mkey='%04d-%02d' % (r.year, r.month)) }}"><strong>{{ r.label }}</strong></a></td>
+          <td class="r">{{ r.calc.step8 | money }}</td>
+          <td class="r">{{ r.calc.gl_total | money }}</td>
+          <td class="r">{{ r.calc.step17 | money }}</td>
+          <td class="r {{ r.calc.step19 | vrclass }}"><strong>{{ r.calc.step19 | money }}</strong></td>
+          <td class="r {{ r.calc.step19 | vrclass }}">{{ r.calc.step19_pct | pct }}</td>
+          <td class="r mono">{{ r.calc.s1_total | money }}</td>
+          <td class="r mono">{{ r.calc.s2_total | money }}</td>
+          <td class="r">{{ r.calc.rad_ytd | money }}</td>
+          <td class="c">
+            {% if r.review_count > 0 %}
+              <a href="{{ url_for('review', mkey='%04d-%02d' % (r.year, r.month)) }}"
+                 class="badge badge-review">{{ r.review_count }}</a>
+            {% else %}
+              <span class="badge badge-ok-small">0</span>
+            {% endif %}
+          </td>
+          <td class="actions">
+            <a href="{{ url_for('inputs_edit', mkey='%04d-%02d' % (r.year, r.month)) }}" title="Edit inputs">✎</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th>Totals / Avg</th>
+          <th class="r">{{ recs | sum(attribute='calc.step8')   | money }}</th>
+          <th class="r">{{ recs | sum(attribute='calc.gl_total') | money }}</th>
+          <th class="r">{{ recs | sum(attribute='calc.step17') | money }}</th>
+          <th class="r">{{ recs | sum(attribute='calc.step19') | money }}</th>
+          <th></th>
+          <th class="r">{{ recs | sum(attribute='calc.s1_total') | money }}</th>
+          <th class="r">{{ recs | sum(attribute='calc.s2_total') | money }}</th>
+          <th></th>
+          <th></th>
+          <th></th>
+        </tr>
+      </tfoot>
+    </table>
+  {% endif %}
+  </div>
+</section>
+
+{% if recs and recs|length > 1 %}
+<!-- Variance pattern chart -->
+<section class="card">
+  <div class="card-header">
+    <h2>3.  Variance Trend</h2>
+  </div>
+  <div class="card-body">
+    <div class="chart-wrap">
+      {% set max_abs = recs | map(attribute='calc.step19') | map('abs') | max %}
+      {% if max_abs == 0 %}{% set max_abs = 1 %}{% endif %}
+      {% for r in recs %}
+        {% set h = (r.calc.step19 | abs / max_abs * 140) | round(0, 'common') | int %}
+        {% if h < 4 %}{% set h = 4 %}{% endif %}
+        <div class="chart-col">
+          <div class="chart-amt">{{ r.calc.step19 | money }}</div>
+          <div class="chart-bar-wrap">
+            {% if r.calc.step19 >= 0 %}
+              <div class="chart-bar pos" style="height: {{ h }}px"></div>
+            {% else %}
+              <div class="chart-bar neg" style="height: {{ h }}px"></div>
+            {% endif %}
+          </div>
+          <div class="chart-label">{{ r.label }}</div>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="hint">
+      Bars show variance $ (Step 17 − Step 8).  Look for a consistent direction
+      (sign) or growing magnitude — those usually indicate a missing adjustment.
+    </p>
+  </div>
+</section>
+{% endif %}
+
+<!-- Footer actions -->
+<section class="card card-quiet">
+  <div class="card-header">
+    <h2>Reset</h2>
+  </div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('reset_all') }}" class="inline-form"
+          onsubmit="return confirm('This deletes all inputs, RAD values, review decisions, and the uploaded GL file. Continue?');">
+      <p class="hint">Clears all saved inputs, RAD values, and the uploaded GL file.</p>
+      <label>Type <code>reset</code> to confirm:
+        <input name="confirm" placeholder="reset" style="width: 100px">
+      </label>
+      <button type="submit" class="btn btn-danger">Reset all data</button>
+    </form>
+  </div>
+</section>
+
+{% endblock %}
