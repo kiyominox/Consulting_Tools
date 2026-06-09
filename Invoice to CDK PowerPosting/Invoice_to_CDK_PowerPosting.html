@@ -93,6 +93,30 @@
   .hint kbd{background:#f1f5f9;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;
             padding:1px 6px;font-family:inherit;font-size:11px;color:var(--ink)}
   .empty{text-align:center;color:var(--muted);padding:48px 12px}
+  /* how-to guide */
+  details.howto{border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;margin-bottom:18px;overflow:hidden}
+  details.howto>summary{cursor:pointer;list-style:none;padding:16px 20px;font-size:16px;font-weight:700;
+        color:#1e3a8a;display:flex;align-items:center;gap:10px;user-select:none}
+  details.howto>summary::-webkit-details-marker{display:none}
+  details.howto>summary .chev{margin-left:auto;font-size:13px;color:#3b82f6;font-weight:600}
+  details.howto[open]>summary .chev .closed{display:none}
+  details.howto:not([open])>summary .chev .opened{display:none}
+  details.howto>summary:hover{background:#dbeafe}
+  .howto-body{background:#fff;border-top:1px solid #bfdbfe;padding:20px 24px 24px;font-size:14.5px;line-height:1.75}
+  .howto-body h3{margin:22px 0 8px;font-size:14px;color:#1e3a8a;text-transform:uppercase;letter-spacing:.5px}
+  .howto-body h3:first-child{margin-top:0}
+  .howto-body ol.steps{list-style:none;margin:0;padding:0;counter-reset:step}
+  .howto-body ol.steps>li{counter-increment:step;position:relative;padding:0 0 14px 46px}
+  .howto-body ol.steps>li::before{content:counter(step);position:absolute;left:0;top:0;width:30px;height:30px;
+        border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:14px;
+        display:flex;align-items:center;justify-content:center}
+  .howto-body b.do{color:#1d4ed8}
+  .howto-body .tip{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534;border-radius:8px;
+        padding:10px 14px;margin:8px 0 14px;font-size:13.5px}
+  .howto-body table.keys{border-collapse:collapse;margin:6px 0 4px;font-size:13.5px}
+  .howto-body table.keys td{border:none;padding:4px 14px 4px 0;white-space:normal}
+  .howto-body kbd{background:#f1f5f9;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;
+        padding:1px 7px;font-family:inherit;font-size:12px;color:var(--ink);font-weight:600}
   /* toast */
   #toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);
          color:#fff;padding:11px 20px;border-radius:10px;font-size:13.5px;font-weight:600;opacity:0;
@@ -110,10 +134,56 @@
 
 <div class="wrap">
 
+  <details class="howto" open>
+    <summary>📖 How to use this tool — step by step
+      <span class="chev"><span class="closed">click to open ▼</span><span class="opened">click to hide ▲</span></span>
+    </summary>
+    <div class="howto-body">
+
+      <h3>Step 1 — Get the invoice</h3>
+      <ol class="steps">
+        <li>Go to the invoice <b class="do">online</b>, the same place you always get it (the Honda or Hyundai site).</li>
+        <li><b class="do">Download</b> the invoice PDF — just like you normally would. Don't just look at it on the screen; it has to be downloaded onto your computer.</li>
+      </ol>
+
+      <h3>Step 2 — Put the invoice into this tool</h3>
+      <ol class="steps">
+        <li>Find the file you just downloaded. The easiest way: look for the <b class="do">downloads popup</b> in your browser (it usually appears in the top-right corner right after you download).</li>
+        <li><b class="do">Drag the file</b> from that downloads popup — or from your Downloads folder — and <b class="do">drop it onto the dotted box</b> below.</li>
+        <li>Prefer clicking? You can also just <b class="do">click the dotted box</b> and pick the file from the window that opens.</li>
+      </ol>
+      <div class="tip">💡 Done with one invoice and ready for the next? Just drop the next PDF in. The old one clears out automatically — you never need to delete anything first.</div>
+
+      <h3>Step 3 — Check the table</h3>
+      <ol class="steps">
+        <li>The tool reads the invoice by itself. It knows whether it's <b class="do">Honda</b> or <b class="do">Hyundai</b> and fills in the company, accounts, amounts, and controls (the last 6 of the VIN) for you.</li>
+        <li>Look at the <b class="do">Balance</b> total above the table and make sure it matches the invoice total. All amounts will show as negative — that's correct.</li>
+        <li>In the rare case the tool guesses the brand wrong, use the little dropdown next to the file name to set it yourself.</li>
+      </ol>
+
+      <h3>Step 4 — Fix anything you want (optional)</h3>
+      <p>Every white cell in the table can be changed. <b class="do">Click any cell and type</b> — the Expert Mode column on the right updates as you type. You can move around the table without touching the mouse:</p>
+      <table class="keys">
+        <tr><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>move up, down, left, or right one cell</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>moves one cell to the right — at the end of a row it jumps to the start of the next row</td></tr>
+        <tr><td><kbd>Tab</kbd></td><td>moves to the next field</td></tr>
+      </table>
+      <p>Need to remove a line? Click the small <b class="do">×</b> at the right end of that row. Need an extra line? Click <b class="do">+ Add Row</b>.</p>
+
+      <h3>Step 5 — Send it to CDK</h3>
+      <ol class="steps">
+        <li>Click the blue <b class="do">📋 Send to AGJE Expert Mode</b> button. Every line in the table is copied for you — you'll see a message confirming how many lines were copied.</li>
+        <li>Go to CDK, open <b class="do">AGJE Expert Mode</b>, and <b class="do">paste</b> (press <kbd>Ctrl</kbd>+<kbd>V</kbd>). All the posting lines come in at once.</li>
+      </ol>
+      <div class="tip">💡 Nothing is ever sent over the internet. The invoice stays on your computer the whole time.</div>
+
+    </div>
+  </details>
+
   <div class="card">
     <div id="drop">
       <div style="font-size:15px"><strong>Click to choose</strong> or drag &amp; drop PDF invoice(s) here</div>
-      <div class="sub">Honda &amp; Hyundai credit memos are detected automatically. You can drop more than one.</div>
+      <div class="sub">Honda &amp; Hyundai credit memos are detected automatically. Dropping a new invoice replaces the one already loaded.</div>
     </div>
     <input type="file" id="file" accept="application/pdf,.pdf" multiple>
     <div class="files" id="files"></div>
@@ -538,6 +608,8 @@
   async function ingest(fileList){
     var files=Array.prototype.slice.call(fileList).filter(function(f){ return /\.pdf$/i.test(f.name)||f.type==='application/pdf'; });
     if(files.length===0){ toast('Please choose a PDF file',true); return; }
+    var hadPrevious = loadedFiles.length>0;
+    loadedFiles=[];  // a new drop always replaces whatever was loaded before
     for(var i=0;i<files.length;i++){
       try{
         var lines = await readPdf(files[i]);
@@ -545,6 +617,7 @@
       }catch(err){ console.error(err); toast('Could not read '+files[i].name,true); }
     }
     rebuild();
+    if(hadPrevious && loadedFiles.length>0) toast('New invoice loaded — the previous one was cleared');
   }
 
   document.getElementById('copyBtn').addEventListener('click', copyExpert);
