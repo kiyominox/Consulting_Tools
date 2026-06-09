@@ -93,16 +93,16 @@
   .hint kbd{background:#f1f5f9;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;
             padding:1px 6px;font-family:inherit;font-size:11px;color:var(--ink)}
   .empty{text-align:center;color:var(--muted);padding:48px 12px}
-  /* how-to guide */
-  details.howto{border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;margin-bottom:18px;overflow:hidden}
-  details.howto>summary{cursor:pointer;list-style:none;padding:16px 20px;font-size:16px;font-weight:700;
-        color:#1e3a8a;display:flex;align-items:center;gap:10px;user-select:none}
-  details.howto>summary::-webkit-details-marker{display:none}
-  details.howto>summary .chev{margin-left:auto;font-size:13px;color:#3b82f6;font-weight:600}
-  details.howto[open]>summary .chev .closed{display:none}
-  details.howto:not([open])>summary .chev .opened{display:none}
-  details.howto>summary:hover{background:#dbeafe}
-  .howto-body{background:#fff;border-top:1px solid #bfdbfe;padding:20px 24px 24px;font-size:14.5px;line-height:1.75}
+  /* header nav */
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header .htitle{flex:1;min-width:240px}
+  .navbtn{border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:8px;padding:9px 16px;
+        font-size:13.5px;font-weight:650;cursor:pointer}
+  .navbtn:hover{background:#334155}
+  /* how-to guide page */
+  .guide-actions{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .guide-card h2{margin:0 0 14px;font-size:20px;color:#1e3a8a}
+  .howto-body{font-size:14.5px;line-height:1.75}
   .howto-body h3{margin:22px 0 8px;font-size:14px;color:#1e3a8a;text-transform:uppercase;letter-spacing:.5px}
   .howto-body h3:first-child{margin-top:0}
   .howto-body ol.steps{list-style:none;margin:0;padding:0;counter-reset:step}
@@ -124,20 +124,37 @@
   #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   #toast.err{background:#b91c1c}
   .hidden{display:none!important}
+  /* printing — only the visible page prints; the guide prints as a clean handout */
+  @media print{
+    body{background:#fff;font-size:12.5pt}
+    header,.no-print,#toast{display:none!important}
+    .wrap{max-width:none;padding:0}
+    .card{border:none;box-shadow:none;padding:0;margin:0}
+    .guide-card h2{color:#000;font-size:18pt}
+    .howto-body h3{color:#000;page-break-after:avoid}
+    .howto-body ol.steps>li{page-break-inside:avoid}
+    .howto-body ol.steps>li::before{background:#000;color:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .howto-body .tip{background:#fff;border:1px solid #999;color:#000;page-break-inside:avoid}
+    .howto-body b.do{color:#000;text-decoration:underline}
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>Invoice → CDK PowerPosting</h1>
-  <p>Drop a Honda or Hyundai PDF credit memo. Review the posting table, then copy it straight into AGJE Expert Mode.</p>
+  <div class="htitle">
+    <h1>Invoice → CDK PowerPosting</h1>
+    <p>Drop a Honda or Hyundai PDF credit memo. Review the posting table, then copy it straight into AGJE Expert Mode.</p>
+  </div>
+  <button class="navbtn" id="navBtn">📖 How-To Guide</button>
 </header>
 
-<div class="wrap">
-
-  <details class="howto">
-    <summary>📖 How to use this tool — step by step
-      <span class="chev"><span class="closed">click to open ▼</span><span class="opened">click to hide ▲</span></span>
-    </summary>
+<div class="wrap hidden" id="guidePage">
+  <div class="card guide-card">
+    <div class="guide-actions no-print">
+      <button class="btn primary" id="backBtn">← Back to the tool</button>
+      <button class="btn" id="printBtn">🖨 Print this guide</button>
+    </div>
+    <h2>📖 How to use this tool — step by step</h2>
     <div class="howto-body">
 
       <h3>Step 1 — Get the invoice</h3>
@@ -178,7 +195,10 @@
       <div class="tip">💡 Nothing is ever sent over the internet. The invoice stays on your computer the whole time.</div>
 
     </div>
-  </details>
+  </div>
+</div>
+
+<div class="wrap" id="toolPage">
 
   <div class="card">
     <div id="drop">
@@ -629,6 +649,19 @@
   });
 
   var copyBtn=document.getElementById('copyBtn'), clearBtn=document.getElementById('clearBtn'), addBtn=document.getElementById('addBtn');
+
+  // ---------- guide page navigation ----------
+  var toolPage=document.getElementById('toolPage'), guidePage=document.getElementById('guidePage'),
+      navBtn=document.getElementById('navBtn');
+  function showGuide(on){
+    toolPage.classList.toggle('hidden', on);
+    guidePage.classList.toggle('hidden', !on);
+    navBtn.textContent = on ? '← Back to the Tool' : '📖 How-To Guide';
+    window.scrollTo(0,0);
+  }
+  navBtn.addEventListener('click', function(){ showGuide(toolPage.classList.contains('hidden')?false:true); });
+  document.getElementById('backBtn').addEventListener('click', function(){ showGuide(false); });
+  document.getElementById('printBtn').addEventListener('click', function(){ window.print(); });
 })();
 </script>
 </body>

@@ -7,7 +7,9 @@ a CDK AGJE Expert Mode posting string.
 
 1. Double-click **`Invoice_to_CDK_PowerPosting.html`** — it opens in any modern web browser
    (Chrome, Edge, Firefox, Safari). No install, no internet connection required.
-   A full step-by-step guide is also built into the top of the tool itself.
+   A full step-by-step guide is built into the tool — click the **📖 How-To Guide** button
+   in the top-right corner. From there it can also be printed as a handout
+   (**🖨 Print this guide**).
 2. Go to the invoice online (the Honda or Hyundai site) and **download** the invoice PDF.
 3. Drag the PDF from your browser's downloads popup — or from your Downloads folder —
    onto the dotted box (or click the box to choose the file).
