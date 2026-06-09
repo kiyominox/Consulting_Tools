@@ -329,7 +329,7 @@
   var RENDER_SCALE = 4;   // OCR accuracy was verified at this resolution
 
   var VIN_RE   = /\b[A-HJ-NPR-Z0-9]{17}\b/;
-  var VIN_LOOSE= /\b[A-Z0-9]{17}\b/i;        // OCR sometimes reads O/I into a VIN
+  var VIN_LOOSE= /\b[A-Z0-9]{16,19}\b/i;     // OCR sometimes garbles a VIN (extra/wrong character)
   var MONEY_RE = /^-?[\d,]+\.\d{2}$/;
   var RO_RE    = /^\d{6}$/;
 
@@ -472,11 +472,13 @@
       var labor=num(last5[0]), amt=num(last5[4]);
       var ro=null;
       for(var k2=0;k2<toks.length;k2++){ if(RO_RE.test(toks[k2])){ ro=toks[k2]; break; } }
-      var vm=ln.match(VIN_RE)||ln.match(VIN_LOOSE);
-      var vin=vm?vm[0].toUpperCase():'';
+      var vm=ln.match(VIN_RE), vin='', vinSuspect=false;
+      if(vm){ vin=vm[0]; }
+      else if((vm=ln.match(VIN_LOOSE))){ vin=vm[0].toUpperCase(); vinSuspect=true; }
 
       if(section==='PDS'){
         if(!vin) warnings.push('A PDS row had no readable VIN — its control is blank. Row: "'+ln.slice(0,80)+'"');
+        else if(vinSuspect) warnings.push('A PDS VIN looked garbled ("'+vin+'") — the control was set to its last 8 characters. Double-check that row.');
         if(labor!==0) rows.push(mk('PDS', ACCT.PDS, -Math.abs(labor), vin?vin.slice(-8):'', vin||ro||''));
       } else {
         if(!ro) warnings.push('A '+(section==='NONPDS'?'Non-PDS':'ToyotaCare')+' row had no readable RO number — its control is blank. Row: "'+ln.slice(0,80)+'"');
