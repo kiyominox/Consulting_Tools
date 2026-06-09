@@ -24,22 +24,22 @@ Current tool types:
 
 ## Tools
 
-### GL-Reconciliation/_shared/GL-Posting-Validator
-Standalone HTML tool for validating GL postings.
+### GL-Reconciliation/Hickmans/GL-Posting-Validator
+Standalone HTML tool for validating GL postings. (Hickman's)
 
-### Parts/_shared/parts-rec
-Parts inventory reconciliation tool. Available as:
+### Parts/Hickmans/parts-rec
+Parts inventory reconciliation tool for Hickman's. Available as:
 - Standalone HTML file (no server needed)
 - Flask web app (Python backend)
 - Browser-only web version (GitHub Pages compatible)
 
-See `Parts/_shared/parts-rec/web/README.md` for usage options.
+See `Parts/Hickmans/parts-rec/web/README.md` for usage options.
 
-### Vehicle-Sales/_shared/vehicle-sales-report
+### Vehicle-Sales/MacDonalds-Hillside/vehicle-sales-report
 Standalone HTML report generator for vehicle sales. Joins CDK GL exports with Deskit exports.
 Pre-loaded with MacDonald and Hillside dealership charts of accounts.
 
-See `Vehicle-Sales/_shared/vehicle-sales-report/README.md` for details.
+See `Vehicle-Sales/MacDonalds-Hillside/vehicle-sales-report/README.md` for details.
 
 ## Adding New Tools
 
