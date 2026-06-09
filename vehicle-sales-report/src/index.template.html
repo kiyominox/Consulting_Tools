@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Vehicle Sales Report</title>
+<style>
+  /* ============================================================ DESIGN TOKENS */
+  :root{
+    /* CDK-flavored: black & white + light-blue accent (MacDonald/Hillside) */
+    --ink:#16191d;          /* near-black primary text */
+    --ink-2:#434a52;        /* secondary text */
+    --muted:#79808a;        /* tertiary / labels */
+    --paper:#ffffff;        /* card surface */
+    --bg:#eceff3;           /* app background, cool gray */
+    --line:#e3e7ec;         /* hairline */
+    --line-2:#d3d9e0;       /* stronger divider */
+
+    /* accent — light blue, tunable via Tweaks */
+    --accent:#1f74cf;
+    --accent-strong:#175ca8;
+    --accent-ink:#0f4d8f;
+    --accent-soft:#e8f1fb;
+    --accent-line:#c4ddf5;
+
+    --pos:#15784c;
+    --neg:#c0392b;
+    --warn:#9a6207;
+    --warn-soft:#fbf2dd;
+    --warn-line:#eed8a6;
+
+    --shadow:0 1px 2px rgba(22,25,29,.05),0 1px 1px rgba(22,25,29,.04);
+    --shadow-lg:0 12px 32px rgba(22,25,29,.16);
+    --r:10px; --r-sm:7px;
+
+    /* density (Tweakable) */
+    --cell-py:9px; --cell-px:11px; --tbl-fs:13px;
+    --font:"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif;
+  }
+  body[data-density="compact"]{--cell-py:5px; --cell-px:9px; --tbl-fs:12px;}
+
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
+       font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  .grow{flex:1}
+  .muted{color:var(--muted)}
+  .num-font{font-variant-numeric:tabular-nums}
+  select,input,button,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+
+  /* ============================================================ BUTTONS */
+  button{cursor:pointer;border-radius:var(--r-sm);border:1px solid var(--line-2);background:#fff;
+       padding:8px 13px;font-weight:600;color:var(--ink);transition:background .12s,border-color .12s,box-shadow .12s}
+  button:hover{background:#f4f6f9;border-color:var(--line-2)}
+  button:active{transform:translateY(.5px)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+  button.ghost{background:transparent;border-color:transparent;color:var(--accent-ink);padding:7px 9px}
+  button.ghost:hover{background:var(--accent-soft)}
+  button.tiny{padding:4px 9px;font-size:12px;font-weight:600}
+  button.danger{color:var(--neg);border-color:transparent;background:transparent}
+  button.danger:hover{background:#fbeceb}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ============================================================ TOP BAR */
+  header.app{position:sticky;top:0;z-index:40;background:var(--paper);
+       border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;
+       padding:11px 22px;box-shadow:0 1px 0 rgba(22,25,29,.02)}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .brand .mark{width:30px;height:30px;border-radius:7px;background:var(--accent);position:relative;flex:none;
+       box-shadow:inset 0 0 0 1px rgba(255,255,255,.18)}
+  .brand .mark::before,.brand .mark::after{content:"";position:absolute;background:#fff;border-radius:1px}
+  .brand .mark::before{left:8px;right:8px;top:9px;height:2.5px;opacity:.95}
+  .brand .mark::after{left:8px;right:14px;bottom:9px;height:2.5px;opacity:.7}
+  .brand h1{font-size:15.5px;margin:0;font-weight:700;letter-spacing:-.1px;white-space:nowrap}
+  .brand .sub{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap}
+  .dealer-switch{display:flex;align-items:center;gap:8px}
+  .dealer-switch .dl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600}
+  select.dealer{padding:7px 11px;border-radius:var(--r-sm);border:1px solid var(--line-2);
+       background:#fff;color:var(--ink);font-weight:700}
+  .topbar-actions{display:flex;align-items:center;gap:8px}
+
+  /* ============================================================ LAYOUT */
+  main{max-width:1640px;margin:0 auto;padding:20px 22px 60px}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .col{flex:1;min-width:280px}
+  .section-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+
+  /* ============================================================ DATA / UPLOAD STATE */
+  .data-panel{padding:24px}
+  .data-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px}
+  .data-head .stepnum{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent-line);
+       color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;
+       font-size:13px;font-weight:700;flex:none;background:var(--accent-soft)}
+  .data-head h2{font-size:17px;margin:0 0 2px;font-weight:700;letter-spacing:-.2px}
+  .data-head p{margin:0;font-size:13px;color:var(--muted);max-width:62ch}
+
+  .drop{border:1.5px dashed var(--line-2);border-radius:var(--r);padding:22px 18px;text-align:center;
+       transition:.15s;background:#fafbfd;height:100%}
+  .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  .drop.loaded{border-style:solid;border-color:var(--pos);background:#f1f8f4}
+  .drop .ico{width:34px;height:34px;border-radius:8px;background:#fff;border:1px solid var(--line-2);
+       display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;color:var(--accent-ink);font-size:17px}
+  .drop.loaded .ico{background:var(--pos);border-color:var(--pos);color:#fff}
+  .drop h3{margin:0 0 4px;font-size:14px;font-weight:700}
+  .drop p{margin:4px 0 12px}
+  .drop .fname{font-weight:700;color:var(--pos);font-size:13px;margin-top:8px;word-break:break-word}
+  .drop input[type=file]{display:none}
+
+  /* ============================================================ SOURCE STRIP (post-generate) */
+  .source-strip{display:flex;align-items:center;gap:0;flex-wrap:wrap;background:var(--paper);
+       border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);
+       padding:10px 14px;margin-bottom:16px}
+  .source-strip .ss-item{display:flex;align-items:center;gap:7px;padding:2px 14px;font-size:12.5px;
+       border-right:1px solid var(--line);white-space:nowrap}
+  .source-strip .ss-item:first-child{padding-left:2px}
+  .source-strip .ss-item:last-of-type{border-right:none}
+  .source-strip .ss-k{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700}
+  .source-strip .ss-v{font-weight:700;color:var(--ink)}
+  .source-strip .ss-store{font-weight:800;font-size:13.5px;letter-spacing:-.2px}
+  .source-strip .ss-dot{width:7px;height:7px;border-radius:50%;background:var(--pos)}
+  .source-strip .ss-warn{color:var(--warn);font-weight:700;display:flex;align-items:center;gap:6px}
+  .source-strip .ss-actions{margin-left:auto;display:flex;gap:8px;padding-left:14px}
+
+  /* ============================================================ KPI BAND (summary-cards / scard) */
+  .summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:16px}
+  .scard{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;
+       box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .scard .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;
+       display:flex;align-items:center;gap:5px}
+  .scard .val{font-size:23px;font-weight:750;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .scard .sub{font-size:11.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+  .scard.accent{background:var(--accent-soft);border-color:var(--accent-line)}
+  .scard.accent::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+  .scard.accent .val{color:var(--accent-ink)}
+  .scard.pos .val{color:var(--pos)}
+  .scard.neg .val{color:var(--neg)}
+
+  /* tiny info tooltip */
+  .hint{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;
+       border:1px solid var(--line-2);color:var(--muted);font-size:9.5px;font-weight:700;cursor:help;font-style:normal}
+  .hint:hover{border-color:var(--accent);color:var(--accent-ink)}
+
+  /* ============================================================ TABS */
+  .tabbar{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+  .tab{background:transparent;border:none;border-bottom:2px solid transparent;border-radius:0;
+       padding:10px 16px;font-size:14px;font-weight:650;color:var(--muted)}
+  .tab:hover{background:transparent;color:var(--ink)}
+  .tab.active{color:var(--accent-ink);border-bottom-color:var(--accent)}
+  .tab .cnt{font-size:11px;font-weight:700;color:var(--muted);margin-left:6px}
+  .tab.active .cnt{color:var(--accent)}
+  .tab-spacer{flex:1}
+  .pane{display:none}
+  .pane.active{display:block}
+
+  /* ============================================================ REPORT TABLE */
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .report-wrap{overflow:auto;border:1px solid var(--line);border-radius:var(--r);max-height:calc(100vh - 280px);
+       box-shadow:var(--shadow);background:#fff}
+  table.report{border-collapse:separate;border-spacing:0;width:100%;font-size:var(--tbl-fs);white-space:nowrap}
+  table.report th,table.report td{padding:var(--cell-py) var(--cell-px);text-align:left;
+       border-bottom:1px solid var(--line)}
+  /* group band (top header row) */
+  table.report thead tr.gband th{position:sticky;top:0;z-index:6;height:28px;
+       background:#f3f5f8;color:var(--muted);font-weight:800;font-size:10.5px;text-transform:uppercase;
+       letter-spacing:.7px;text-align:left;padding:0 var(--cell-px);border-bottom:1px solid var(--line-2);cursor:default}
+  table.report thead tr.gband th.g-front{background:var(--accent-soft);color:var(--accent-ink)}
+  table.report thead tr.gband th.g-fi{background:#eef4ee;color:#3a6b48}
+  table.report thead tr.gband th.g-comp{background:#f4f1f7;color:#6b4f86}
+  table.report thead tr.gband th.spacer{background:#f3f5f8}
+  /* column labels (second header row) */
+  table.report thead tr.cols th{position:sticky;top:28px;z-index:5;background:#fbfcfe;font-weight:700;
+       font-size:11.5px;color:var(--ink-2);border-bottom:2px solid var(--line-2);cursor:pointer;
+       user-select:none;white-space:nowrap}
+  table.report thead tr.cols th:hover{background:#eef2f7;color:var(--ink)}
+  table.report thead tr.cols th .arrow{color:var(--accent);font-size:9px;margin-left:4px}
+  table.report td.num,table.report th.num{text-align:right;font-variant-numeric:tabular-nums}
+  /* vertical group separators */
+  table.report .gstart{border-left:1px solid var(--line-2)}
+  table.report thead tr.gband th{border-left:1px solid var(--line-2)}
+  table.report thead tr.gband th:first-child{border-left:none}
+  /* emphasis (gross/total) columns */
+  table.report td.emph{font-weight:700;background:rgba(31,116,207,.045)}
+  table.report th.emph{background:#f1f6fc}
+  table.report tbody tr:hover td{background:#f5f9fe}
+  table.report tbody tr:hover td.emph{background:#e9f2fc}
+  table.report td.veh{white-space:normal;max-width:230px;line-height:1.3}
+  table.report td.veh .vyear{color:var(--muted);font-weight:600;margin-right:5px}
+  table.report .ptext{color:var(--ink);font-weight:600}
+  /* missing (not in Deskit) rows */
+  table.report tr.missing td{background:var(--warn-soft)}
+  table.report tr.missing td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+  table.report tr.missing:hover td{background:#f7ecd3}
+  table.report tr.missing:hover td.emph{background:#f3e7c8}
+  .neg{color:var(--neg)}
+  .pill{display:inline-block;font-size:10px;font-weight:800;padding:1px 7px;border-radius:999px;
+       background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line);
+       text-transform:uppercase;letter-spacing:.3px;vertical-align:middle}
+  table.report tfoot td{position:sticky;bottom:0;z-index:4;background:#eef3f9;font-weight:800;
+       border-top:2px solid var(--accent);border-bottom:none}
+  table.report tfoot td.emph{background:#e2eef9}
+  .zero{color:var(--muted)}
+
+  /* ============================================================ DASHBOARD */
+  .dash-scope{margin:0 0 14px;font-size:12.5px;color:var(--muted)}
+  .dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:16px}
+  .dash-table{border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:#fff;box-shadow:var(--shadow)}
+  .dash-table h3{margin:0;font-size:13px;font-weight:700;padding:12px 14px;background:#fff;
+       border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px}
+  .dash-table h3 .h3-sub{font-size:11px;font-weight:600;color:var(--muted);margin-left:auto}
+  .dash-table .twrap{overflow:auto;max-height:360px}
+
+  /* leaderboard rows (default dashboard style) */
+  .lb{display:flex;flex-direction:column}
+  .lb-row{display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:center;
+       padding:9px 14px;border-bottom:1px solid var(--line);position:relative}
+  .lb-row:last-child{border-bottom:none}
+  .lb-row:hover{background:#f7fafd}
+  .lb-rank{font-size:11px;font-weight:700;color:var(--muted);text-align:right}
+  .lb-main{min-width:0}
+  .lb-name{font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .lb-meta{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:2px}
+  .lb-bar{height:5px;border-radius:3px;background:var(--accent);margin-top:5px;min-width:2px;opacity:.85}
+  .lb-val{text-align:right;white-space:nowrap}
+  .lb-total{font-size:14px;font-weight:750;font-variant-numeric:tabular-nums;letter-spacing:-.2px}
+  .lb-pvr{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px}
+  .dash-table .tfoot{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+       padding:10px 14px;background:#f7f9fc;border-top:1px solid var(--line-2);font-size:12px}
+  .dash-table .tfoot b{font-variant-numeric:tabular-nums}
+
+  /* dashboard table variation (Tweak) */
+  table.grp{border-collapse:collapse;width:100%;font-size:12px}
+  table.grp th,table.grp td{padding:7px 11px;border-bottom:1px solid var(--line);text-align:right;
+       white-space:nowrap;font-variant-numeric:tabular-nums}
+  table.grp th:first-child,table.grp td:first-child{text-align:left;position:sticky;left:0;background:#fff;font-variant-numeric:normal}
+  table.grp thead th{position:sticky;top:0;background:#fbfcfe;font-weight:700;cursor:default;z-index:1;color:var(--ink-2)}
+  table.grp tbody tr:hover td{background:#f7fafd}
+  table.grp tfoot td{font-weight:800;background:#eef3f9;position:sticky;bottom:0}
+
+  .legend{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6}
+  .legend b{color:var(--ink-2)}
+  details.fibasis{margin-top:14px;border:1px solid var(--line);border-radius:var(--r);padding:0 14px;background:#fff}
+  details.fibasis summary{cursor:pointer;font-weight:700;font-size:13px;padding:12px 0}
+  details.fibasis[open] summary{border-bottom:1px solid var(--line)}
+  table.basis{border-collapse:collapse;font-size:12.5px;margin:10px 0 14px;width:100%}
+  table.basis th,table.basis td{padding:7px 14px 7px 0;text-align:left;border-bottom:1px solid var(--line)}
+  table.basis thead th{color:var(--ink-2);font-weight:700}
+  table.basis tfoot th{border-bottom:none;border-top:2px solid var(--accent)}
+  table.basis td.num,table.basis th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .fibasis-bar{display:flex;align-items:center;gap:10px;margin:6px 0 2px;flex-wrap:wrap}
+  .fibasis-bar .grow{flex:1}
+  input.firate{width:60px;padding:4px 6px;border:1px solid var(--line-2);border-radius:var(--r-sm);
+       text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
+  input.firate:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+  .rate-cell{display:inline-flex;align-items:center;gap:3px;justify-content:flex-end}
+  .auto-hint{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
+  table.basis tr.ov td{background:var(--warn-soft)}
+  table.basis tr.ov .auto-hint{color:var(--warn)}
+  button.attn{box-shadow:0 0 0 3px var(--warn-line)}
+
+  /* ============================================================ SETTINGS DRAWER */
+  .overlay{position:fixed;inset:0;background:rgba(22,25,29,.42);z-index:60;opacity:0;transition:opacity .2s}
+  .overlay.show{opacity:1}
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(720px,94vw);background:var(--paper);z-index:70;
+       box-shadow:var(--shadow-lg);transform:translateX(100%);transition:transform .24s cubic-bezier(.4,0,.2,1);
+       display:flex;flex-direction:column}
+  .drawer.show{transform:translateX(0)}
+  .drawer-head{display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid var(--line)}
+  .drawer-head h2{font-size:16px;margin:0;font-weight:700}
+  .drawer-head .x{margin-left:auto}
+  .drawer-body{padding:20px 22px;overflow:auto;flex:1}
+  .drawer-intro{font-size:13px;color:var(--ink-2);margin:0 0 16px;line-height:1.6}
+
+  .cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:14px}
+  .cat-tabs button{font-size:12.5px;border-radius:999px;padding:6px 13px}
+  .cat-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .cat-panel{display:none}
+  .cat-panel.active{display:block}
+  .cat-meta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:12px;
+       background:#f6f8fb;border:1px solid var(--line);padding:11px 13px;border-radius:var(--r-sm)}
+  .cat-meta .desc{font-size:12.5px;color:var(--ink-2);flex:1;min-width:220px;line-height:1.5}
+  .sign-pick{display:flex;align-items:center;gap:6px;font-size:12.5px}
+  .tier-box{background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--r-sm);padding:13px;margin-bottom:12px}
+  .tier-box h4{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--accent-ink)}
+  .tier-grid{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px}
+  .tier-grid input{width:84px;padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r-sm);font-variant-numeric:tabular-nums}
+  .tier-grid .seg{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line-2);border-radius:var(--r-sm);padding:6px 9px}
+  .acct-scroll{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:var(--r-sm);padding:9px;background:#fcfdfe}
+  .acct-list{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+  .acct-row{display:flex;gap:8px;align-items:center}
+  .acct-row input{padding:7px 10px;border:1px solid var(--line-2);border-radius:var(--r-sm)}
+  .acct-row input.num{width:130px;font-variant-numeric:tabular-nums;font-weight:600}
+  .acct-row input.dsc{flex:1}
+  .acct-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+  details.bulk{margin-top:10px}
+  details.bulk summary{cursor:pointer;color:var(--accent-ink);font-size:13px;font-weight:600}
+  details.bulk textarea{width:100%;min-height:90px;margin-top:8px;padding:10px;border:1px solid var(--line-2);border-radius:var(--r-sm);font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+
+  /* ============================================================ STATUS / BANNERS */
+  .status{font-size:13px;padding:10px 13px;border-radius:var(--r-sm);display:none;font-weight:600}
+  .status.show{display:block}
+  .status.ok{background:#f1f8f4;color:var(--pos);border:1px solid #c5e4d2}
+  .status.err{background:#fbeceb;color:var(--neg);border:1px solid #f1cdc8}
+  .status.info{background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent-line)}
+  .banner{font-size:12.5px;padding:10px 13px;border-radius:var(--r-sm);margin-top:12px;line-height:1.5}
+  .banner.j{background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent-line)}
+  .banner.f{background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn-line)}
+
+  /* ============================================================ MENUS / FILTERS */
+  .hide{display:none !important}
+  .filter-input{padding:8px 11px;border:1px solid var(--line-2);border-radius:var(--r-sm);min-width:240px;background:#fff}
+  .filter-input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  select.filter-input{min-width:auto}
+  .export-wrap{position:relative;display:inline-block}
+  .export-menu{position:absolute;right:0;top:calc(100% + 6px);z-index:30;background:#fff;
+       border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--shadow-lg);
+       padding:6px;min-width:240px}
+  .export-menu .menu-section{font-size:10.5px;font-weight:800;color:var(--muted);text-transform:uppercase;
+       letter-spacing:.5px;padding:8px 10px 4px}
+  .export-menu .menu-item{display:block;width:100%;text-align:left;border:none;background:transparent;
+       padding:9px 10px;border-radius:var(--r-sm);font-weight:600}
+  .export-menu .menu-item:hover{background:var(--accent-soft)}
+  .export-menu.scroll{max-height:340px;overflow:auto}
+  #dealTypeMenu,#vehTypeMenu{left:0;right:auto}
+  .export-menu .menu-check{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);font-size:13px;cursor:pointer}
+  .export-menu .menu-check:hover{background:var(--accent-soft)}
+  .export-menu .menu-check input{margin:0;accent-color:var(--accent)}
+  .export-menu .dt-controls{display:flex;gap:6px;padding:4px 6px 8px;border-bottom:1px solid var(--line);margin-bottom:4px;position:sticky;top:0;background:#fff}
+  .checkline{font-size:12.5px;display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;color:var(--ink-2);font-weight:600}
+  .checkline input{accent-color:var(--accent)}
+
+  /* ============================================================ PRINT */
+  @media print{
+    body{background:#fff}
+    header.app{position:static;border-bottom:2px solid var(--ink)}
+    .topbar-actions,.tabbar,.toolbar,.source-strip .ss-actions,#tweaksRoot,.no-print{display:none !important}
+    .source-strip{box-shadow:none;border-color:var(--ink)}
+    .pane{display:block !important}
+    .report-wrap{overflow:visible;border:none;max-height:none;box-shadow:none}
+    table.report thead tr.gband th,table.report thead tr.cols th,table.report tfoot td{position:static}
+    .scard,.panel,.dash-table{box-shadow:none;break-inside:avoid}
+    .dash-grid{display:block}
+    .dash-table{margin-bottom:14px}
+  }
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>Vehicle Sales Report</h1>
+      <div class="sub">CDK Journal &times; Deskit reconciliation</div>
+    </div>
+  </div>
+  <div class="grow"></div>
+  <div class="dealer-switch">
+    <span class="dl">Store</span>
+    <select id="dealerSel" class="dealer" title="Switch dealership. Each store keeps its own GL account setup.">
+      <option value="MacDonald">MacDonald</option>
+      <option value="Hillside">Hillside</option>
+    </select>
+  </div>
+  <div class="topbar-actions">
+    <button class="ghost" id="openSettingsBtn" title="Map GL account numbers to report categories for this store">&#9881;&#65039; Account setup</button>
+  </div>
+</header>
+
+<main>
+  <!-- DATA / UPLOAD STATE (shown until a report is generated) -->
+  <section class="panel data-panel" id="dataPanel">
+    <div class="data-head">
+      <span class="stepnum">1</span>
+      <div>
+        <h2>Load this month&rsquo;s exports</h2>
+        <p>Drop in your CDK GL/Journal export and the matching Deskit export. Everything runs in your browser &mdash; no data leaves this computer.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <div class="drop" id="glDrop">
+          <div class="ico">&#128202;</div>
+          <h3>CDK GL / Journal export</h3>
+          <p class="muted">The &ldquo;bible&rdquo; &mdash; determines which deals appear.</p>
+          <button class="primary" type="button" onclick="document.getElementById('glFile').click()">Choose GL file</button>
+          <input type="file" id="glFile" accept=".xlsx,.xls,.csv" />
+          <div class="fname" id="glName"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="drop" id="dkDrop">
+          <div class="ico">&#128203;</div>
+          <h3>Deskit export</h3>
+          <p class="muted">Cross-reference &mdash; supplies dates, customer, vehicle &amp; salespeople.</p>
+          <button class="primary" type="button" onclick="document.getElementById('dkFile').click()">Choose Deskit file</button>
+          <input type="file" id="dkFile" accept=".xlsx,.xls,.csv" />
+          <div class="fname" id="dkName"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="glFormatNote"></div>
+
+    <div id="glMapWrap" class="hide" style="margin-top:14px;background:#f6f8fb;border:1px solid var(--line);border-radius:var(--r);padding:16px">
+      <b style="font-size:13px">GL column mapping</b>
+      <span class="muted" style="font-size:12px"> &mdash; auto-detected. Adjust only if needed.</span>
+      <div class="row" style="margin-top:12px;gap:14px">
+        <div style="min-width:170px"><label class="section-eyebrow">Account #</label><br><select id="mapAccount" class="filter-input"></select></div>
+        <div style="min-width:170px"><label class="section-eyebrow">Reference / Stock #</label><br><select id="mapRef" class="filter-input"></select></div>
+        <div style="min-width:170px"><label class="section-eyebrow">Posting Date</label><br><select id="mapDate" class="filter-input"></select></div>
+        <div style="min-width:170px"><label class="section-eyebrow">Amount</label><br><select id="mapAmount" class="filter-input"></select></div>
+        <div style="min-width:150px"><label class="section-eyebrow">Debit (optional)</label><br><select id="mapDebit" class="filter-input"></select></div>
+        <div style="min-width:150px"><label class="section-eyebrow">Credit (optional)</label><br><select id="mapCredit" class="filter-input"></select></div>
+      </div>
+      <p class="muted" style="font-size:12px;margin:12px 0 0">
+        Use a single <b>Amount</b> column, OR a <b>Debit</b> + <b>Credit</b> pair (Amount = Debit &minus; Credit).
+      </p>
+    </div>
+
+    <div class="toolbar" style="margin-top:18px">
+      <button class="primary" id="genBtn" disabled>Generate report</button>
+      <div id="loadStatus" class="status"></div>
+      <div class="grow"></div>
+      <button class="ghost" id="demoBtn" title="Load realistic sample data to preview the report and dashboard">Preview with sample data</button>
+    </div>
+  </section>
+
+  <!-- COMPACT SOURCE STRIP (shown after a report is generated) -->
+  <div class="source-strip hide" id="sourceStrip">
+    <div class="ss-item"><span class="ss-dot"></span><span class="ss-store" id="ssStore"></span></div>
+    <div class="ss-item"><span class="ss-k">Deals</span><span class="ss-v" id="ssDeals"></span></div>
+    <div class="ss-item"><span class="ss-k">GL source</span><span class="ss-v" id="ssGL"></span></div>
+    <div class="ss-item"><span class="ss-k">Deskit</span><span class="ss-v" id="ssDeskit"></span></div>
+    <div class="ss-item hide" id="ssWarnItem"><span class="ss-warn" id="ssWarn"></span></div>
+    <div class="ss-actions">
+      <button class="ghost" id="changeDataBtn">&#8592; Change data</button>
+      <button id="regenBtn">Re-generate</button>
+    </div>
+  </div>
+
+  <!-- RESULTS: KPI band + tabs -->
+  <div class="hide" id="resultsArea">
+    <div class="summary-cards" id="summaryCards"></div>
+    <div class="tabbar">
+      <button class="tab active" data-tab="report">Deal report <span class="cnt" id="reportTabCount"></span></button>
+      <button class="tab" data-tab="dashboard">Dashboard</button>
+      <div class="tab-spacer"></div>
+      <span class="muted" id="reportDealerName" style="display:none"></span>
+    </div>
+
+    <section class="pane active" id="reportPane">
+      <div class="toolbar">
+        <input type="text" class="filter-input" id="reportFilter" placeholder="Search stock, customer, salesperson&hellip;" />
+        <div class="export-wrap">
+          <button id="vehTypeBtn">Veh Type &#9662;</button>
+          <div class="export-menu scroll hide" id="vehTypeMenu"></div>
+        </div>
+        <div class="export-wrap">
+          <button id="dealTypeBtn">Deal Type &#9662;</button>
+          <div class="export-menu scroll hide" id="dealTypeMenu"></div>
+        </div>
+        <label class="checkline" title="Hide deals that are in the GL but have no matching Deskit record">
+          <input type="checkbox" id="onlyMatched" checked /> Only deals found in Deskit
+        </label>
+        <div class="grow"></div>
+        <div class="export-wrap">
+          <button id="exportBtn">Export &#9662;</button>
+          <div class="export-menu hide" id="exportMenu">
+            <div class="menu-section">All deals</div>
+            <button class="menu-item" data-scope="all" data-fmt="xlsx">Excel (.xlsx)</button>
+            <button class="menu-item" data-scope="all" data-fmt="csv">CSV (.csv)</button>
+            <div class="menu-section">Only deals shown (current filters)</div>
+            <button class="menu-item" data-scope="shown" data-fmt="xlsx">Excel (.xlsx)</button>
+            <button class="menu-item" data-scope="shown" data-fmt="csv">CSV (.csv)</button>
+          </div>
+        </div>
+        <button id="printBtn">Print / PDF</button>
+      </div>
+      <div class="report-wrap">
+        <table class="report" id="reportTable">
+          <thead></thead><tbody></tbody><tfoot></tfoot>
+        </table>
+      </div>
+      <div class="legend" id="reportLegend"></div>
+      <div id="fiBasis"></div>
+    </section>
+
+    <section class="pane" id="dashboardPane">
+      <p class="dash-scope" id="dashScopeNote"></p>
+      <div class="summary-cards" id="dashCards"></div>
+      <div class="dash-grid" id="dashTables"></div>
+      <span id="dashDealerName" style="display:none"></span>
+    </section>
+  </div>
+</main>
+
+<!-- SETTINGS DRAWER -->
+<div class="overlay hide" id="settingsOverlay"></div>
+<aside class="drawer hide" id="settingsDrawer" aria-label="GL account setup">
+  <div class="drawer-head">
+    <h2>GL Account Setup &mdash; <span id="settingsDealerName">MacDonald</span></h2>
+    <button class="ghost x" id="closeSettingsBtn">&#10005; Close</button>
+  </div>
+  <div class="drawer-body">
+    <p class="drawer-intro">
+      Define which GL account numbers belong to each category, <b>per store</b>. The report uses these to
+      calculate Price, Cost, F&amp;I Gross and commissions. Settings save in this browser automatically &mdash;
+      use Export/Import to back up or copy to another computer.
+    </p>
+    <div class="cat-tabs" id="catTabs"></div>
+    <div id="catPanels"></div>
+    <div class="acct-actions" style="margin-top:18px;border-top:1px solid var(--line);padding-top:16px">
+      <button class="primary" id="saveCfgBtn">Save settings</button>
+      <span id="cfgSaveStatus" class="muted"></span>
+      <div class="grow"></div>
+      <button id="exportCfgBtn">Export (backup)</button>
+      <button id="importCfgBtn">Import</button>
+      <input type="file" id="importCfgFile" accept="application/json" class="hide" />
+      <button class="danger" id="resetCfgBtn">Reset to defaults</button>
+    </div>
+  </div>
+</aside>
+
+<!-- SheetJS (embedded for offline use) -->
+<script>/*__SHEETJS_LIB__*/</script>
+<!-- ExcelJS (embedded — styled .xlsx export) -->
+<script>/*__EXCELJS_LIB__*/</script>
+<!-- MacDonald default chart-of-accounts -->
+<script>/*__MAC_DEFAULTS__*/</script>
+<!-- Application -->
+<script>/*__APP_JS__*/</script>
+</body>
+</html>
