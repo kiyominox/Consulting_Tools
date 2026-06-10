@@ -6,7 +6,7 @@ posting strings:
 | File | What it reads |
 |------|---------------|
 | `Invoice_to_CDK_PowerPosting.html` | Honda / Hyundai credit-memo invoices |
-| `Warranty_Claims_to_CDK_PowerPosting.html` | Toyota Settled Claims (warranty) reports |
+| `Warranty_Claims_to_CDK_PowerPosting.html` | Toyota Settled Claims / GM Transaction Summary (warranty) reports |
 
 Both open in any modern web browser (Chrome, Edge, Firefox, Safari) with no install,
 and both run fully offline — the PDF never leaves the computer.
@@ -50,11 +50,13 @@ Fully offline — the PDF never leaves the computer. The brand is detected autom
 | Dealer Holdback Report    | 521160  |
 | Dealer Flooring Allowance | 521171  |
 
-## Toyota warranty claims tool
+## Warranty claims tool (Toyota & GM)
 
-Reads the embedded text of the Toyota Settled Claims Report — instant, offline, and exact.
+Reads the embedded text of the report — instant, offline, and exact. The brand is
+detected automatically (with a manual override dropdown). Everything posts to
+Company **21** as credits, balanced by one debit to 532099.
 
-Everything posts to Company **21** as credits, balanced by one debit:
+**Toyota** (Settled Claims Report):
 
 | Section of the report          | Account | Control          |
 |--------------------------------|---------|------------------|
@@ -64,7 +66,17 @@ Everything posts to Company **21** as credits, balanced by one debit:
 | ToyotaCare/Boost (Amt Paid)    | 541140  | RO number        |
 | Balancing debit                | 532099  | 321              |
 
-After reading, the tool adds up each section and compares it against the totals
+**GM** (Transaction Summary Report) — one posting per job card from the Processed
+Transaction Summary, using the Job Card Amount Paid column (unpaid job cards are
+skipped):
+
+| Job card number                | Account | Control          |
+|--------------------------------|---------|------------------|
+| Starts with a letter           | 531180  | last 8 of VIN    |
+| All digits                     | 531140  | job card (RO) #  |
+| Balancing debit                | 532099  | 121              |
+
+After reading, the tool adds up what it read and compares it against the totals
 printed on the report itself — green check lines mean everything was read correctly;
 a yellow line means a misread to find and fix in the table. The balancing 532099 line
 recalculates itself whenever an amount is edited, so the posting always nets to zero.

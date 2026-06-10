@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Toyota Warranty Claims → CDK PowerPosting</title>
+<title>Warranty Claims → CDK PowerPosting</title>
 <style>
   :root{
     --bg:#0f172a; --panel:#ffffff; --ink:#1e293b; --muted:#64748b;
@@ -44,7 +44,10 @@
         border-radius:8px;padding:8px 12px}
   .frow .nm{font-weight:600;flex:1;min-width:180px;word-break:break-all}
   .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:700;color:#fff;
-         letter-spacing:.3px;text-transform:uppercase;background:var(--toyota)}
+         letter-spacing:.3px;text-transform:uppercase;background:#64748b}
+  .badge.toyota{background:var(--toyota)}
+  .badge.gm{background:#1a5dad}
+  .frow select{font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:#fff}
   .frow .cnt{color:var(--muted);font-size:12.5px}
   .frow .x{cursor:pointer;color:var(--muted);font-weight:700;border:none;background:none;font-size:16px;line-height:1}
   .frow .x:hover{color:#dc2626}
@@ -87,6 +90,8 @@
   .pill.toyotacare{background:#fef3c7;color:#92400e}
   .pill.sublet{background:#ede9fe;color:#5b21b6}
   .pill.balance{background:#fee2e2;color:#991b1b}
+  .pill.gmpdi{background:#dbeafe;color:#1e40af}
+  .pill.gmwty{background:#dcfce7;color:#166534}
   td input{width:100%;border:1px solid transparent;background:transparent;padding:6px 10px;font:inherit;
            color:var(--ink);outline:none;font-variant-numeric:tabular-nums}
   td input:hover{background:#f8fafc}
@@ -144,8 +149,8 @@
 <body>
 <header>
   <div class="htitle">
-    <h1>Toyota Warranty Claims → CDK PowerPosting</h1>
-    <p>Drop a Toyota Settled Claims Report PDF. The tool reads it instantly, builds the posting, and copies it straight into AGJE Expert Mode.</p>
+    <h1>Warranty Claims → CDK PowerPosting</h1>
+    <p>Drop a Toyota Settled Claims Report or a GM Transaction Summary Report PDF. The tool reads it instantly, builds the posting, and copies it straight into AGJE Expert Mode.</p>
   </div>
   <button class="navbtn" id="navBtn">📖 How-To Guide</button>
 </header>
@@ -161,7 +166,7 @@
 
       <h3>Step 1 — Get the claims report</h3>
       <ol class="steps">
-        <li>Go to the Toyota <b class="do">Settled Claims Report online</b>, the same place you always get it.</li>
+        <li>Go to the claims report <b class="do">online</b>, the same place you always get it — the Toyota <b class="do">Settled Claims Report</b> or the GM <b class="do">Transaction Summary Report</b>.</li>
         <li><b class="do">Download</b> the report PDF — just like you normally would. Don't just look at it on the screen; it has to be downloaded onto your computer.</li>
       </ol>
 
@@ -175,9 +180,12 @@
 
       <h3>Step 3 — Check the table</h3>
       <ol class="steps">
-        <li>The tool posts everything to <b class="do">company 21</b>: PDS labor to 541180 (control = last 8 of the VIN), the PDS sublet sub-total to 532450, Non-PDS and ToyotaCare claims to 541140 (control = RO number) — all as credits — and one balancing debit to 532099 with control 321.</li>
-        <li>Look at the <b class="do">green check lines</b>. The tool adds up each section and compares it to the totals printed on the report itself. Green means everything was read correctly.</li>
-        <li>If a line is <b class="do">yellow</b>, the tool misread something on that section — compare the two amounts shown, find the row that's off, and fix it right in the table. The balancing line updates by itself as you fix things.</li>
+        <li>The tool knows whether it's a <b class="do">Toyota</b> or <b class="do">GM</b> report and posts everything to <b class="do">company 21</b> as credits, balanced by one debit to 532099.<br>
+          <b>Toyota:</b> PDS labor to 541180 (control = last 8 of the VIN), the PDS sublet sub-total to 532450, Non-PDS and ToyotaCare claims to 541140 (control = RO number); the balancing debit uses control 321.<br>
+          <b>GM:</b> each job card's Amount Paid — to 531180 with the last 8 of the VIN as control when the job card number starts with a letter, otherwise to 531140 with the job card (RO) number as control; the balancing debit uses control 121.</li>
+        <li>Look at the <b class="do">green check lines</b>. The tool adds up what it read and compares it to the totals printed on the report itself. Green means everything was read correctly.</li>
+        <li>If a line is <b class="do">yellow</b>, the tool misread something — compare the two amounts shown, find the row that's off, and fix it right in the table. The balancing line updates by itself as you fix things.</li>
+        <li>In the rare case the tool guesses the brand wrong, use the little dropdown next to the file name to set it yourself.</li>
       </ol>
 
       <h3>Step 4 — Fix anything you want (optional)</h3>
@@ -204,8 +212,8 @@
 
   <div class="card">
     <div id="drop">
-      <div style="font-size:15px"><strong>Click to choose</strong> or drag &amp; drop the Toyota Settled Claims Report PDF here</div>
-      <div class="sub">The report is read instantly. Dropping a new report replaces the one already loaded.</div>
+      <div style="font-size:15px"><strong>Click to choose</strong> or drag &amp; drop the warranty claims report PDF here</div>
+      <div class="sub">Toyota Settled Claims and GM Transaction Summary reports are detected automatically. Dropping a new report replaces the one already loaded.</div>
     </div>
     <input type="file" id="file" accept="application/pdf,.pdf">
     <div class="files" id="files"></div>
@@ -226,7 +234,7 @@
       <div class="bal" id="bal"></div>
     </div>
     <div class="tablewrap" id="tablewrap">
-      <div class="empty" id="emptyMsg">No report loaded yet. Add the Toyota claims PDF above to get started.</div>
+      <div class="empty" id="emptyMsg">No report loaded yet. Add the warranty claims PDF above to get started.</div>
       <table id="tbl" class="hidden">
         <thead><tr id="head"></tr></thead>
         <tbody id="body"></tbody>
@@ -307,13 +315,21 @@
   //   Non-PDS Amt Paid     -> 541140, control = RO number, credit
   //   ToyotaCare/Boost     -> 541140, control = RO number, credit
   //   Balancing line       -> 532099, control 321, debit (auto-recalculated)
+  // GM warranty -> company 21, from the "Processed Transaction Summary"
+  //   Job Card Amount Paid, sign flipped to credit:
+  //     job card number with a leading letter  -> 531180, control = last 8 of VIN
+  //     job card number all digits             -> 531140, control = job card (RO) number
+  //   Balancing line       -> 532099, control 121, debit (auto-recalculated)
   var CO = 21;
-  var ACCT = { PDS:'541180', SUBLET:'532450', NONPDS:'541140', TOYOTACARE:'541140', BALANCE:'532099' };
+  var ACCT = { PDS:'541180', SUBLET:'532450', NONPDS:'541140', TOYOTACARE:'541140',
+               GMPDI:'531180', GMWTY:'531140', BALANCE:'532099' };
+  var BAL_CTRL = { toyota:'321', gm:'121' };
 
   var VIN_RE   = /\b[A-HJ-NPR-Z0-9]{17}\b/;
-  var VIN_LOOSE= /\b[A-Z0-9]{16,19}\b/i;     // OCR sometimes garbles a VIN (extra/wrong character)
+  var VIN_LOOSE= /\b[A-Z0-9]{16,19}\b/i;     // tolerate a garbled VIN (extra/wrong character)
   var MONEY_RE = /^-?[\d,]+\.\d{2}$/;
   var RO_RE    = /^\d{6}$/;
+  var JOB_RE   = /^[A-Z]?\d{4,}$/i;          // GM job card number, with or without leading letter
 
   var COLS = [
     {key:'co',          label:'Co'},
@@ -368,8 +384,16 @@
     return lines;
   }
 
-  // ---------- parser (logic verified against the report's printed sub-totals) ----------
-  function parseWarranty(lines){
+  // ---------- brand detection ----------
+  function detectBrand(lines){
+    var f=lines.join('\n').toUpperCase();
+    if(f.indexOf('SETTLED CLAIMS REPORT')>=0 || f.indexOf('TOYOTA')>=0) return 'toyota';
+    if(f.indexOf('GLOBAL WARRANTY MANAGEMENT')>=0 || f.indexOf('GENERAL MOTORS')>=0) return 'gm';
+    return 'unknown';
+  }
+
+  // ---------- Toyota parser (logic verified against the report's printed sub-totals) ----------
+  function parseToyota(lines){
     var rows=[], warnings=[], section=null;
     var sub={PDS:{},NONPDS:{},TOYOTACARE:{},TOTALS:{}};
     function cap(re,U){ var m=U.match(re); return m?num(m[1]):null; }
@@ -423,7 +447,7 @@
     // balancing debit
     var credits=0;
     rows.forEach(function(r){ credits+=parseFloat(r.amount)||0; });
-    rows.push(mk('BALANCE', ACCT.BALANCE, Math.round(-credits*100)/100, '321', ''));
+    rows.push(mk('BALANCE', ACCT.BALANCE, Math.round(-credits*100)/100, BAL_CTRL.toyota, ''));
 
     // verification vs the totals printed on the report
     var checks=[];
@@ -442,6 +466,64 @@
 
     return {rows:rows, warnings:warnings, checks:checks};
   }
+
+  // ---------- GM parser (Global Warranty Management "Transaction Summary Report") ----------
+  // One posting per job card in the "Processed Transaction Summary" section,
+  // using the "Job Card Amount Paid" column (4th money figure after the VIN).
+  function parseGM(lines){
+    var rows=[], warnings=[], sec=null;
+    var paidTotal=null, creditTotal=null;
+    for(var i=0;i<lines.length;i++){
+      var ln=lines[i], U=ln.toUpperCase();
+      if(U.indexOf('PROCESSED TRANSACTION SUMMARY')>=0){ sec='SUMMARY'; continue; }
+      if(U.indexOf('ACCEPTED TRANSACTION DETAIL')>=0 || U.indexOf('PENDING TRANSACTION DETAIL')>=0) sec=null;
+      if(U.indexOf('TRANSACTION ANALYSIS')>=0) sec='ANALYSIS';
+      if(sec==='ANALYSIS'){
+        var m;
+        if((m=U.match(/TRANSACTIONS PAID\s+([\d,]+\.\d{2})/)) && paidTotal===null) paidTotal=num(m[1]);
+        if((m=U.match(/TOTAL CREDIT\s+([\d,]+\.\d{2})/)) && creditTotal===null) creditTotal=num(m[1]);
+        continue;
+      }
+      if(sec!=='SUMMARY') continue;
+      var toks=ln.split(/\s+/);
+      if(toks.length<7 || !JOB_RE.test(toks[0])) continue;
+      var vm=ln.match(VIN_RE);
+      if(!vm) continue;
+      var vidx=toks.indexOf(vm[0]);
+      if(vidx<0) continue;
+      var money=[];
+      for(var k=vidx+1;k<toks.length;k++){ if(MONEY_RE.test(toks[k])) money.push(toks[k]); }
+      if(money.length<4) continue;
+      var amt=num(money[3]);                          // Job Card Amount Paid
+      if(amt===null || amt===0) continue;             // skip unpaid / pending job cards
+      var job=toks[0], vin=vm[0];
+      if(/^[A-Za-z]/.test(job))
+        rows.push(mk('GMPDI', ACCT.GMPDI, -Math.abs(amt), vin.slice(-8), vin));
+      else
+        rows.push(mk('GMWTY', ACCT.GMWTY, -Math.abs(amt), job, vin));
+    }
+
+    // balancing debit
+    var credits=0;
+    rows.forEach(function(r){ credits+=parseFloat(r.amount)||0; });
+    rows.push(mk('BALANCE', ACCT.BALANCE, Math.round(-credits*100)/100, BAL_CTRL.gm, ''));
+
+    // verification vs the totals printed on the report
+    var checks=[];
+    var posted=Math.round(-credits*100)/100;
+    if(paidTotal!==null) checks.push(chk('Transactions Paid total', posted, paidTotal));
+    if(creditTotal!==null) checks.push(chk('Total Credit', posted, creditTotal));
+    if(rows.length===1) warnings.push('No paid job cards could be read from this PDF. Is this a GM Transaction Summary Report?');
+    return {rows:rows, warnings:warnings, checks:checks};
+  }
+
+  // ---------- dispatch ----------
+  function parseByBrand(lines, brand){
+    if(brand==='toyota') return parseToyota(lines);
+    if(brand==='gm') return parseGM(lines);
+    return {rows:[], warnings:['Could not tell whether this is a Toyota or GM report. Pick the brand with the dropdown next to the file name.'], checks:[]};
+  }
+
   function mk(source, account, amount, control, ref){
     return {source:source, ref:ref, co:String(CO), account:account, amount:String(amount),
             control:control, control2:'', description:'', count:''};
@@ -463,10 +545,8 @@
     renderAll();
     try{
       var lines=await readTextLines(file);
-      var res=parseWarranty(lines);
-      model=res.rows; allWarnings=res.warnings; parsedChecks=res.checks;
-      loadedFile={name:file.name};
-      renderAll();
+      loadedFile={name:file.name, lines:lines, brandOverride:'auto'};
+      reparse();
       if(hadPrevious) toast('New report loaded — the previous one was cleared');
       else toast('Report read — '+model.length+' posting line(s) built');
     }catch(err){
@@ -474,6 +554,15 @@
       toast(err.message||'Could not read the PDF',true);
     }
     busy=false;
+  }
+
+  function reparse(){
+    if(!loadedFile) return;
+    var brand = loadedFile.brandOverride!=='auto' ? loadedFile.brandOverride : detectBrand(loadedFile.lines);
+    loadedFile.detectedBrand=brand;
+    var res=parseByBrand(loadedFile.lines, brand);
+    model=res.rows; allWarnings=res.warnings; parsedChecks=res.checks;
+    renderAll();
   }
 
   // ---------- balance recompute ----------
@@ -501,11 +590,17 @@
   function renderFiles(){
     var c=document.getElementById('files'); c.innerHTML='';
     if(!loadedFile) return;
+    var brand=loadedFile.detectedBrand||'unknown';
     var div=document.createElement('div'); div.className='frow';
     div.innerHTML='<span class="nm">'+escapeHtml(loadedFile.name)+'</span>'+
-      '<span class="badge">toyota warranty</span>'+
+      '<span class="badge '+brand+'">'+(brand==='gm'?'GM':brand)+' warranty</span>'+
+      '<label class="cnt">Brand: <select id="brandSel">'+
+        opt('auto','Auto')+opt('toyota','Toyota')+opt('gm','GM')+
+      '</select></label>'+
       '<span class="cnt">'+model.length+' postings</span>'+
       '<button class="x" title="Remove">×</button>';
+    function opt(v,label){ return '<option value="'+v+'"'+((loadedFile.brandOverride||'auto')===v?' selected':'')+'>'+label+'</option>'; }
+    div.querySelector('#brandSel').addEventListener('change',function(){ loadedFile.brandOverride=this.value; reparse(); });
     div.querySelector('.x').addEventListener('click',function(){ loadedFile=null; model=[]; parsedChecks=[]; allWarnings=[]; renderAll(); });
     c.appendChild(div);
   }
@@ -517,7 +612,7 @@
     var bySrc={};
     model.forEach(function(r){ var a=parseFloat(r.amount)||0; bySrc[r.source]=(bySrc[r.source]||0)+a; });
     var html=stat('Postings', model.length);
-    ['PDS','NONPDS','TOYOTACARE','SUBLET','BALANCE'].forEach(function(s){
+    ['PDS','NONPDS','TOYOTACARE','SUBLET','GMPDI','GMWTY','BALANCE'].forEach(function(s){
       if(bySrc[s]!=null) html+=stat(srcLabel(s), fmtMoney(bySrc[s]));
     });
     document.getElementById('summary').innerHTML=html;
@@ -535,7 +630,8 @@
     if(allWarnings.length){ wb.classList.remove('hidden'); wb.textContent='⚠ '+allWarnings.join('\n⚠ '); }
     else wb.classList.add('hidden');
   }
-  function srcLabel(s){ return {PDS:'PDS Labor',NONPDS:'Non-PDS',TOYOTACARE:'ToyotaCare',SUBLET:'PDS Sublet',BALANCE:'Balance'}[s]||s; }
+  function srcLabel(s){ return {PDS:'PDS Labor',NONPDS:'Non-PDS',TOYOTACARE:'ToyotaCare',SUBLET:'PDS Sublet',
+    GMPDI:'GM Lettered',GMWTY:'GM Warranty',BALANCE:'Balance'}[s]||s; }
   function stat(k,v){ return '<div class="stat"><div class="k">'+k+'</div><div class="v">'+v+'</div></div>'; }
 
   var head=document.getElementById('head'), body=document.getElementById('body');
