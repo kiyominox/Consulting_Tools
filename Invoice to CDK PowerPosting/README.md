@@ -8,7 +8,8 @@ posting strings:
 | `Invoice_to_CDK_PowerPosting.html` | Honda / Hyundai credit-memo invoices |
 | `Warranty_Claims_to_CDK_PowerPosting.html` | Toyota Settled Claims (warranty) reports |
 
-Both open in any modern web browser (Chrome, Edge, Firefox, Safari) with no install.
+Both open in any modern web browser (Chrome, Edge, Firefox, Safari) with no install,
+and both run fully offline — the PDF never leaves the computer.
 Each has a built-in step-by-step guide — click the **📖 How-To Guide** button in the
 top-right corner. From there it can also be printed as a handout (**🖨 Print this guide**).
 
@@ -51,9 +52,7 @@ Fully offline — the PDF never leaves the computer. The brand is detected autom
 
 ## Toyota warranty claims tool
 
-Toyota Settled Claims Reports are scanned images, so the tool reads them with built-in
-OCR (page by page — a full report takes a minute or two, and needs an internet
-connection to load the reading engine; the PDF itself never leaves the computer).
+Reads the embedded text of the Toyota Settled Claims Report — instant, offline, and exact.
 
 Everything posts to Company **21** as credits, balanced by one debit:
 
