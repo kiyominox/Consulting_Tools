@@ -1026,25 +1026,25 @@ function renderApp(vm) {
 class Component {
   static DEFAULTS = {
     stores: [
-      { co: 18, name: "Subaru of Winchester", clearing: "501010", donation: "", donationControl: "DONATION",
+      { co: 18, name: "Subaru of Winchester", clearing: "501010", donation: "502420", donationControl: "DONATION",
         deposits: [
           { type: "CASH", acct: "501001", prefix: "CA" }, { type: "CREDIT", acct: "501001", prefix: "CR" },
           { type: "CHECK", acct: "501001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "507750", prefix: "SP" },
           { type: "PARTS POLICY", acct: "507650", prefix: "PP" } ],
         nosCats: [] },
-      { co: 19, name: "Honda of Winchester", clearing: "511011", donation: "", donationControl: "DONATION",
+      { co: 19, name: "Honda of Winchester", clearing: "511011", donation: "512420", donationControl: "DONATION",
         deposits: [
           { type: "CASH", acct: "511007", prefix: "CA" }, { type: "CREDIT", acct: "511001", prefix: "CR" },
           { type: "CHECK", acct: "511001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "517750", prefix: "SP" },
           { type: "PARTS POLICY", acct: "517650", prefix: "PP" } ],
         nosCats: [] },
-      { co: 20, name: "Hyundai of Winchester", clearing: "521011", donation: "", donationControl: "DONATION",
+      { co: 20, name: "Hyundai of Winchester", clearing: "521011", donation: "522420", donationControl: "DONATION",
         deposits: [
           { type: "CASH", acct: "521007", prefix: "CA" }, { type: "CREDIT", acct: "521001", prefix: "CR" },
           { type: "CHECK", acct: "521001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "527750", prefix: "SP" },
           { type: "PARTS POLICY", acct: "527650", prefix: "PP" } ],
         nosCats: [] },
-      { co: 21, name: "CMA's Toyota Chevrolet of Martinsburg", clearing: "531011", donation: "", donationControl: "DONATION",
+      { co: 21, name: "CMA's Toyota Chevrolet of Martinsburg", clearing: "531011", donation: "532420", donationControl: "DONATION",
         deposits: [
           { type: "CASH", acct: "531007", prefix: "CA" }, { type: "CREDIT", acct: "531001", prefix: "CR" },
           { type: "CHECK", acct: "531001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "537750", prefix: "SP" },
@@ -1052,7 +1052,7 @@ class Component {
         nosCats: [
           { label: "EXT WARRANTY", acct: "531150" }, { label: "GM WARRANTY", acct: "531140" },
           { label: "TOY WARRANTY", acct: "541140" }, { label: "PNC", acct: "531122" }, { label: "AR", acct: "531120" } ] },
-      { co: 23, name: "CMA's CDJR of Martinsburg", clearing: "551011", donation: "", donationControl: "DONATION",
+      { co: 23, name: "CMA's CDJR of Martinsburg", clearing: "551011", donation: "552420", donationControl: "DONATION",
         deposits: [
           { type: "CASH", acct: "551007", prefix: "CA" }, { type: "CREDIT", acct: "551001", prefix: "CR" },
           { type: "CHECK", acct: "551001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "557750", prefix: "SP" },
@@ -1537,8 +1537,8 @@ class Component {
     const step1done = d.schedule.length > 0 && d.ccFiles.length > 0;
     const step2done = depTot > 0;
     const needsCount = needsRows.length;
-    const open1 = ui.open[1] != null ? ui.open[1] : !step1done;
-    const open2 = ui.open[2] != null ? ui.open[2] : !step2done;
+    const open1 = ui.open[1] != null ? ui.open[1] : true;
+    const open2 = ui.open[2] != null ? ui.open[2] : true;
 
     /* rail */
     const icoBase = { width: 24, height: 24, borderRadius: "50%", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
