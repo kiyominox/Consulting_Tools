@@ -51,6 +51,11 @@ no install, no server; everything stays on the local machine.
   WARRANTY, PNC, AR) that routes the posting to the right account; other stores post to
   schedule clearing. A live Deposit/Received/Variance header turns green at 0.00.
   (The workbook's BALFWD table was dropped — no longer part of the workflow.)
+- **Setup screen (⚙)**: edit everything per store — names, Co numbers, clearing account,
+  deposit types/accounts/control prefixes, and Not-On-Schedule categories with their
+  accounts; add or remove stores. Settings save in the browser automatically, and
+  **Download shareable copy** regenerates the HTML file itself with your settings baked
+  in as the new defaults — replace the original or send it to coworkers.
 - **Export**: AGJE posting lines in the workbook's exact `Co.Acct.Cents.Control.Control2.
   Desc.Count` format (copy to clipboard for AGJE Expert Mode paste, or download .txt); a
   polished **PDF** record (print view) and a styled **Excel (.xlsx)** record — both built

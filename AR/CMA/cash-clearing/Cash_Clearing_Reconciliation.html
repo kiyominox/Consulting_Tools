@@ -95,6 +95,31 @@
   .empty{padding:20px;text-align:center;color:var(--muted);font-size:13px}
   .next{font-size:12px;color:var(--accent);font-weight:600}
   footer{max-width:1180px;margin:0 auto;padding:0 18px 30px;font-size:11px;color:var(--muted)}
+
+  /* setup modal */
+  #setupOverlay{position:fixed;inset:0;background:rgba(15,30,50,.55);z-index:100;display:none;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto}
+  #setupOverlay.open{display:flex}
+  .modal{background:#fff;border-radius:12px;max-width:880px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.three);box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden}
+  .modal h2{margin:0;padding:14px 20px;background:var(--navy);color:#fff;font-size:15px;display:flex;align-items:center;gap:10px}
+  .modal h2 .x{margin-left:auto;cursor:pointer;font-size:20px;opacity:.8;background:none;border:0;color:#fff;padding:0 4px}
+  .modal .mbody{padding:16px 20px;display:grid;grid-template-columns:215px 1fr;gap:18px}
+  @media(max-width:760px){.modal .mbody{grid-template-columns:1fr}}
+  .storeList{border:1px solid var(--line);border-radius:8px;overflow:hidden;align-self:start}
+  .storeList .it{padding:9px 12px;cursor:pointer;border-bottom:1px solid #edf1f5;font-size:13px}
+  .storeList .it.sel{background:var(--accent);color:#fff;font-weight:600}
+  .storeList .acts{padding:8px;display:flex;gap:6px;background:#f7f9fb}
+  .setupPane label{font-size:11.5px;color:var(--muted);display:block;margin:10px 0 3px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+  .setupPane .frow{display:flex;gap:12px;flex-wrap:wrap}
+  .setupPane .frow>div{flex:1;min-width:120px}
+  .setupPane input[type=text],.setupPane input[type=number]{width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:5px;font-size:13px}
+  .setupPane input.mono{font-family:var(--mono)}
+  .setupPane table{margin-top:4px}
+  .setupPane table input{width:100%;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:4px;font-size:13px}
+  .setupPane table input:hover{border-color:var(--line);background:#fff}
+  .setupPane table input:focus{border-color:var(--accent);background:#fff;outline:0}
+  .setupPane table input.mono{font-family:var(--mono)}
+  .mfoot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:14px 20px;border-top:1px solid var(--line);background:#f7f9fb}
+  .mfoot .note{flex:1;min-width:200px}
 </style>
 </head>
 <body>
@@ -125,6 +150,7 @@ window.onerror = function (msg, src, line) {
     <div class="kpi"><span>Deposit</span><b id="hdrDep">0.00</b></div>
     <div class="kpi"><span>Received</span><b id="hdrRec">0.00</b></div>
     <div class="kpi var" id="hdrVarWrap"><span>Variance</span><b id="hdrVar">0.00</b></div>
+    <button id="btnSetup" class="alt mini" title="Store accounts &amp; categories setup" style="margin-left:6px">⚙ Setup</button>
   </div>
 </header>
 
@@ -245,50 +271,101 @@ window.onerror = function (msg, src, line) {
   Everything runs locally in the browser; no data leaves this page. <span id="bootStamp" style="color:#b32f2f">⚠ script not loaded — if you are viewing this in a preview pane, download the file and open it in a browser.</span>
 </footer>
 
+<div id="setupOverlay">
+  <div class="modal">
+    <h2>⚙ Store Setup — accounts &amp; categories <button class="x" id="setupClose" title="Close">×</button></h2>
+    <div class="mbody">
+      <div>
+        <div class="storeList" id="setupStores"></div>
+        <div class="storeList acts" style="border:0;padding:8px 0">
+          <button class="mini alt" id="setupAddStore">+ add store</button>
+          <button class="mini warn" id="setupDelStore">remove store</button>
+        </div>
+      </div>
+      <div class="setupPane" id="setupPane"></div>
+    </div>
+    <div class="mfoot">
+      <span class="note" id="setupNote">Changes apply to this browser. Use “Download shareable copy” to bake them into the file itself for others.</span>
+      <button class="mini alt" id="setupReset">Reset to file defaults</button>
+      <button class="alt" id="setupShare">Download shareable copy</button>
+      <button class="go" id="setupSave">Apply &amp; save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Default per-store configuration. The Setup screen edits this; "Download shareable copy"
+     writes the edited version back into this block in the downloaded file. -->
+<script type="application/json" id="defaultConfig">
+{
+ "stores": [
+  { "co": 18, "name": "Subaru of Winchester", "clearing": "501010",
+    "deposits": [
+      { "type": "CASH", "acct": "501001", "prefix": "CA" }, { "type": "CREDIT", "acct": "501001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "501001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "507750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "507650", "prefix": "PP" } ],
+    "nosCats": [] },
+  { "co": 19, "name": "Honda of Winchester", "clearing": "511011",
+    "deposits": [
+      { "type": "CASH", "acct": "511007", "prefix": "CA" }, { "type": "CREDIT", "acct": "511001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "511001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "517750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "517650", "prefix": "PP" } ],
+    "nosCats": [] },
+  { "co": 20, "name": "Hyundai of Winchester", "clearing": "521011",
+    "deposits": [
+      { "type": "CASH", "acct": "521007", "prefix": "CA" }, { "type": "CREDIT", "acct": "521001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "521001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "527750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "527650", "prefix": "PP" } ],
+    "nosCats": [] },
+  { "co": 21, "name": "CMA's Toyota Chevrolet of Martinsburg", "clearing": "531011",
+    "deposits": [
+      { "type": "CASH", "acct": "531007", "prefix": "CA" }, { "type": "CREDIT", "acct": "531001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "531001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "537750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "537650", "prefix": "PP" }, { "type": "XTIME", "acct": "531001", "prefix": "XT" } ],
+    "nosCats": [
+      { "label": "EXT WARRANTY", "acct": "531150" }, { "label": "GM WARRANTY", "acct": "531140" },
+      { "label": "TOY WARRANTY", "acct": "541140" }, { "label": "PNC", "acct": "531122" }, { "label": "AR", "acct": "531120" } ] },
+  { "co": 23, "name": "CMA's CDJR of Martinsburg", "clearing": "551011",
+    "deposits": [
+      { "type": "CASH", "acct": "551007", "prefix": "CA" }, { "type": "CREDIT", "acct": "551001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "551001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "557750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "557650", "prefix": "PP" }, { "type": "XTIME", "acct": "551001", "prefix": "XT" } ],
+    "nosCats": [
+      { "label": "EXT WARRANTY", "acct": "551150" }, { "label": "CHRY WARRANTY", "acct": "551140" },
+      { "label": "PNC", "acct": "551122" }, { "label": "AR", "acct": "551120" } ] }
+ ]
+}
+</script>
+
 <script>
 /* ===================== ENGINE (pure logic — no DOM) ===================== */
-/* Per-store configuration extracted from the CASHCLEARINGTEMPLATE_COxx workbooks.
+/* Per-store configuration. Loaded from the embedded #defaultConfig JSON block, optionally
+   overridden by a browser-saved copy (localStorage). The Setup screen edits it.
    clearing  = schedule clearing account (received items + uncategorized not-on-schedule)
    deposits  = deposit type → offset account + control prefix
    nosCats   = not-on-schedule TYPE → account (empty list = post to clearing, no choice) */
-const STORE_CONFIG = {
-  18: { name: "Subaru of Winchester", clearing: "501010",
-        deposits: [
-          { type: "CASH", acct: "501001", prefix: "CA" }, { type: "CREDIT", acct: "501001", prefix: "CR" },
-          { type: "CHECK", acct: "501001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "507750", prefix: "SP" },
-          { type: "PARTS POLICY", acct: "507650", prefix: "PP" } ],
-        nosCats: [] },
-  19: { name: "Honda of Winchester", clearing: "511011",
-        deposits: [
-          { type: "CASH", acct: "511007", prefix: "CA" }, { type: "CREDIT", acct: "511001", prefix: "CR" },
-          { type: "CHECK", acct: "511001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "517750", prefix: "SP" },
-          { type: "PARTS POLICY", acct: "517650", prefix: "PP" } ],
-        nosCats: [] },
-  20: { name: "Hyundai of Winchester", clearing: "521011",
-        deposits: [
-          { type: "CASH", acct: "521007", prefix: "CA" }, { type: "CREDIT", acct: "521001", prefix: "CR" },
-          { type: "CHECK", acct: "521001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "527750", prefix: "SP" },
-          { type: "PARTS POLICY", acct: "527650", prefix: "PP" } ],
-        nosCats: [] },
-  21: { name: "CMA's Toyota Chevrolet of Martinsburg", clearing: "531011",
-        deposits: [
-          { type: "CASH", acct: "531007", prefix: "CA" }, { type: "CREDIT", acct: "531001", prefix: "CR" },
-          { type: "CHECK", acct: "531001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "537750", prefix: "SP" },
-          { type: "PARTS POLICY", acct: "537650", prefix: "PP" }, { type: "XTIME", acct: "531001", prefix: "XT" } ],
-        nosCats: [
-          { label: "EXT WARRANTY", acct: "531150" }, { label: "GM WARRANTY", acct: "531140" },
-          { label: "TOY WARRANTY", acct: "541140" }, { label: "PNC", acct: "531122" }, { label: "AR", acct: "531120" } ] },
-  23: { name: "CMA's CDJR of Martinsburg", clearing: "551011",
-        deposits: [
-          { type: "CASH", acct: "551007", prefix: "CA" }, { type: "CREDIT", acct: "551001", prefix: "CR" },
-          { type: "CHECK", acct: "551001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "557750", prefix: "SP" },
-          { type: "PARTS POLICY", acct: "557650", prefix: "PP" }, { type: "XTIME", acct: "551001", prefix: "XT" } ],
-        nosCats: [
-          { label: "EXT WARRANTY", acct: "551150" }, { label: "CHRY WARRANTY", acct: "551140" },
-          { label: "PNC", acct: "551122" }, { label: "AR", acct: "551120" } ] },
-};
-const STORE_LIST = Object.keys(STORE_CONFIG).map(Number);
-const getStore = co => STORE_CONFIG[co] || STORE_CONFIG[18];
+let CONFIG = { stores: [] };
+function setConfig(c) { CONFIG = sanitizeConfig(c); }
+function sanitizeConfig(c) {
+  const stores = (c && Array.isArray(c.stores) ? c.stores : [])
+    .map(s => ({
+      co: Number(s.co) || 0,
+      name: String(s.name == null ? "" : s.name).trim(),
+      clearing: String(s.clearing == null ? "" : s.clearing).trim(),
+      deposits: (Array.isArray(s.deposits) ? s.deposits : [])
+        .map(d => ({ type: String(d.type || "").trim().toUpperCase(), acct: String(d.acct || "").trim(), prefix: String(d.prefix || "").trim().toUpperCase() }))
+        .filter(d => d.type !== ""),
+      nosCats: (Array.isArray(s.nosCats) ? s.nosCats : [])
+        .map(x => ({ label: String(x.label || "").trim().toUpperCase(), acct: String(x.acct || "").trim() }))
+        .filter(x => x.label !== ""),
+    }))
+    .filter(s => s.co > 0);
+  return { stores };
+}
+const storeList = () => CONFIG.stores.map(s => s.co);
+function getStore(co) {
+  return CONFIG.stores.find(s => s.co === Number(co)) || CONFIG.stores[0] ||
+         { co: 0, name: "?", clearing: "", deposits: [], nosCats: [] };
+}
 function nosAccount(store, category) {
   if (!category) return store.clearing;
   const c = store.nosCats.find(x => x.label === category);
@@ -655,9 +732,26 @@ const SAMPLE_CC = [
   "WALK-IN CUSTOMER\t06-10-26 10:30 AM\t\t\t77.77\tSale\tVisa\t2222\tABC123\tParts\tHand Key\tBachtell, Neil\t",
 ].join("\n");
 
+/* ---------- pristine source + config bootstrap ---------- */
+/* Captured before any DOM mutation so "Download shareable copy" can rebuild the file. */
+const PRISTINE_HTML = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+const LS_KEY = "ccr_store_config_v1";
+function loadConfig() {
+  const embedded = JSON.parse(document.getElementById("defaultConfig").textContent);
+  let cfg = embedded, custom = false;
+  try {
+    const saved = localStorage.getItem(LS_KEY);
+    if (saved) { cfg = JSON.parse(saved); custom = true; }
+  } catch (e) { /* localStorage unavailable — embedded defaults only */ }
+  setConfig(cfg);
+  if (!CONFIG.stores.length) { setConfig(embedded); custom = false; }
+  return custom;
+}
+let usingCustomConfig = loadConfig();
+
 /* ---------- state ---------- */
 const state = {
-  co: STORE_LIST[0],
+  co: storeList()[0],
   cashDate: new Date().toISOString().slice(0, 10),
   deposits: {},
   schedule: [],        // {control, moreInfo, days, amount, include, manualAmt}
@@ -670,9 +764,17 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /* ---------- header ---------- */
-function initHeader() {
-  $("store").innerHTML = STORE_LIST.map(co => `<option value="${co}">CO${co} — ${esc(getStore(co).name)}</option>`).join("");
+function renderStoreSelect() {
+  $("store").innerHTML = storeList().map(co => `<option value="${co}">CO${co} — ${esc(getStore(co).name)}</option>`).join("");
+  if (!storeList().includes(state.co)) state.co = storeList()[0];
   $("store").value = state.co;
+  $("btnSetup").textContent = usingCustomConfig ? "⚙ Setup •" : "⚙ Setup";
+  $("btnSetup").title = usingCustomConfig
+    ? "Store accounts & categories setup — custom settings saved in this browser are active"
+    : "Store accounts & categories setup";
+}
+function initHeader() {
+  renderStoreSelect();
   $("cashdate").value = state.cashDate;
   $("store").onchange = e => { state.co = Number(e.target.value); onStoreChange(); };
   $("cashdate").onchange = e => { state.cashDate = e.target.value; refresh(); };
@@ -731,7 +833,7 @@ function loadSchedule(rows, sourceName) {
   const p = parseSchedule(rows);
   state.schedule = p.rows.map(r => ({ ...r, include: false, manualAmt: "" }));
   const src = sourceName ? ` (${sourceName})` : "";
-  if (p.company && STORE_CONFIG[p.company]) {
+  if (p.company && storeList().includes(p.company)) {
     state.co = p.company; $("store").value = p.company; onStoreChange();
     setStatus("stSch", `${p.rows.length} schedule item(s) loaded${src} · store auto-detected: CO${p.company}`, "ok");
   } else {
@@ -1070,13 +1172,143 @@ $("fileLoad").addEventListener("change", e => {
   e.target.value = "";
 });
 
+/* ---------- setup screen ---------- */
+let setupCfg = null;     // working copy while the modal is open
+let setupSel = 0;        // index of selected store in setupCfg.stores
+
+function openSetup() {
+  setupCfg = JSON.parse(JSON.stringify(CONFIG));
+  setupSel = Math.max(0, setupCfg.stores.findIndex(s => s.co === state.co));
+  renderSetup();
+  $("setupOverlay").classList.add("open");
+}
+function closeSetup() { $("setupOverlay").classList.remove("open"); setupCfg = null; }
+
+function renderSetup() {
+  const list = $("setupStores");
+  list.innerHTML = setupCfg.stores.map((s, i) =>
+    `<div class="it ${i === setupSel ? "sel" : ""}" data-si="${i}">CO${esc(String(s.co))} — ${esc(s.name || "(unnamed)")}</div>`).join("") ||
+    `<div class="it">no stores</div>`;
+  list.querySelectorAll("[data-si]").forEach(el => el.addEventListener("click", e => {
+    setupSel = Number(e.currentTarget.dataset.si); renderSetup();
+  }));
+  const s = setupCfg.stores[setupSel];
+  const pane = $("setupPane");
+  if (!s) { pane.innerHTML = `<div class="empty">Add a store to begin.</div>`; return; }
+
+  const depRows = s.deposits.map((d, i) => `
+    <tr><td><input data-sd="type:${i}" value="${esc(d.type)}"></td>
+    <td><input class="mono" data-sd="acct:${i}" value="${esc(d.acct)}"></td>
+    <td><input class="mono" data-sd="prefix:${i}" value="${esc(d.prefix)}" maxlength="4" style="width:64px"></td>
+    <td><button class="mini alt" data-sddel="${i}">✕</button></td></tr>`).join("");
+  const catRows = s.nosCats.map((c, i) => `
+    <tr><td><input data-sc="label:${i}" value="${esc(c.label)}"></td>
+    <td><input class="mono" data-sc="acct:${i}" value="${esc(c.acct)}"></td>
+    <td><button class="mini alt" data-scdel="${i}">✕</button></td></tr>`).join("");
+
+  pane.innerHTML = `
+    <div class="frow">
+      <div style="max-width:110px"><label>Co #</label><input type="number" class="mono" id="suCo" value="${esc(String(s.co))}"></div>
+      <div style="flex:2"><label>Store name</label><input type="text" id="suName" value="${esc(s.name)}"></div>
+      <div><label>Schedule clearing acct</label><input type="text" class="mono" id="suClearing" value="${esc(s.clearing)}"></div>
+    </div>
+    <label>Deposit types</label>
+    <table><thead><tr><th>Type</th><th>Account</th><th>Control prefix</th><th></th></tr></thead><tbody>${depRows}</tbody></table>
+    <div style="margin-top:6px"><button class="mini alt" id="suAddDep">+ add deposit type</button></div>
+    <label>Not-On-Schedule categories <span style="text-transform:none;font-weight:400">(leave empty for stores that always post to clearing)</span></label>
+    <table><thead><tr><th>Category</th><th>Account</th><th></th></tr></thead><tbody>${catRows}</tbody></table>
+    <div style="margin-top:6px"><button class="mini alt" id="suAddCat">+ add category</button></div>`;
+
+  const upd = () => { renderSetup(); };
+  $("suCo").addEventListener("change", e => { s.co = Number(e.target.value) || s.co; upd(); });
+  $("suName").addEventListener("change", e => { s.name = e.target.value; upd(); });
+  $("suClearing").addEventListener("change", e => { s.clearing = e.target.value.trim(); });
+  pane.querySelectorAll("[data-sd]").forEach(inp => inp.addEventListener("change", e => {
+    const [f, i] = e.target.dataset.sd.split(":");
+    s.deposits[Number(i)][f] = f === "acct" ? e.target.value.trim() : e.target.value.trim().toUpperCase();
+  }));
+  pane.querySelectorAll("[data-sddel]").forEach(b => b.addEventListener("click", e => { s.deposits.splice(Number(e.target.dataset.sddel), 1); upd(); }));
+  $("suAddDep").addEventListener("click", () => { s.deposits.push({ type: "", acct: "", prefix: "" }); upd(); });
+  pane.querySelectorAll("[data-sc]").forEach(inp => inp.addEventListener("change", e => {
+    const [f, i] = e.target.dataset.sc.split(":");
+    s.nosCats[Number(i)][f] = f === "acct" ? e.target.value.trim() : e.target.value.trim().toUpperCase();
+  }));
+  pane.querySelectorAll("[data-scdel]").forEach(b => b.addEventListener("click", e => { s.nosCats.splice(Number(e.target.dataset.scdel), 1); upd(); }));
+  $("suAddCat").addEventListener("click", () => { s.nosCats.push({ label: "", acct: "" }); upd(); });
+}
+
+function validateSetup(cfg) {
+  const c = sanitizeConfig(cfg);
+  if (!c.stores.length) return "At least one store is required.";
+  const cos = c.stores.map(s => s.co);
+  if (new Set(cos).size !== cos.length) return "Duplicate Co numbers — each store needs a unique Co #.";
+  for (const s of c.stores) {
+    if (!s.clearing) return `CO${s.co}: schedule clearing account is required.`;
+    if (!s.deposits.length) return `CO${s.co}: at least one deposit type is required.`;
+    for (const d of s.deposits) if (!d.acct || !d.prefix) return `CO${s.co}: deposit type "${d.type}" needs an account and a control prefix.`;
+    for (const x of s.nosCats) if (!x.acct) return `CO${s.co}: category "${x.label}" needs an account.`;
+  }
+  return null;
+}
+function applySetup() {
+  const err = validateSetup(setupCfg);
+  if (err) { alert(err); return false; }
+  setConfig(setupCfg);
+  usingCustomConfig = true;
+  try { localStorage.setItem(LS_KEY, JSON.stringify(CONFIG)); }
+  catch (e) { alert("Settings applied for this session, but could not be saved in this browser (storage unavailable). Use “Download shareable copy” to keep them."); }
+  renderStoreSelect();
+  onStoreChange();
+  return true;
+}
+$("btnSetup").addEventListener("click", openSetup);
+$("setupClose").addEventListener("click", closeSetup);
+$("setupOverlay").addEventListener("click", e => { if (e.target === $("setupOverlay")) closeSetup(); });
+$("setupAddStore").addEventListener("click", () => {
+  const used = new Set(setupCfg.stores.map(s => s.co));
+  let co = 1; while (used.has(co)) co++;
+  setupCfg.stores.push({ co, name: "New store", clearing: "",
+    deposits: [{ type: "CASH", acct: "", prefix: "CA" }, { type: "CREDIT", acct: "", prefix: "CR" }, { type: "CHECK", acct: "", prefix: "CK" }],
+    nosCats: [] });
+  setupSel = setupCfg.stores.length - 1;
+  renderSetup();
+});
+$("setupDelStore").addEventListener("click", () => {
+  const s = setupCfg.stores[setupSel];
+  if (!s) return;
+  if (setupCfg.stores.length === 1) { alert("At least one store is required."); return; }
+  if (!confirm(`Remove CO${s.co} — ${s.name}?`)) return;
+  setupCfg.stores.splice(setupSel, 1);
+  setupSel = Math.max(0, setupSel - 1);
+  renderSetup();
+});
+$("setupReset").addEventListener("click", () => {
+  if (!confirm("Discard all customizations and go back to the settings built into this file?")) return;
+  try { localStorage.removeItem(LS_KEY); } catch (e) {}
+  usingCustomConfig = false;
+  setConfig(JSON.parse(document.getElementById("defaultConfig").textContent));
+  renderStoreSelect();
+  onStoreChange();
+  closeSetup();
+});
+$("setupSave").addEventListener("click", () => { if (applySetup()) closeSetup(); });
+$("setupShare").addEventListener("click", () => {
+  if (!applySetup()) return;
+  const json = JSON.stringify(CONFIG, null, 1).replace(/<\//g, "<\\/");
+  const re = /(<script type="application\/json" id="defaultConfig">)[\s\S]*?(<\/script>)/;
+  if (!re.test(PRISTINE_HTML)) { alert("Could not locate the settings block in this file."); return; }
+  const out = PRISTINE_HTML.replace(re, (m, a, b) => a + "\n" + json + "\n" + b);
+  download("Cash_Clearing_Reconciliation.html", out, "text/html");
+  alert("Shareable copy downloaded.\n\nYour current settings are baked into it as the defaults — replace the old file with it, or send it to whoever needs the same setup.");
+});
+
 /* ---------- boot ---------- */
 try {
   initHeader();
   wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
   wireImport("dropCC", "btnCCFile", "fileCC", "stCC", loadCC);
   refresh();
-  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.2)";
+  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.3)";
 } catch (err) { window.onerror(err.message || String(err)); throw err; }
 </script>
 </body>
