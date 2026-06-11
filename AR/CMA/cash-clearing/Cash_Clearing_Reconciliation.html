@@ -73,6 +73,19 @@
 </style>
 </head>
 <body>
+<div id="bootErr" style="display:none;background:#8e1f1f;color:#fff;padding:10px 18px;font:13px Arial"></div>
+<noscript><div style="background:#8e1f1f;color:#fff;padding:10px 18px;font:13px Arial">
+This tool needs JavaScript. If you are seeing this inside a preview window, download the file and open it directly in a browser (Chrome/Edge).
+</div></noscript>
+<script>
+window.onerror = function (msg, src, line) {
+  var el = document.getElementById("bootErr");
+  if (el) { el.style.display = "block";
+    el.textContent = "Script error: " + msg + (line ? " (line " + line + ")" : "") +
+      " — browser: " + navigator.userAgent; }
+  return false;
+};
+</script>
 <header>
   <h1>Cash Clearing Reconciliation</h1>
   <div>
@@ -206,7 +219,7 @@
 </main>
 <footer>
   Cash Clearing Reconciliation — standalone HTML port of the CASHCLEARINGTEMPLATE workbooks (new CC processor report: RO#/Other + Sale Amount).
-  Everything runs locally in the browser; no data leaves this page.
+  Everything runs locally in the browser; no data leaves this page. <span id="bootStamp" style="color:#b32f2f">⚠ script not loaded — if you are viewing this in a preview pane, download the file and open it in a browser.</span>
 </footer>
 
 <script>
@@ -811,10 +824,18 @@ $("fileLoad").addEventListener("change", e => {
 });
 
 /* ---------- boot ---------- */
-initHeader();
-wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
-wireImport("dropCC", "btnCCFile", "fileCC", "stCC", loadCC);
-refresh();
+try {
+  initHeader();
+  wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
+  wireImport("dropCC", "btnCCFile", "fileCC", "stCC", loadCC);
+  refresh();
+  const st = $("bootStamp");
+  st.style.color = "";
+  st.textContent = "✓ ready (v1.1)";
+} catch (err) {
+  window.onerror(err.message || String(err));
+  throw err;
+}
 </script>
 </body>
 </html>
