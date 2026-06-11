@@ -34,21 +34,28 @@ Changes made:
 no install, no server; everything stays on the local machine.
 
 - **Store**: pick any of the five stores (CO18/19/20/21/23), or let the tool auto-detect
-  from the `Company: NN` line of the pasted CDK schedule.
+  from the `Company: NN` line of the schedule. Each store carries its own real account
+  numbers (deposit/clearing) and its own Not-On-Schedule categories, all extracted from
+  that store's workbook — changing the store updates the accounts, deposit types
+  (CO21/CO23 include XTIME) and category options everywhere.
 - **Import**: upload (or drag &amp; drop) the CDK Cash Clearing schedule export and the
   processor's settlement report — Excel files (`.xlsx`/`.xlsm`) are read natively in the
   browser (no libraries), and `.csv`/`.tsv`/`.txt` also work. CC columns are located by
   header name (`RO#/Other`, `Sale Amount`, `Card`, …). A **Generate using sample data**
   button loads a built-in balanced example for testing/training.
-- **Reconcile**: deposit totals by type, automatic CC matching per control (green = exact,
-  amber = amount differs), `Y`/amount Received entry, Unfound Match → editable
-  Not-On-Schedule list (re-matches as you correct a reference), and a live
-  Deposit/Received/Variance header. (The workbook's BALFWD table was dropped — no longer
-  part of the workflow.)
+- **Reconcile**: deposit totals by type; automatic CC matching per control (green = exact,
+  amber = amount differs). CC-matched items are received automatically — for anything
+  received outside the processor you **click “Received in full”** or type the exact amount
+  (no more typing `Y`). Unfound Match brings unmatched CC items into an editable
+  Not-On-Schedule list where, for CO21/CO23, you pick the **category** (EXT/GM/TOY/CHRY
+  WARRANTY, PNC, AR) that routes the posting to the right account; other stores post to
+  schedule clearing. A live Deposit/Received/Variance header turns green at 0.00.
+  (The workbook's BALFWD table was dropped — no longer part of the workflow.)
 - **Export**: AGJE posting lines in the workbook's exact `Co.Acct.Cents.Control.Control2.
-  Desc.Count` format (copy to clipboard for AGJE Expert Mode paste, or download .txt), a
-  self-contained HTML reconciliation record and CSV for record keeping, and JSON session
-  save/load to resume a day in progress.
+  Desc.Count` format (copy to clipboard for AGJE Expert Mode paste, or download .txt); a
+  polished **PDF** record (print view) and a styled **Excel (.xlsx)** record — both built
+  in the browser with no libraries — for record keeping; and JSON session save/load to
+  resume a day in progress.
 
 Differences from the workbook: rows on the CC report with a blank `RO#/Other` are listed
 for manual review when running Unfound (the workbook skips them silently), and the
