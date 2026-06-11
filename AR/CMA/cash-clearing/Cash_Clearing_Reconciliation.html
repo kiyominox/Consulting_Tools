@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cash Clearing Reconciliation</title>
+<style>
+  :root{
+    --bg:#f4f6f8; --panel:#ffffff; --ink:#1d2733; --muted:#67768a;
+    --line:#dde3ea; --accent:#0b5fa5; --accent2:#0d7d4d;
+    --green:#e7f6ed; --greenline:#bfe5cd;
+    --amber:#fdf3dc; --amberline:#f0ddae;
+    --red:#fdeaea; --redline:#f2c4c4;
+    --mono:Consolas,Menlo,"Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,Arial,sans-serif}
+  header{background:#15324f;color:#fff;padding:14px 22px;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+  header h1{font-size:18px;margin:0 16px 0 0;font-weight:600}
+  header label{font-size:12px;opacity:.85;display:block;margin-bottom:2px}
+  header select,header input[type=date]{padding:6px 8px;border:0;border-radius:5px;font-size:14px}
+  .pill{margin-left:auto;display:flex;gap:18px;text-align:right}
+  .pill div b{display:block;font-size:17px}
+  .pill .var-ok b{color:#7df0a8}
+  .pill .var-bad b{color:#ffb3b3}
+  main{max-width:1280px;margin:18px auto;padding:0 18px 60px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:9px;margin-bottom:18px;overflow:hidden}
+  section>h2{margin:0;padding:10px 16px;font-size:14px;letter-spacing:.4px;text-transform:uppercase;color:#fff;background:var(--accent);display:flex;align-items:center;gap:10px}
+  section>h2 .step{background:rgba(255,255,255,.22);border-radius:11px;padding:1px 9px;font-size:12px}
+  section>h2 small{font-weight:400;text-transform:none;opacity:.85;letter-spacing:0}
+  .body{padding:14px 16px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  .drop{border:2px dashed var(--line);border-radius:8px;padding:10px;transition:.15s}
+  .drop.over{border-color:var(--accent);background:#eef6fd}
+  .drop h3{margin:2px 0 6px;font-size:13px}
+  .drop textarea{width:100%;height:110px;border:1px solid var(--line);border-radius:6px;padding:8px;font:12px var(--mono);resize:vertical}
+  .drop .status{font-size:12px;color:var(--muted);margin-top:5px;min-height:17px}
+  .drop .status.ok{color:var(--accent2);font-weight:600}
+  .drop .status.err{color:#b32f2f;font-weight:600}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th{background:#eef2f6;text-align:left;padding:6px 8px;border-bottom:2px solid var(--line);white-space:nowrap;position:sticky;top:0}
+  td{padding:4px 8px;border-bottom:1px solid #edf1f5;vertical-align:middle}
+  td.num,th.num{text-align:right;font-family:var(--mono)}
+  tr.matched td{background:var(--green)}
+  tr.partial td{background:var(--amber)}
+  tr.recvd td{background:#e8f0fb}
+  .scroll{max-height:420px;overflow:auto;border-top:1px solid var(--line)}
+  input.cell{width:90px;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font:13px var(--mono);text-align:right}
+  input.cell.wide{width:130px;text-align:left}
+  input.cell:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+  button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.1)}
+  button.alt{background:#5b6c80}
+  button.go{background:var(--accent2)}
+  button.warn{background:#b3551d}
+  button.mini{padding:3px 9px;font-size:12px;font-weight:500}
+  .btnrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .note{font-size:12px;color:var(--muted)}
+  .totline{display:flex;gap:26px;padding:10px 16px;background:#f7f9fb;border-top:1px solid var(--line);font-size:14px;flex-wrap:wrap}
+  .totline b{font-family:var(--mono)}
+  .ok{color:var(--accent2)} .bad{color:#b32f2f}
+  pre.je{background:#10202f;color:#9fe2b5;font:12px/1.6 var(--mono);padding:12px 14px;border-radius:7px;max-height:300px;overflow:auto;margin:10px 0 0}
+  .badge{display:inline-block;border-radius:9px;padding:0 8px;font-size:11px;font-weight:700}
+  .badge.ok{background:var(--green);color:var(--accent2)}
+  .badge.bad{background:var(--red);color:#b32f2f}
+  details.help{margin-bottom:16px}
+  details.help summary{cursor:pointer;font-weight:600;color:var(--accent)}
+  details.help ol{margin:8px 0 0;padding-left:22px;font-size:13px}
+  .empty{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+  footer{max-width:1280px;margin:0 auto;padding:0 18px 30px;font-size:11px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Cash Clearing Reconciliation</h1>
+  <div>
+    <label for="store">Store</label>
+    <select id="store"></select>
+  </div>
+  <div>
+    <label for="cashdate">Cash date</label>
+    <input type="date" id="cashdate">
+  </div>
+  <div class="pill">
+    <div><span>Deposit</span><b id="hdrDep">0.00</b></div>
+    <div><span>Received</span><b id="hdrRec">0.00</b></div>
+    <div id="hdrVarWrap" class="var-bad"><span>Variance</span><b id="hdrVar">0.00</b></div>
+  </div>
+</header>
+<main>
+  <details class="help">
+    <summary>How to use this tool (daily workflow)</summary>
+    <ol>
+      <li>Select the <b>store</b> (auto-detected from the schedule paste when possible) and enter the <b>cash date</b>.</li>
+      <li>In CDK, run Accounting Schedule 1 — CASH CLEARING (no zero-balance controls, include post-ahead), open the export, copy columns A:F, and paste into the <b>CDK Schedule</b> box. Or drop a .csv/.tsv/.txt file.</li>
+      <li>From the payment processor site, export the day's transactions, select all, copy, and paste into the <b>CC Report</b> box.</li>
+      <li>Enter the actual <b>deposit totals</b> by type.</li>
+      <li>Click <b>Run Unfound Match</b> — CC transactions not on the schedule appear under Not&nbsp;On&nbsp;Schedule. Fix any wrong reference numbers there (the amount/note re-match as you type).</li>
+      <li>For schedule items paid outside the processor, type <b>Y</b> (or the actual amount) in the Received column. CC-matched rows are received automatically.</li>
+      <li>Record items missing from the schedule entirely under <b>BALFWD Entries</b> (closed RO/invoice, amount, close date).</li>
+      <li>When the <b>Variance is 0.00</b>, click <b>Generate Posting</b>, then copy the AGJE lines and paste into CDK AGJE (Expert Mode, right-click → Paste).</li>
+      <li>Click <b>Export Record</b> to download the reconciliation record for record keeping. <b>Save Session</b> lets you resume later.</li>
+    </ol>
+  </details>
+
+  <section>
+    <h2><span class="step">1</span> Import Data <small>— paste from Excel (Ctrl+C there, Ctrl+V here) or drop a .csv / .tsv / .txt file</small></h2>
+    <div class="body cols">
+      <div class="drop" id="dropSch">
+        <h3>CDK Schedule — Cash Clearing (columns A:F)</h3>
+        <textarea id="txtSch" placeholder="Paste the CDK schedule export here…"></textarea>
+        <div class="status" id="stSch">Nothing loaded.</div>
+      </div>
+      <div class="drop" id="dropCC">
+        <h3>CC Report — payment processor transactions</h3>
+        <textarea id="txtCC" placeholder="Paste the processor export here (Name / Date / RO#&#47;Other / … / Sale Amount)…"></textarea>
+        <div class="status" id="stCC">Nothing loaded.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="step">2</span> Deposit Totals</h2>
+    <div class="body">
+      <table style="max-width:640px">
+        <thead><tr><th>Type</th><th class="num">Amount $</th><th>Account</th><th>Control</th></tr></thead>
+        <tbody id="depBody"></tbody>
+        <tfoot><tr><th>Total deposit</th><th class="num" id="depTot">0.00</th><th></th><th></th></tr></tfoot>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="step">3</span> Schedule Reconciliation
+      <small id="schCount"></small>
+    </h2>
+    <div class="scroll">
+      <table id="schTable">
+        <thead><tr>
+          <th>Control</th><th>MoreInfo</th><th class="num">Days</th><th class="num">Amount $</th>
+          <th class="num">On CC Stmnt</th><th>Received (Y / amt)</th><th>Note</th><th class="num">For JE</th>
+        </tr></thead>
+        <tbody id="schBody"><tr><td colspan="8" class="empty">Paste the CDK schedule above to begin.</td></tr></tbody>
+      </table>
+    </div>
+    <div class="totline">
+      <span>Schedule received: <b id="schRecTot">0.00</b></span>
+      <span class="note">Green = CC match equals schedule amount · Amber = CC match differs from schedule amount · Blue = received manually</span>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="step">4</span> Not On Schedule <small>— paid, not closed</small></h2>
+    <div class="body">
+      <div class="btnrow" style="margin:0 0 10px">
+        <button id="btnUnfound" class="warn">Run Unfound Match</button>
+        <button id="btnAddNos" class="mini alt">+ add row</button>
+        <span class="note">CC transactions whose RO#/Other is not on the schedule. Type over a wrong reference number to correct it.</span>
+      </div>
+      <table style="max-width:820px">
+        <thead><tr><th>RO / Invoice #</th><th class="num">Amount</th><th>Note</th><th class="num">For JE</th><th></th></tr></thead>
+        <tbody id="nosBody"><tr><td colspan="5" class="empty">Run the unfound match after importing both files.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="step">5</span> BALFWD Entries <small>— RO/invoice closed on or before the cash date</small></h2>
+    <div class="body">
+      <div class="btnrow" style="margin:0 0 10px">
+        <button id="btnAddBf" class="mini alt">+ add row</button>
+        <span class="note">Each entry posts three lines: −amount to BAL-FWD, then +/− wash on the RO control marked “MOVED TO BALFWD”.</span>
+      </div>
+      <table style="max-width:820px">
+        <thead><tr><th>RO / Invoice #</th><th class="num">Amount received</th><th>Closed (e.g. CLOSED 0312)</th><th></th></tr></thead>
+        <tbody id="bfBody"><tr><td colspan="4" class="empty">No balance-forward items.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="step">6</span> Posting &amp; Exports</h2>
+    <div class="body">
+      <div class="btnrow" style="margin:0">
+        <button id="btnPost" class="go">Generate Posting</button>
+        <button id="btnCopy" disabled>Copy AGJE Lines</button>
+        <button id="btnDlJe" class="alt" disabled>Download AGJE (.txt)</button>
+        <button id="btnRecord" class="alt">Export Record (.html)</button>
+        <button id="btnCsv" class="alt">Export Record (.csv)</button>
+        <button id="btnSave" class="alt">Save Session (.json)</button>
+        <button id="btnLoad" class="alt">Load Session</button>
+        <input type="file" id="fileLoad" accept=".json" style="display:none">
+        <span id="jeBal"></span>
+      </div>
+      <div id="postWrap" style="display:none">
+        <div class="totline" style="border:0;padding:10px 0 0">
+          <span>JE# <b id="jeRef"></b></span>
+          <span>Lines: <b id="jeCount"></b></span>
+          <span>JE balance: <b id="jeBalAmt"></b></span>
+        </div>
+        <div class="scroll" style="max-height:260px;margin-top:8px;border:1px solid var(--line);border-radius:6px">
+          <table id="jeTable">
+            <thead><tr><th>Co</th><th>Account</th><th class="num">Amount</th><th>Control</th><th>Control2</th><th>Description</th></tr></thead>
+            <tbody id="jeBody"></tbody>
+          </table>
+        </div>
+        <pre class="je" id="jeText"></pre>
+      </div>
+    </div>
+  </section>
+</main>
+<footer>
+  Cash Clearing Reconciliation — standalone HTML port of the CASHCLEARINGTEMPLATE workbooks (new CC processor report: RO#/Other + Sale Amount).
+  Everything runs locally in the browser; no data leaves this page.
+</footer>
+
+<script>
+/* ===================== ENGINE (pure logic — no DOM) ===================== */
+const STORES = [
+  { co: 18, name: "Subaru of Winchester" },
+  { co: 19, name: "Honda of Winchester" },
+  { co: 20, name: "Hyundai of Winchester" },
+  { co: 21, name: "CMA's Toyota Chevrolet of Martinsburg" },
+  { co: 23, name: "CMA's CDJR of Martinsburg" },
+];
+const ACCTS = { schedule: "501010", deposit: "501001", servicePolicy: "507750", partsPolicy: "507650" };
+const DEPOSIT_TYPES = [
+  { type: "CASH",           acct: ACCTS.deposit,       prefix: "CA" },
+  { type: "CREDIT",         acct: ACCTS.deposit,       prefix: "CR" },
+  { type: "CHECK",          acct: ACCTS.deposit,       prefix: "CK" },
+  { type: "PARTS POLICY",   acct: ACCTS.partsPolicy,   prefix: "PP" },
+  { type: "SERVICE POLICY", acct: ACCTS.servicePolicy, prefix: "SP" },
+];
+
+function splitRows(text) {
+  return text.replace(/\r\n?/g, "\n").split("\n")
+    .map(line => line.split("\t").map(c => c.trim()));
+}
+function parseAmount(s) {
+  if (s == null) return NaN;
+  s = String(s).trim().replace(/[$,]/g, "");
+  if (/^\(.*\)$/.test(s)) s = "-" + s.slice(1, -1);
+  if (s === "" || s === "-") return NaN;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+/* Same normalization as the workbook macro: numeric-looking → number, else upper-cased text */
+function normRef(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (s === "") return "";
+  const n = Number(s.replace(/,/g, ""));
+  return Number.isFinite(n) ? String(n) : s.toUpperCase();
+}
+
+/* CDK schedule export, columns A:F → control in col C (index 2), amount in col F (index 5). */
+function parseSchedule(text) {
+  const out = { rows: [], company: null };
+  for (const cells of splitRows(text)) {
+    const joined = cells.join(" ");
+    const m = joined.match(/Company:\s*(\d+)/i);
+    if (m) out.company = Number(m[1]);
+    if (cells.length < 6) continue;
+    const control = cells[2], amt = parseAmount(cells[5]);
+    if (control === "" || /^control$/i.test(control) || !Number.isFinite(amt)) continue;
+    out.rows.push({ control, moreInfo: cells[3] || "", days: cells[4] || "", amount: amt });
+  }
+  return out;
+}
+
+/* New processor report. Columns located by header names so extra/reordered columns are fine. */
+function parseCC(text) {
+  const rows = splitRows(text);
+  let hdr = -1, col = {};
+  for (let i = 0; i < rows.length; i++) {
+    const lower = rows[i].map(c => c.toLowerCase());
+    const iRef = lower.findIndex(c => c.replace(/\s/g, "") === "ro#/other");
+    const iAmt = lower.findIndex(c => c === "sale amount");
+    if (iRef >= 0 && iAmt >= 0) {
+      hdr = i;
+      col = { ref: iRef, amt: iAmt,
+              name: lower.indexOf("name"), card: lower.indexOf("card"),
+              op: lower.indexOf("operation"), dept: lower.indexOf("department") };
+      break;
+    }
+  }
+  if (hdr < 0) return { error: 'Header row not found — expected columns "RO#/Other" and "Sale Amount".', rows: [] };
+  const out = [];
+  for (let i = hdr + 1; i < rows.length; i++) {
+    const c = rows[i];
+    const amt = parseAmount(c[col.amt]);
+    if (!Number.isFinite(amt)) continue;
+    out.push({
+      ref:  (c[col.ref]  || "").trim(),
+      amount: amt,
+      name: col.name >= 0 ? (c[col.name] || "").trim() : "",
+      card: col.card >= 0 ? (c[col.card] || "").trim() : "",
+      op:   col.op   >= 0 ? (c[col.op]   || "").trim() : "",
+      dept: col.dept >= 0 ? (c[col.dept] || "").trim() : "",
+    });
+  }
+  return { rows: out };
+}
+
+/* Workbook G column: sum of Sale Amounts whose RO#/Other matches the control. */
+function ccIndex(ccRows) {
+  const idx = new Map();
+  for (const r of ccRows) {
+    const k = normRef(r.ref);
+    if (k === "") continue;
+    const e = idx.get(k) || { total: 0, cards: new Set() };
+    e.total += r.amount;
+    if (r.card) e.cards.add(r.card);
+    idx.set(k, e);
+  }
+  return idx;
+}
+
+/* Workbook J column: Y → schedule amount; numeric → that amount; else CC sum if non-zero. */
+function receivedFor(row, onCC) {
+  const h = String(row.received == null ? "" : row.received).trim();
+  if (/^y$/i.test(h)) return row.amount;
+  const n = parseAmount(h);
+  if (Number.isFinite(n) && n !== 0) return n;
+  if (Math.abs(onCC) > 0.004) return onCC;
+  return 0;
+}
+
+/* Same matching as PopulateNotOnSchedule: CC refs not present among schedule controls. */
+function unfoundMatch(schRows, ccRows) {
+  const schSet = new Set(schRows.map(r => normRef(r.control)).filter(k => k !== ""));
+  const out = [], skipped = [];
+  for (const r of ccRows) {
+    const k = normRef(r.ref);
+    if (k === "") { skipped.push(r); continue; }
+    if (!schSet.has(k)) out.push({ ref: r.ref, amount: r.amount, note: noteFor(r) });
+  }
+  return { rows: out, skipped };
+}
+function noteFor(ccRow) {
+  return [ccRow.card, ccRow.name].filter(Boolean).join(" · ");
+}
+
+const r2 = v => Math.round(v * 100) / 100;
+const cents = v => Math.round(v * 100);
+function money(v) { return (Math.abs(v) < 0.005 ? 0 : v).toFixed(2); }
+function mmdd(dateStr)   { return dateStr ? dateStr.slice(5, 7) + dateStr.slice(8, 10) : "????"; }
+function mmddyy(dateStr) { return dateStr ? mmdd(dateStr) + dateStr.slice(2, 4) : "??????"; }
+
+/* Builds the full posting in the same order as the workbook's POST macro. */
+function buildPosting(state) {
+  const co = state.co, lines = [];
+  const add = (acct, amt, control, control2, desc) =>
+    lines.push({ co, acct: String(acct), amt: r2(amt), control: String(control || ""), control2: String(control2 || ""), desc: String(desc || "") });
+
+  for (const d of DEPOSIT_TYPES) {
+    const amt = parseAmount(state.deposits[d.type]);
+    if (Number.isFinite(amt) && amt !== 0)
+      add(d.acct, amt, d.prefix + mmdd(state.cashDate), "", d.type);
+  }
+  const idx = ccIndex(state.cc);
+  for (const row of state.schedule) {
+    const onCC = (idx.get(normRef(row.control)) || { total: 0 }).total;
+    const rec = receivedFor(row, onCC);
+    if (rec !== 0) add(ACCTS.schedule, -rec, row.control, "", "");
+  }
+  for (const n of state.notOnSchedule) {
+    const amt = parseAmount(n.amount);
+    if (n.ref && Number.isFinite(amt) && amt !== 0)
+      add(ACCTS.schedule, -amt, n.ref, "", n.note || "");
+  }
+  for (const b of state.balfwd) {
+    const amt = parseAmount(b.amount);
+    if (!b.ref || !Number.isFinite(amt) || amt === 0) continue;
+    const closed = String(b.closed || "").toUpperCase();
+    add(ACCTS.schedule, -amt, "BAL-FWD", b.ref, closed);
+    add(ACCTS.schedule,  amt, b.ref, "", closed);
+    add(ACCTS.schedule, -amt, b.ref, "", "MOVED TO BALFWD");
+  }
+  return lines;
+}
+/* AGJE paste string — identical shape to the workbook: Co.Acct.Cents.Control.Control2.Description.Count */
+function jeStrings(lines) {
+  return lines.map(l => [l.co, l.acct, cents(l.amt), l.control, l.control2, l.desc, ""].join("."));
+}
+function totals(state) {
+  let dep = 0;
+  for (const d of DEPOSIT_TYPES) {
+    const a = parseAmount(state.deposits[d.type]);
+    if (Number.isFinite(a)) dep += a;
+  }
+  const idx = ccIndex(state.cc);
+  let rec = 0;
+  for (const row of state.schedule)
+    rec += receivedFor(row, (idx.get(normRef(row.control)) || { total: 0 }).total);
+  for (const n of state.notOnSchedule) {
+    const a = parseAmount(n.amount);
+    if (n.ref && Number.isFinite(a)) rec += a;
+  }
+  for (const b of state.balfwd) {
+    const a = parseAmount(b.amount);
+    if (b.ref && Number.isFinite(a)) rec += a;
+  }
+  return { deposit: r2(dep), received: r2(rec), variance: r2(dep - rec) };
+}
+/* ===================== END ENGINE ===================== */
+
+/* ---------- state ---------- */
+const state = {
+  co: STORES[0].co,
+  cashDate: new Date().toISOString().slice(0, 10),
+  deposits: Object.fromEntries(DEPOSIT_TYPES.map(d => [d.type, ""])),
+  schedule: [],        // {control, moreInfo, days, amount, received}
+  cc: [],              // {ref, amount, name, card, op, dept}
+  notOnSchedule: [],   // {ref, amount, note}
+  balfwd: [],          // {ref, amount, closed}
+  rawSchedule: "", rawCC: "",
+};
+let lastPosting = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------- header ---------- */
+function initHeader() {
+  $("store").innerHTML = STORES.map(s => `<option value="${s.co}">CO${s.co} — ${esc(s.name)}</option>`).join("");
+  $("store").value = state.co;
+  $("cashdate").value = state.cashDate;
+  $("store").onchange = e => { state.co = Number(e.target.value); refresh(); };
+  $("cashdate").onchange = e => { state.cashDate = e.target.value; refresh(); };
+}
+
+/* ---------- import panels ---------- */
+function wireDrop(boxId, txtId, stId, onText) {
+  const box = $(boxId), txt = $(txtId);
+  txt.addEventListener("input", () => onText(txt.value));
+  box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("over"); });
+  box.addEventListener("dragleave", () => box.classList.remove("over"));
+  box.addEventListener("drop", e => {
+    e.preventDefault(); box.classList.remove("over");
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (/\.(xlsx?|xlsm)$/i.test(f.name)) {
+      setStatus(stId, "Excel files can't be read directly — open the file, select all, copy, and paste here instead.", "err");
+      return;
+    }
+    f.text().then(t => { txt.value = t.replace(/,(?=\S)/g, m => m); onText(maybeCsv(t)); });
+  });
+}
+/* tolerate comma-separated files dropped in (simple CSV → TSV; quoted fields handled) */
+function maybeCsv(t) {
+  if (t.includes("\t")) return t;
+  return t.replace(/\r\n?/g, "\n").split("\n").map(line => {
+    const cells = []; let cur = "", q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { cells.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    cells.push(cur);
+    return cells.join("\t");
+  }).join("\n");
+}
+function setStatus(id, msg, cls) { const el = $(id); el.textContent = msg; el.className = "status " + (cls || ""); }
+
+function loadSchedule(text) {
+  state.rawSchedule = text;
+  const p = parseSchedule(text);
+  state.schedule = p.rows.map(r => ({ ...r, received: "" }));
+  if (p.company && STORES.some(s => s.co === p.company)) {
+    state.co = p.company; $("store").value = p.company;
+    setStatus("stSch", `${p.rows.length} schedule item(s) loaded · store auto-detected: CO${p.company}`, "ok");
+  } else {
+    setStatus("stSch", p.rows.length ? `${p.rows.length} schedule item(s) loaded.` : "No schedule rows recognized (need columns A:F with Control in column C).", p.rows.length ? "ok" : "err");
+  }
+  refresh();
+}
+function loadCC(text) {
+  state.rawCC = text;
+  const p = parseCC(text);
+  if (p.error) { state.cc = []; setStatus("stCC", p.error, "err"); }
+  else {
+    state.cc = p.rows;
+    const blank = p.rows.filter(r => normRef(r.ref) === "").length;
+    setStatus("stCC", `${p.rows.length} CC transaction(s) loaded, total ${money(p.rows.reduce((a, r) => a + r.amount, 0))}` +
+      (blank ? ` · ⚠ ${blank} row(s) have a blank RO#/Other` : ""), "ok");
+  }
+  refresh();
+}
+
+/* ---------- deposits ---------- */
+function renderDeposits() {
+  $("depBody").innerHTML = DEPOSIT_TYPES.map(d => `
+    <tr><td>${d.type}</td>
+    <td class="num"><input class="cell" data-dep="${d.type}" value="${esc(state.deposits[d.type])}" placeholder="0.00"></td>
+    <td>${d.acct}</td><td style="font-family:var(--mono)">${d.prefix}${mmdd(state.cashDate)}</td></tr>`).join("");
+  document.querySelectorAll("[data-dep]").forEach(inp =>
+    inp.addEventListener("input", e => { state.deposits[e.target.dataset.dep] = e.target.value; refreshTotals(); }));
+}
+
+/* ---------- schedule grid ---------- */
+function renderSchedule() {
+  const tb = $("schBody");
+  if (!state.schedule.length) {
+    tb.innerHTML = `<tr><td colspan="8" class="empty">Paste the CDK schedule above to begin.</td></tr>`;
+    $("schCount").textContent = ""; return;
+  }
+  const idx = ccIndex(state.cc);
+  let recTot = 0;
+  tb.innerHTML = state.schedule.map((row, i) => {
+    const e = idx.get(normRef(row.control));
+    const onCC = e ? r2(e.total) : 0;
+    const note = e ? [...e.cards].join(", ") : "";
+    const rec = receivedFor(row, onCC);
+    recTot += rec;
+    let cls = "";
+    if (rec !== 0 && String(row.received).trim() !== "") cls = "recvd";
+    else if (onCC !== 0) cls = Math.abs(onCC - row.amount) < 0.005 ? "matched" : "partial";
+    return `<tr class="${cls}">
+      <td style="font-family:var(--mono)">${esc(row.control)}</td><td>${esc(row.moreInfo)}</td>
+      <td class="num">${esc(row.days)}</td><td class="num">${money(row.amount)}</td>
+      <td class="num">${onCC ? money(onCC) : ""}</td>
+      <td><input class="cell" style="width:70px" data-rec="${i}" value="${esc(row.received)}" placeholder=""></td>
+      <td>${esc(note)}</td><td class="num">${rec ? money(-rec) : ""}</td></tr>`;
+  }).join("");
+  $("schCount").textContent = `— ${state.schedule.length} items`;
+  $("schRecTot").textContent = money(recTot);
+  tb.querySelectorAll("[data-rec]").forEach(inp =>
+    inp.addEventListener("change", e => { state.schedule[Number(e.target.dataset.rec)].received = e.target.value; refresh(); }));
+}
+
+/* ---------- not on schedule ---------- */
+function renderNos() {
+  const tb = $("nosBody");
+  if (!state.notOnSchedule.length) {
+    tb.innerHTML = `<tr><td colspan="5" class="empty">Run the unfound match after importing both files.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = state.notOnSchedule.map((n, i) => `
+    <tr><td><input class="cell wide" data-nosref="${i}" value="${esc(n.ref)}"></td>
+    <td class="num"><input class="cell" data-nosamt="${i}" value="${esc(n.amount)}"></td>
+    <td>${esc(n.note || "")}</td>
+    <td class="num" style="font-family:var(--mono)">${money(-(parseAmount(n.amount) || 0))}</td>
+    <td><button class="mini alt" data-nosdel="${i}">✕</button></td></tr>`).join("");
+  tb.querySelectorAll("[data-nosref]").forEach(inp => inp.addEventListener("change", e => {
+    const i = Number(e.target.dataset.nosref);
+    state.notOnSchedule[i].ref = e.target.value;
+    const m = ccIndex(state.cc).get(normRef(e.target.value));
+    if (m) { state.notOnSchedule[i].amount = r2(m.total); state.notOnSchedule[i].note = [...m.cards].join(", "); }
+    refresh();
+  }));
+  tb.querySelectorAll("[data-nosamt]").forEach(inp => inp.addEventListener("change", e => {
+    state.notOnSchedule[Number(e.target.dataset.nosamt)].amount = e.target.value; refresh();
+  }));
+  tb.querySelectorAll("[data-nosdel]").forEach(btn => btn.addEventListener("click", e => {
+    state.notOnSchedule.splice(Number(e.target.dataset.nosdel), 1); refresh();
+  }));
+}
+
+/* ---------- balfwd ---------- */
+function renderBf() {
+  const tb = $("bfBody");
+  if (!state.balfwd.length) {
+    tb.innerHTML = `<tr><td colspan="4" class="empty">No balance-forward items.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = state.balfwd.map((b, i) => `
+    <tr><td><input class="cell wide" data-bfref="${i}" value="${esc(b.ref)}"></td>
+    <td class="num"><input class="cell" data-bfamt="${i}" value="${esc(b.amount)}"></td>
+    <td><input class="cell wide" data-bfcl="${i}" value="${esc(b.closed)}" placeholder="CLOSED 0312"></td>
+    <td><button class="mini alt" data-bfdel="${i}">✕</button></td></tr>`).join("");
+  const wire = (sel, field) => tb.querySelectorAll(sel).forEach(inp => inp.addEventListener("change", e => {
+    state.balfwd[Number(e.target.dataset[field])][{ bfref: "ref", bfamt: "amount", bfcl: "closed" }[field]] = e.target.value; refreshTotals();
+  }));
+  wire("[data-bfref]", "bfref"); wire("[data-bfamt]", "bfamt"); wire("[data-bfcl]", "bfcl");
+  tb.querySelectorAll("[data-bfdel]").forEach(btn => btn.addEventListener("click", e => {
+    state.balfwd.splice(Number(e.target.dataset.bfdel), 1); refresh();
+  }));
+}
+
+/* ---------- totals / posting ---------- */
+function refreshTotals() {
+  const t = totals(state);
+  $("hdrDep").textContent = money(t.deposit);
+  $("hdrRec").textContent = money(t.received);
+  $("hdrVar").textContent = money(t.variance);
+  $("hdrVarWrap").className = Math.abs(t.variance) < 0.005 ? "var-ok" : "var-bad";
+  $("depTot").textContent = money(t.deposit);
+}
+function refresh() { renderDeposits(); renderSchedule(); renderNos(); renderBf(); refreshTotals(); }
+
+$("btnUnfound").addEventListener("click", () => {
+  if (!state.cc.length) { alert("Load the CC report first."); return; }
+  const res = unfoundMatch(state.schedule, state.cc);
+  state.notOnSchedule = res.rows;
+  let msg = res.rows.length ? `${res.rows.length} unmatched transaction(s) brought over.` : "All CC transactions are already on the schedule.";
+  if (res.skipped.length) msg += `\n⚠ ${res.skipped.length} CC row(s) skipped because RO#/Other is blank — review them manually:` +
+    res.skipped.map(r => `\n   ${money(r.amount)}  ${r.name || "(no name)"}`).join("");
+  alert(msg);
+  refresh();
+});
+$("btnAddNos").addEventListener("click", () => { state.notOnSchedule.push({ ref: "", amount: "", note: "" }); renderNos(); });
+$("btnAddBf").addEventListener("click", () => { state.balfwd.push({ ref: "", amount: "", closed: "" }); renderBf(); });
+
+$("btnPost").addEventListener("click", () => {
+  const t = totals(state);
+  if (Math.abs(t.variance) >= 0.005 &&
+      !confirm(`Variance is ${money(t.variance)} (should be 0.00). Generate the posting anyway?`)) return;
+  lastPosting = buildPosting(state);
+  const bal = r2(lastPosting.reduce((a, l) => a + l.amt, 0));
+  $("postWrap").style.display = "";
+  $("jeRef").textContent = "DD" + mmddyy(state.cashDate);
+  $("jeCount").textContent = lastPosting.length;
+  $("jeBalAmt").innerHTML = `<span class="badge ${Math.abs(bal) < 0.005 ? "ok" : "bad"}">${money(bal)}</span>`;
+  $("jeBody").innerHTML = lastPosting.map(l => `<tr>
+    <td>${l.co}</td><td>${l.acct}</td><td class="num">${money(l.amt)}</td>
+    <td style="font-family:var(--mono)">${esc(l.control)}</td><td style="font-family:var(--mono)">${esc(l.control2)}</td><td>${esc(l.desc)}</td></tr>`).join("");
+  $("jeText").textContent = jeStrings(lastPosting).join("\n");
+  $("btnCopy").disabled = $("btnDlJe").disabled = false;
+});
+$("btnCopy").addEventListener("click", () => {
+  navigator.clipboard.writeText(jeStrings(lastPosting).join("\r\n"))
+    .then(() => { $("btnCopy").textContent = "Copied ✓"; setTimeout(() => $("btnCopy").textContent = "Copy AGJE Lines", 1600); });
+});
+
+function download(name, mime, content) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([content], { type: mime }));
+  a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+const fileStem = () => `CASHDEPOSIT-${mmddyy(state.cashDate)}-CO${state.co}`;
+
+$("btnDlJe").addEventListener("click", () =>
+  download(fileStem() + "-AGJE.txt", "text/plain", jeStrings(lastPosting).join("\r\n")));
+
+/* ---------- record exports ---------- */
+function recordData() {
+  const idx = ccIndex(state.cc), t = totals(state);
+  const sch = state.schedule.map(row => {
+    const e = idx.get(normRef(row.control));
+    const onCC = e ? r2(e.total) : 0;
+    return { ...row, onCC, note: e ? [...e.cards].join(", ") : "", receivedAmt: receivedFor(row, onCC) };
+  });
+  return { sch, t, posting: lastPosting || buildPosting(state) };
+}
+$("btnRecord").addEventListener("click", () => {
+  const { sch, t, posting } = recordData();
+  const store = STORES.find(s => s.co === state.co);
+  const tr = (cells, tag = "td") => `<tr>${cells.map(c => `<${tag}>${esc(c == null ? "" : c)}</${tag}>`).join("")}</tr>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${fileStem()} record</title>
+<style>body{font:13px "Segoe UI",Arial;margin:24px;color:#1d2733}h1{font-size:18px}h2{font-size:14px;margin:22px 0 6px;border-bottom:2px solid #0b5fa5;padding-bottom:3px}
+table{border-collapse:collapse;margin-top:4px}td,th{border:1px solid #c9d2dc;padding:3px 8px;font-size:12px}th{background:#eef2f6}
+.tot{font-size:14px;margin:10px 0}.tot b{font-family:Consolas,monospace}pre{background:#f4f6f8;padding:10px;border:1px solid #c9d2dc;font:11px/1.5 Consolas,monospace}</style></head><body>
+<h1>Cash Deposit Reconciliation Record</h1>
+<p><b>Store:</b> CO${state.co} — ${esc(store ? store.name : "")} &nbsp; <b>Cash date:</b> ${esc(state.cashDate)} &nbsp; <b>Generated:</b> ${new Date().toLocaleString()}</p>
+<div class="tot">Deposit <b>${money(t.deposit)}</b> · Received <b>${money(t.received)}</b> · Variance <b>${money(t.variance)}</b> ${Math.abs(t.variance) < 0.005 ? "✔ balanced" : "⚠ NOT BALANCED"}</div>
+<h2>Deposit Totals</h2><table>${tr(["Type", "Amount", "Account", "Control"], "th")}
+${DEPOSIT_TYPES.filter(d => parseAmount(state.deposits[d.type])).map(d => tr([d.type, money(parseAmount(state.deposits[d.type])), d.acct, d.prefix + mmdd(state.cashDate)])).join("")}</table>
+<h2>Schedule Reconciliation (${sch.length} items)</h2><table>${tr(["Control", "MoreInfo", "Days", "Amount", "On CC", "Received entry", "Received $", "Note"], "th")}
+${sch.map(r => tr([r.control, r.moreInfo, r.days, money(r.amount), r.onCC ? money(r.onCC) : "", r.received, r.receivedAmt ? money(r.receivedAmt) : "", r.note])).join("")}</table>
+<h2>Not On Schedule (${state.notOnSchedule.length})</h2><table>${tr(["RO/Invoice#", "Amount", "Note"], "th")}
+${state.notOnSchedule.map(n => tr([n.ref, money(parseAmount(n.amount) || 0), n.note || ""])).join("")}</table>
+<h2>BALFWD Entries (${state.balfwd.length})</h2><table>${tr(["RO/Invoice#", "Amount", "Closed"], "th")}
+${state.balfwd.map(b => tr([b.ref, money(parseAmount(b.amount) || 0), b.closed])).join("")}</table>
+<h2>Posting (JE# DD${mmddyy(state.cashDate)})</h2><table>${tr(["Co", "Account", "Amount", "Control", "Control2", "Description"], "th")}
+${posting.map(l => tr([l.co, l.acct, money(l.amt), l.control, l.control2, l.desc])).join("")}</table>
+<h2>AGJE Paste Lines</h2><pre>${esc(jeStrings(posting).join("\n"))}</pre>
+</body></html>`;
+  download(fileStem() + "-record.html", "text/html", html);
+});
+$("btnCsv").addEventListener("click", () => {
+  const { sch, t, posting } = recordData();
+  const q = v => `"${String(v == null ? "" : v).replace(/"/g, '""')}"`;
+  const lines = [];
+  const push = (...cells) => lines.push(cells.map(q).join(","));
+  push("CASH DEPOSIT RECONCILIATION RECORD");
+  push("Store", `CO${state.co}`, "Cash date", state.cashDate, "Generated", new Date().toISOString());
+  push("Deposit", money(t.deposit), "Received", money(t.received), "Variance", money(t.variance));
+  push(); push("DEPOSIT TOTALS"); push("Type", "Amount", "Account", "Control");
+  for (const d of DEPOSIT_TYPES) if (parseAmount(state.deposits[d.type]))
+    push(d.type, money(parseAmount(state.deposits[d.type])), d.acct, d.prefix + mmdd(state.cashDate));
+  push(); push("SCHEDULE"); push("Control", "MoreInfo", "Days", "Amount", "OnCC", "ReceivedEntry", "ReceivedAmt", "Note");
+  for (const r of sch) push(r.control, r.moreInfo, r.days, money(r.amount), r.onCC ? money(r.onCC) : "", r.received, r.receivedAmt ? money(r.receivedAmt) : "", r.note);
+  push(); push("NOT ON SCHEDULE"); push("RO/Invoice#", "Amount", "Note");
+  for (const n of state.notOnSchedule) push(n.ref, money(parseAmount(n.amount) || 0), n.note || "");
+  push(); push("BALFWD"); push("RO/Invoice#", "Amount", "Closed");
+  for (const b of state.balfwd) push(b.ref, money(parseAmount(b.amount) || 0), b.closed);
+  push(); push("POSTING JE# DD" + mmddyy(state.cashDate)); push("Co", "Account", "Amount", "Control", "Control2", "Description", "AGJE");
+  jeStrings(posting).forEach((s, i) => { const l = posting[i]; push(l.co, l.acct, money(l.amt), l.control, l.control2, l.desc, s); });
+  download(fileStem() + "-record.csv", "text/csv", "﻿" + lines.join("\r\n"));
+});
+
+/* ---------- session save / load ---------- */
+$("btnSave").addEventListener("click", () =>
+  download(fileStem() + "-session.json", "application/json", JSON.stringify(state, null, 1)));
+$("btnLoad").addEventListener("click", () => $("fileLoad").click());
+$("fileLoad").addEventListener("change", e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => {
+    try {
+      const s = JSON.parse(t);
+      Object.assign(state, s);
+      $("store").value = state.co; $("cashdate").value = state.cashDate;
+      $("txtSch").value = state.rawSchedule || ""; $("txtCC").value = state.rawCC || "";
+      setStatus("stSch", `${state.schedule.length} schedule item(s) restored.`, "ok");
+      setStatus("stCC", `${state.cc.length} CC transaction(s) restored.`, "ok");
+      refresh();
+    } catch (err) { alert("Could not read session file: " + err.message); }
+  });
+  e.target.value = "";
+});
+
+/* ---------- boot ---------- */
+initHeader();
+wireDrop("dropSch", "txtSch", "stSch", loadSchedule);
+wireDrop("dropCC", "txtCC", "stCC", loadCC);
+refresh();
+</script>
+</body>
+</html>

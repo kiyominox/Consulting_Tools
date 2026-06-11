@@ -27,3 +27,26 @@ Changes made:
   macro, so review the pasted report for blanks before running it.
 - The CC tab ships with a sample of the new report layout. Paste the new export at
   cell A1 (title row 1, headers row 2, data from row 3), same as before.
+
+## Standalone HTML tool (experimental)
+
+`Cash_Clearing_Reconciliation.html` is a browser-based port of the workbook — one file,
+no install, no server; everything stays on the local machine.
+
+- **Store**: pick any of the five stores (CO18/19/20/21/23), or let the tool auto-detect
+  from the `Company: NN` line of the pasted CDK schedule.
+- **Import**: paste the CDK Cash Clearing schedule (columns A:F) and the processor's
+  settlement report straight from Excel (copy → paste), or drop `.csv`/`.tsv`/`.txt` files.
+  CC columns are located by header name (`RO#/Other`, `Sale Amount`, `Card`, …).
+- **Reconcile**: deposit totals by type, automatic CC matching per control (green = exact,
+  amber = amount differs), `Y`/amount Received entry, Unfound Match → editable
+  Not-On-Schedule list (re-matches as you correct a reference), BALFWD entries with the
+  same 3-line posting expansion as the workbook, live Deposit/Received/Variance header.
+- **Export**: AGJE posting lines in the workbook's exact `Co.Acct.Cents.Control.Control2.
+  Desc.Count` format (copy to clipboard for AGJE Expert Mode paste, or download .txt), a
+  self-contained HTML reconciliation record and CSV for record keeping, and JSON session
+  save/load to resume a day in progress.
+
+Differences from the workbook: rows on the CC report with a blank `RO#/Other` are listed
+for manual review when running Unfound (the workbook skips them silently), and the
+Not-On-Schedule note goes in the JE Description field rather than Control2.
