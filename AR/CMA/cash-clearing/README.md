@@ -54,11 +54,13 @@ no install, no server; everything stays on the local machine.
   WARRANTY, PNC, AR) that routes the posting to the right account; other stores post to
   schedule clearing. A live Deposit/Received/Variance header turns green at 0.00.
   (The workbook's BALFWD table was dropped — no longer part of the workflow.)
-- **Round-up donations**: when a payment was rounded up to the next whole dollar as a
-  charity donation, the schedule row shows a 🎁 suggestion with the extra amount; tick it
-  and the posting splits — schedule amount to clearing, the rounded-up cents to the
-  store's donation account (set per store in ⚙ Setup; posting is blocked with a prompt
-  if a donation is marked but no account is configured).
+- **Donations**: when a payment came in above the schedule amount — rounded up to the
+  next whole dollar or a custom amount the customer typed — the schedule row shows a 🎁
+  suggestion with the difference (labeled "round-up" or "donation"); tick it and the
+  posting splits — schedule amount to clearing, the donation to the store's donation
+  account (set per store in ⚙ Setup; posting is blocked with a prompt if a donation is
+  marked but no account is configured). JE descriptions distinguish ROUND UP DONATION
+  from CUSTOMER DONATION.
 - **Setup screen (⚙)**: edit everything per store — names, Co numbers, clearing account,
   round-up donation account,
   deposit types/accounts/control prefixes, and Not-On-Schedule categories with their

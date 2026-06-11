@@ -167,7 +167,7 @@ window.onerror = function (msg, src, line) {
       <li>Pick the <b>store</b> (auto-detected from the schedule when possible) and the <b>cash date</b>. Accounts and Not-On-Schedule categories update to match the store.</li>
       <li><b>Upload</b> the CDK Cash Clearing schedule export, then drop the processor's <b>card, cash and check</b> reports together — they add up, and the file list shows each one with a remove button (Excel, CSV or text).</li>
       <li>Enter the actual <b>deposit totals</b> by type.</li>
-      <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount. When a payment was <b>rounded up to the next dollar as a donation</b>, the row shows a 🎁 round-up suggestion — tick it and the extra cents post to the donation account from ⚙ Setup.</li>
+      <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount. When a payment came in <b>above the schedule amount as a donation</b> — rounded up to the next dollar or a custom amount the customer typed — the row shows a 🎁 suggestion with the difference; tick it and that amount posts to the donation account from ⚙ Setup.</li>
       <li>Click <b>Run Unfound Match</b>; for each Not-On-Schedule item pick the <b>category</b> (where applicable) and correct any wrong reference number.</li>
       <li>When <b>Variance is 0.00</b>, click <b>Generate Posting</b>, then <b>Copy AGJE Lines</b> into CDK AGJE (Expert Mode, right-click → Paste).</li>
       <li>Export a <b>PDF</b> or <b>Excel</b> record for record keeping. <b>Save Session</b> to resume later.</li>
@@ -468,12 +468,13 @@ function ccIndex(ccRows) {
   return idx;
 }
 
-/* Received: explicit amount wins; else "include in full" → schedule amount; else auto CC sum. */
+/* Received: explicit amount wins; else the CC match; else "received in full" → schedule
+   amount. CC outranks the include flag so a stale checkbox can't override a real match. */
 function receivedFor(row, onCC) {
   const m = parseAmount(row.manualAmt);
   if (Number.isFinite(m) && m !== 0) return m;
-  if (row.include) return row.amount;
   if (Math.abs(onCC) > 0.004) return onCC;
+  if (row.include) return row.amount;
   return 0;
 }
 
@@ -496,18 +497,24 @@ function money(v) { return (Math.abs(v) < 0.005 ? 0 : v).toFixed(2); }
 function mmdd(dateStr)   { return dateStr ? dateStr.slice(5, 7) + dateStr.slice(8, 10) : "????"; }
 function mmddyy(dateStr) { return dateStr ? mmdd(dateStr) + dateStr.slice(2, 4) : "??????"; }
 
-/* Round-up donation: customer chose to round the charge up to the next whole dollar.
-   Candidate = CC-matched, no manual override, CC total is a whole dollar slightly above
-   the schedule amount. The user confirms per row; the difference posts to store.donation. */
+/* Donations: the customer either rounded the charge up to the next whole dollar, or
+   typed a custom donation amount on the terminal. Candidate = CC-matched row paid above
+   the schedule amount (no manual override). "Round-up" when the charged total is a whole
+   dollar within $1 of the schedule amount; otherwise a custom donation of any size.
+   The user confirms per row; the difference posts to store.donation. */
 function donationCandidate(row, onCC) {
   if (String(row.manualAmt || "").trim() !== "") return 0;
   const diff = r2(onCC - row.amount);
-  return (diff > 0.004 && diff < 1 && cents(onCC) % 100 === 0) ? diff : 0;
+  return diff > 0.004 ? diff : 0;
+}
+function isRoundUp(row, onCC) {
+  const diff = r2(onCC - row.amount);
+  return diff > 0.004 && diff < 1 && cents(onCC) % 100 === 0;
 }
 function donationFor(row, onCC) {
   if (!row.donate || String(row.manualAmt || "").trim() !== "") return 0;
   const diff = r2(onCC - row.amount);
-  return (diff > 0.004 && diff < 1) ? diff : 0;
+  return diff > 0.004 ? diff : 0;
 }
 
 /* Builds the full posting in the same order as the workbook's POST macro. */
@@ -534,7 +541,7 @@ function buildPosting(state) {
         throw err;
       }
       add(store.clearing, -(rec - donation), row.control, "", "");
-      add(store.donation, -donation, row.control, "", "ROUND UP DONATION");
+      add(store.donation, -donation, row.control, "", isRoundUp(row, onCC) ? "ROUND UP DONATION" : "CUSTOMER DONATION");
     } else {
       add(store.clearing, -rec, row.control, "", "");
     }
@@ -971,8 +978,8 @@ function renderSchedule() {
     let recvCell;
     if (onCC !== 0) {
       const donateUI = candidate > 0
-        ? `<label class="inc ${row.donate ? "on" : ""}" title="Customer rounded up to the next dollar — the extra posts to the donation account">
-             <input type="checkbox" data-don="${i}" ${row.donate ? "checked" : ""}>🎁 round-up +${money(candidate)}</label>`
+        ? `<label class="inc ${row.donate ? "on" : ""}" title="The amount paid above the schedule amount posts to the donation account">
+             <input type="checkbox" data-don="${i}" ${row.donate ? "checked" : ""}>🎁 ${isRoundUp(row, onCC) ? "round-up" : "donation"} +${money(candidate)}</label>`
         : "";
       recvCell = `<div class="recv"><span class="pill ${exact || donation > 0 ? "g" : "a"}">✓ ${money(onCC)} on CC</span>${donateUI}
         <input class="cell ovr" data-man="${i}" value="${esc(row.manualAmt)}" placeholder="override"></div>`;
@@ -1119,7 +1126,7 @@ function recordData() {
     if (rec === 0) how = "";
     else if (parseAmount(row.manualAmt) && parseAmount(row.manualAmt) !== 0) how = "manual amount";
     else if (row.include) how = "received in full";
-    else if (onCC !== 0) how = donation > 0 ? `on CC (incl. ${money(donation)} round-up donation)` : "on CC";
+    else if (onCC !== 0) how = donation > 0 ? `on CC (incl. ${money(donation)} ${isRoundUp(row, onCC) ? "round-up" : "customer"} donation)` : "on CC";
     return { ...row, onCC, card: e ? [...e.cards].join(", ") : "", receivedAmt: rec, donation, how };
   });
   return { sch, t, store, posting: lastPosting || buildPosting(state) };
@@ -1398,7 +1405,7 @@ try {
   wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
   wireImport("dropCC", "btnCCFile", "fileCC", "stCC", addCCFile, true);
   refresh();
-  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.5)";
+  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.6)";
 } catch (err) { window.onerror(err.message || String(err)); throw err; }
 </script>
 </body>
