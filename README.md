@@ -15,7 +15,7 @@ Current tool types:
 | Folder | Contents |
 |---|---|
 | `AP/` | Accounts Payable tools (coming soon) |
-| `AR/` | Accounts Receivable tools (coming soon) |
+| `AR/` | Cash Clearing reconciliation template (CMA) |
 | `GL-Reconciliation/` | GL Posting Validator |
 | `Parts/` | Parts Inventory Reconciliation |
 | `Powerposting/` | Powerposting tools (coming soon) |
