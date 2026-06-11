@@ -167,7 +167,7 @@ window.onerror = function (msg, src, line) {
       <li>Pick the <b>store</b> (auto-detected from the schedule when possible) and the <b>cash date</b>. Accounts and Not-On-Schedule categories update to match the store.</li>
       <li><b>Upload</b> the CDK Cash Clearing schedule export, then drop the processor's <b>card, cash and check</b> reports together — they add up, and the file list shows each one with a remove button (Excel, CSV or text).</li>
       <li>Enter the actual <b>deposit totals</b> by type.</li>
-      <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount.</li>
+      <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount. When a payment was <b>rounded up to the next dollar as a donation</b>, the row shows a 🎁 round-up suggestion — tick it and the extra cents post to the donation account from ⚙ Setup.</li>
       <li>Click <b>Run Unfound Match</b>; for each Not-On-Schedule item pick the <b>category</b> (where applicable) and correct any wrong reference number.</li>
       <li>When <b>Variance is 0.00</b>, click <b>Generate Posting</b>, then <b>Copy AGJE Lines</b> into CDK AGJE (Expert Mode, right-click → Paste).</li>
       <li>Export a <b>PDF</b> or <b>Excel</b> record for record keeping. <b>Save Session</b> to resume later.</li>
@@ -305,25 +305,25 @@ window.onerror = function (msg, src, line) {
 <script type="application/json" id="defaultConfig">
 {
  "stores": [
-  { "co": 18, "name": "Subaru of Winchester", "clearing": "501010",
+  { "co": 18, "name": "Subaru of Winchester", "clearing": "501010", "donation": "",
     "deposits": [
       { "type": "CASH", "acct": "501001", "prefix": "CA" }, { "type": "CREDIT", "acct": "501001", "prefix": "CR" },
       { "type": "CHECK", "acct": "501001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "507750", "prefix": "SP" },
       { "type": "PARTS POLICY", "acct": "507650", "prefix": "PP" } ],
     "nosCats": [] },
-  { "co": 19, "name": "Honda of Winchester", "clearing": "511011",
+  { "co": 19, "name": "Honda of Winchester", "clearing": "511011", "donation": "",
     "deposits": [
       { "type": "CASH", "acct": "511007", "prefix": "CA" }, { "type": "CREDIT", "acct": "511001", "prefix": "CR" },
       { "type": "CHECK", "acct": "511001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "517750", "prefix": "SP" },
       { "type": "PARTS POLICY", "acct": "517650", "prefix": "PP" } ],
     "nosCats": [] },
-  { "co": 20, "name": "Hyundai of Winchester", "clearing": "521011",
+  { "co": 20, "name": "Hyundai of Winchester", "clearing": "521011", "donation": "",
     "deposits": [
       { "type": "CASH", "acct": "521007", "prefix": "CA" }, { "type": "CREDIT", "acct": "521001", "prefix": "CR" },
       { "type": "CHECK", "acct": "521001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "527750", "prefix": "SP" },
       { "type": "PARTS POLICY", "acct": "527650", "prefix": "PP" } ],
     "nosCats": [] },
-  { "co": 21, "name": "CMA's Toyota Chevrolet of Martinsburg", "clearing": "531011",
+  { "co": 21, "name": "CMA's Toyota Chevrolet of Martinsburg", "clearing": "531011", "donation": "",
     "deposits": [
       { "type": "CASH", "acct": "531007", "prefix": "CA" }, { "type": "CREDIT", "acct": "531001", "prefix": "CR" },
       { "type": "CHECK", "acct": "531001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "537750", "prefix": "SP" },
@@ -331,7 +331,7 @@ window.onerror = function (msg, src, line) {
     "nosCats": [
       { "label": "EXT WARRANTY", "acct": "531150" }, { "label": "GM WARRANTY", "acct": "531140" },
       { "label": "TOY WARRANTY", "acct": "541140" }, { "label": "PNC", "acct": "531122" }, { "label": "AR", "acct": "531120" } ] },
-  { "co": 23, "name": "CMA's CDJR of Martinsburg", "clearing": "551011",
+  { "co": 23, "name": "CMA's CDJR of Martinsburg", "clearing": "551011", "donation": "",
     "deposits": [
       { "type": "CASH", "acct": "551007", "prefix": "CA" }, { "type": "CREDIT", "acct": "551001", "prefix": "CR" },
       { "type": "CHECK", "acct": "551001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "557750", "prefix": "SP" },
@@ -358,6 +358,7 @@ function sanitizeConfig(c) {
       co: Number(s.co) || 0,
       name: String(s.name == null ? "" : s.name).trim(),
       clearing: String(s.clearing == null ? "" : s.clearing).trim(),
+      donation: String(s.donation == null ? "" : s.donation).trim(),
       deposits: (Array.isArray(s.deposits) ? s.deposits : [])
         .map(d => ({ type: String(d.type || "").trim().toUpperCase(), acct: String(d.acct || "").trim(), prefix: String(d.prefix || "").trim().toUpperCase() }))
         .filter(d => d.type !== ""),
@@ -495,6 +496,20 @@ function money(v) { return (Math.abs(v) < 0.005 ? 0 : v).toFixed(2); }
 function mmdd(dateStr)   { return dateStr ? dateStr.slice(5, 7) + dateStr.slice(8, 10) : "????"; }
 function mmddyy(dateStr) { return dateStr ? mmdd(dateStr) + dateStr.slice(2, 4) : "??????"; }
 
+/* Round-up donation: customer chose to round the charge up to the next whole dollar.
+   Candidate = CC-matched, no manual override, CC total is a whole dollar slightly above
+   the schedule amount. The user confirms per row; the difference posts to store.donation. */
+function donationCandidate(row, onCC) {
+  if (String(row.manualAmt || "").trim() !== "") return 0;
+  const diff = r2(onCC - row.amount);
+  return (diff > 0.004 && diff < 1 && cents(onCC) % 100 === 0) ? diff : 0;
+}
+function donationFor(row, onCC) {
+  if (!row.donate || String(row.manualAmt || "").trim() !== "") return 0;
+  const diff = r2(onCC - row.amount);
+  return (diff > 0.004 && diff < 1) ? diff : 0;
+}
+
 /* Builds the full posting in the same order as the workbook's POST macro. */
 function buildPosting(state) {
   const co = state.co, store = getStore(co), lines = [];
@@ -510,7 +525,19 @@ function buildPosting(state) {
   for (const row of state.schedule) {
     const onCC = (idx.get(normRef(row.control)) || { total: 0 }).total;
     const rec = receivedFor(row, onCC);
-    if (rec !== 0) add(store.clearing, -rec, row.control, "", "");
+    if (rec === 0) continue;
+    const donation = donationFor(row, onCC);
+    if (donation > 0) {
+      if (!store.donation) {
+        const err = new Error(`RO ${row.control} is marked as a round-up donation, but no donation account is set for CO${co}.\n\nOpen ⚙ Setup and fill in the "Round-up donation acct" for this store.`);
+        err.isDonationConfig = true;
+        throw err;
+      }
+      add(store.clearing, -(rec - donation), row.control, "", "");
+      add(store.donation, -donation, row.control, "", "ROUND UP DONATION");
+    } else {
+      add(store.clearing, -rec, row.control, "", "");
+    }
   }
   for (const n of state.notOnSchedule) {
     const amt = parseAmount(n.amount);
@@ -740,7 +767,7 @@ const SAMPLE_CC_CARDS = SAMPLE_CC_HDR.concat([
   "HOWARD, THOMAS R\t06-10-26 11:02 AM\t455144\t108266\t118.92\tSale\tDiscover\t0641\t01082R\tService\tCard Present\tBachtell, Neil\tService - 3957",
   "BERKELEY SPRINGS MGR\t06-10-26 09:35 AM\t218011\t\t62.01\tSale\tMasterCard\t5224\t077181\tParts\tHand Key\tBachtell, Neil\t",
   "BERKELEY SPRINGS MGR\t06-10-26 02:10 PM\t218011\t\t1000.00\tSale\tVisa\t9052\t05496B\tParts\tCard Present\tBachtell, Neil\t",
-  "BOWMAN, DOUGLASS\t06-10-26 10:57 AM\t5426\t\t785.38\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tBachtell, Neil\t",
+  "BOWMAN, DOUGLASS\t06-10-26 10:57 AM\t5426\t\t786.00\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tBachtell, Neil\t",
 ]).join("\n");
 const SAMPLE_CC_OTHER = SAMPLE_CC_HDR.concat([
   "ANDERSON, DOUGLAS\t06-10-26 10:43 AM\t999111\t74923\t25.50\tSale\tVisa\t3889\t010915\tParts\tCard Present\tBachtell, Neil\tService - 3957",
@@ -849,7 +876,7 @@ function wireImport(boxId, btnId, fileId, stId, onRows, multi) {
 }
 function loadSchedule(rows, sourceName) {
   const p = parseSchedule(rows);
-  state.schedule = p.rows.map(r => ({ ...r, include: false, manualAmt: "" }));
+  state.schedule = p.rows.map(r => ({ ...r, include: false, manualAmt: "", donate: false }));
   const src = sourceName ? ` (${sourceName})` : "";
   if (p.company && storeList().includes(p.company)) {
     state.co = p.company; $("store").value = p.company; onStoreChange();
@@ -901,7 +928,7 @@ $("btnSample").addEventListener("click", () => {
   addCCFile(SAMPLE_CC_CARDS, "sample-cards.xlsx");
   addCCFile(SAMPLE_CC_OTHER, "sample-cash-checks.xlsx");
   for (const row of state.schedule) if (row.control === "213835" || row.control === "347151") row.include = true;
-  state.deposits = { "CASH": "28.97", "CREDIT": "1991.81", "CHECK": "89.75" };
+  state.deposits = { "CASH": "28.97", "CREDIT": "1992.43", "CHECK": "89.75" };
   state.notOnSchedule = unfoundMatch(state.schedule, state.cc).rows;
   refresh();
 });
@@ -935,30 +962,41 @@ function renderSchedule() {
     const rec = receivedFor(row, onCC);
     recTot += rec;
     const exact = onCC !== 0 && Math.abs(onCC - row.amount) < 0.005;
+    const candidate = onCC !== 0 ? donationCandidate(row, onCC) : 0;
+    const donation = onCC !== 0 ? donationFor(row, onCC) : 0;
     let cls = "";
-    if (onCC !== 0) cls = exact ? "matched" : "partial";
+    if (onCC !== 0) cls = (exact || donation > 0) ? "matched" : "partial";
     else if (rec !== 0) cls = "recvd";
 
     let recvCell;
     if (onCC !== 0) {
-      recvCell = `<div class="recv"><span class="pill ${exact ? "g" : "a"}">✓ ${money(onCC)} on CC</span>
+      const donateUI = candidate > 0
+        ? `<label class="inc ${row.donate ? "on" : ""}" title="Customer rounded up to the next dollar — the extra posts to the donation account">
+             <input type="checkbox" data-don="${i}" ${row.donate ? "checked" : ""}>🎁 round-up +${money(candidate)}</label>`
+        : "";
+      recvCell = `<div class="recv"><span class="pill ${exact || donation > 0 ? "g" : "a"}">✓ ${money(onCC)} on CC</span>${donateUI}
         <input class="cell ovr" data-man="${i}" value="${esc(row.manualAmt)}" placeholder="override"></div>`;
     } else {
       recvCell = `<div class="recv">
         <label class="inc ${row.include ? "on" : ""}"><input type="checkbox" data-inc="${i}" ${row.include ? "checked" : ""}>Received in full</label>
         <input class="cell ovr" data-man="${i}" value="${esc(row.manualAmt)}" placeholder="or $ amt"></div>`;
     }
+    const jeCell = rec
+      ? (donation > 0 ? `${money(-(rec - donation))}<br><span title="to donation account">🎁 ${money(-donation)}</span>` : money(-rec))
+      : "";
     return `<tr class="${cls}">
       <td style="font-family:var(--mono)">${esc(row.control)}</td><td>${esc(row.moreInfo)}</td>
       <td class="num">${esc(row.days)}</td><td class="num">${money(row.amount)}</td>
       <td class="num">${onCC ? money(onCC) : ""}</td>
       <td>${recvCell}</td><td>${esc(card)}</td>
-      <td class="num">${rec ? money(-rec) : ""}</td></tr>`;
+      <td class="num">${jeCell}</td></tr>`;
   }).join("");
   $("schCount").textContent = `— ${state.schedule.length} items`;
   $("schRecTot").textContent = money(recTot);
   tb.querySelectorAll("[data-inc]").forEach(inp =>
     inp.addEventListener("change", e => { state.schedule[Number(e.target.dataset.inc)].include = e.target.checked; refresh(); }));
+  tb.querySelectorAll("[data-don]").forEach(inp =>
+    inp.addEventListener("change", e => { state.schedule[Number(e.target.dataset.don)].donate = e.target.checked; refresh(); }));
   tb.querySelectorAll("[data-man]").forEach(inp =>
     inp.addEventListener("change", e => { state.schedule[Number(e.target.dataset.man)].manualAmt = e.target.value; refresh(); }));
 }
@@ -1041,7 +1079,8 @@ $("btnAddNos").addEventListener("click", () => { state.notOnSchedule.push({ ref:
 $("btnPost").addEventListener("click", () => {
   const t = totals(state);
   if (Math.abs(t.variance) >= 0.005 && !confirm(`Variance is ${money(t.variance)} (should be 0.00). Generate the posting anyway?`)) return;
-  lastPosting = buildPosting(state);
+  try { lastPosting = buildPosting(state); }
+  catch (err) { alert(err.message); if (err.isDonationConfig) openSetup(); return; }
   const bal = r2(lastPosting.reduce((a, l) => a + l.amt, 0));
   $("postWrap").style.display = "";
   $("jeRef").textContent = "DD" + mmddyy(state.cashDate);
@@ -1069,24 +1108,27 @@ $("btnDlJe").addEventListener("click", () => download(fileStem() + "-AGJE.txt", 
 
 /* ---------- record data ---------- */
 function recordData() {
+  // throws if a donation is marked but no account is configured (same as Generate Posting)
   const idx = ccIndex(state.cc), t = totals(state), store = getStore(state.co);
   const sch = state.schedule.map(row => {
     const e = idx.get(normRef(row.control));
     const onCC = e ? r2(e.total) : 0;
     const rec = receivedFor(row, onCC);
+    const donation = donationFor(row, onCC);
     let how = "";
     if (rec === 0) how = "";
     else if (parseAmount(row.manualAmt) && parseAmount(row.manualAmt) !== 0) how = "manual amount";
     else if (row.include) how = "received in full";
-    else if (onCC !== 0) how = "on CC";
-    return { ...row, onCC, card: e ? [...e.cards].join(", ") : "", receivedAmt: rec, how };
+    else if (onCC !== 0) how = donation > 0 ? `on CC (incl. ${money(donation)} round-up donation)` : "on CC";
+    return { ...row, onCC, card: e ? [...e.cards].join(", ") : "", receivedAmt: rec, donation, how };
   });
   return { sch, t, store, posting: lastPosting || buildPosting(state) };
 }
 
 /* ---------- PDF (styled print view) ---------- */
 $("btnPdf").addEventListener("click", () => {
-  const { sch, t, store, posting } = recordData();
+  let rd; try { rd = recordData(); } catch (err) { alert(err.message); if (err.isDonationConfig) openSetup(); return; }
+  const { sch, t, store, posting } = rd;
   const balanced = Math.abs(t.variance) < 0.005;
   const tr = (cells, opts = {}) => `<tr>${cells.map((c, i) =>
     `<${opts.head ? "th" : "td"}${(opts.num && opts.num.includes(i)) ? ' class="num"' : ""}>${esc(c == null ? "" : c)}</${opts.head ? "th" : "td"}>`).join("")}</tr>`;
@@ -1141,8 +1183,9 @@ $("btnPdf").addEventListener("click", () => {
 
 /* ---------- Excel record ---------- */
 $("btnXlsx").addEventListener("click", async () => {
+  let rd; try { rd = recordData(); } catch (err) { alert(err.message); if (err.isDonationConfig) openSetup(); return; }
   try {
-    const { sch, t, store, posting } = recordData();
+    const { sch, t, store, posting } = rd;
     const S = ST;
     const txt = (v, s) => ({ v, s });
     const num = (v, s) => ({ v, n: true, s: s == null ? S.MONEY : s });
@@ -1256,6 +1299,7 @@ function renderSetup() {
       <div style="max-width:110px"><label>Co #</label><input type="number" class="mono" id="suCo" value="${esc(String(s.co))}"></div>
       <div style="flex:2"><label>Store name</label><input type="text" id="suName" value="${esc(s.name)}"></div>
       <div><label>Schedule clearing acct</label><input type="text" class="mono" id="suClearing" value="${esc(s.clearing)}"></div>
+      <div><label>Round-up donation acct</label><input type="text" class="mono" id="suDonation" value="${esc(s.donation || "")}" placeholder="optional"></div>
     </div>
     <label>Deposit types</label>
     <table><thead><tr><th>Type</th><th>Account</th><th>Control prefix</th><th></th></tr></thead><tbody>${depRows}</tbody></table>
@@ -1268,6 +1312,7 @@ function renderSetup() {
   $("suCo").addEventListener("change", e => { s.co = Number(e.target.value) || s.co; upd(); });
   $("suName").addEventListener("change", e => { s.name = e.target.value; upd(); });
   $("suClearing").addEventListener("change", e => { s.clearing = e.target.value.trim(); });
+  $("suDonation").addEventListener("change", e => { s.donation = e.target.value.trim(); });
   pane.querySelectorAll("[data-sd]").forEach(inp => inp.addEventListener("change", e => {
     const [f, i] = e.target.dataset.sd.split(":");
     s.deposits[Number(i)][f] = f === "acct" ? e.target.value.trim() : e.target.value.trim().toUpperCase();
@@ -1353,7 +1398,7 @@ try {
   wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
   wireImport("dropCC", "btnCCFile", "fileCC", "stCC", addCCFile, true);
   refresh();
-  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.4)";
+  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.5)";
 } catch (err) { window.onerror(err.message || String(err)); throw err; }
 </script>
 </body>
