@@ -48,6 +48,12 @@
   .drop .status{font-size:12px;color:var(--muted);margin-top:10px;min-height:17px;font-weight:600}
   .drop .status.ok{color:var(--greentext)}
   .drop .status.err{color:#b32f2f}
+  .filelist{display:flex;flex-direction:column;gap:5px;margin-top:10px;text-align:left}
+  .filechip{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--line);border-radius:6px;padding:5px 9px;font-size:12px}
+  .filechip .fname{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:230px}
+  .filechip .fmeta{color:var(--muted);margin-left:auto;white-space:nowrap;font-family:var(--mono);font-size:11.5px}
+  .filechip button{padding:1px 7px;font-size:11px}
+  .filelist .clearrow{display:flex;justify-content:flex-end;margin-top:2px}
 
   table{border-collapse:collapse;width:100%;font-size:13px}
   th{background:#eef2f6;text-align:left;padding:7px 9px;border-bottom:2px solid var(--line);white-space:nowrap;position:sticky;top:0;font-size:12px;letter-spacing:.2px}
@@ -159,7 +165,7 @@ window.onerror = function (msg, src, line) {
     <summary>How to use this tool — daily workflow</summary>
     <ol>
       <li>Pick the <b>store</b> (auto-detected from the schedule when possible) and the <b>cash date</b>. Accounts and Not-On-Schedule categories update to match the store.</li>
-      <li><b>Upload</b> the CDK Cash Clearing schedule export and the payment-processor report (Excel, CSV or text).</li>
+      <li><b>Upload</b> the CDK Cash Clearing schedule export, then drop the processor's <b>card, cash and check</b> reports together — they add up, and the file list shows each one with a remove button (Excel, CSV or text).</li>
       <li>Enter the actual <b>deposit totals</b> by type.</li>
       <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount.</li>
       <li>Click <b>Run Unfound Match</b>; for each Not-On-Schedule item pick the <b>category</b> (where applicable) and correct any wrong reference number.</li>
@@ -179,10 +185,11 @@ window.onerror = function (msg, src, line) {
         <div class="status" id="stSch">Nothing loaded.</div>
       </div>
       <div class="drop" id="dropCC">
-        <h3>CC Report — payment processor transactions</h3>
-        <button id="btnCCFile">Upload CC report…</button>
-        <input type="file" id="fileCC" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt" style="display:none">
-        <div class="hint">or drag &amp; drop the export file here</div>
+        <h3>Payment Processor Reports — cards, cash &amp; checks</h3>
+        <button id="btnCCFile">Add report file(s)…</button>
+        <input type="file" id="fileCC" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt" multiple style="display:none">
+        <div class="hint">drop the card, cash and check exports here — files <b>add together</b>; re-adding a file with the same name replaces it</div>
+        <div class="filelist" id="ccFileList"></div>
         <div class="status" id="stCC">Nothing loaded.</div>
       </div>
     </div>
@@ -721,16 +728,20 @@ const SAMPLE_SCH = [
   "\t\t213835\tDetail\t1\t89.75", "\t\t347151\tDetail\t1\t28.97",
   "\t\t809485\tDetail\t4\t469.25", "\t\t5426\tDetail\t1\t785.38",
 ].join("\n");
-const SAMPLE_CC = [
+const SAMPLE_CC_HDR = [
   "CMA's Toyota Chevrolet of Martinsburg\tOpen Transactions",
   "Name\tDate\tRO#/Other\tCust #\tSale Amount\tOperation\tCard\tLast 4\tAuth Code\tDepartment\tSource\tUser\tTerminal",
+];
+const SAMPLE_CC_CARDS = SAMPLE_CC_HDR.concat([
   "HOWARD, THOMAS R\t06-10-26 11:02 AM\t455144\t108266\t118.92\tSale\tDiscover\t0641\t01082R\tService\tCard Present\tBachtell, Neil\tService - 3957",
   "BERKELEY SPRINGS MGR\t06-10-26 09:35 AM\t218011\t\t62.01\tSale\tMasterCard\t5224\t077181\tParts\tHand Key\tBachtell, Neil\t",
   "BERKELEY SPRINGS MGR\t06-10-26 02:10 PM\t218011\t\t1000.00\tSale\tVisa\t9052\t05496B\tParts\tCard Present\tBachtell, Neil\t",
   "BOWMAN, DOUGLASS\t06-10-26 10:57 AM\t5426\t\t785.38\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tBachtell, Neil\t",
+]).join("\n");
+const SAMPLE_CC_OTHER = SAMPLE_CC_HDR.concat([
   "ANDERSON, DOUGLAS\t06-10-26 10:43 AM\t999111\t74923\t25.50\tSale\tVisa\t3889\t010915\tParts\tCard Present\tBachtell, Neil\tService - 3957",
   "WALK-IN CUSTOMER\t06-10-26 10:30 AM\t\t\t77.77\tSale\tVisa\t2222\tABC123\tParts\tHand Key\tBachtell, Neil\t",
-].join("\n");
+]).join("\n");
 
 /* ---------- pristine source + config bootstrap ---------- */
 /* Captured before any DOM mutation so "Download shareable copy" can rebuild the file. */
@@ -755,7 +766,8 @@ const state = {
   cashDate: new Date().toISOString().slice(0, 10),
   deposits: {},
   schedule: [],        // {control, moreInfo, days, amount, include, manualAmt}
-  cc: [],              // {ref, amount, name, card, op, dept}
+  ccFiles: [],         // {name, rows:[{ref, amount, name, card, op, dept}]} — additive
+  cc: [],              // derived: all ccFiles rows combined
   notOnSchedule: [],   // {ref, amount, note, category}
 };
 let lastPosting = null;
@@ -816,18 +828,20 @@ async function fileToRows(file) {
   const text = await file.text();
   return text.includes("\t") ? splitRows(text) : csvRows(text);
 }
-function wireImport(boxId, btnId, fileId, stId, onRows) {
+function wireImport(boxId, btnId, fileId, stId, onRows, multi) {
   const box = $(boxId);
-  const handle = async file => {
-    if (!file) return;
-    try { onRows(await fileToRows(file), file.name); }
-    catch (err) { setStatus(stId, err.message, "err"); }
+  const handle = async files => {
+    const list = multi ? [...(files || [])] : [files && files[0]].filter(Boolean);
+    for (const file of list) {
+      try { onRows(await fileToRows(file), file.name); }
+      catch (err) { setStatus(stId, `${file.name}: ${err.message}`, "err"); }
+    }
   };
   $(btnId).addEventListener("click", () => $(fileId).click());
-  $(fileId).addEventListener("change", e => { handle(e.target.files[0]); e.target.value = ""; });
+  $(fileId).addEventListener("change", e => { handle(e.target.files); e.target.value = ""; });
   box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("over"); });
   box.addEventListener("dragleave", () => box.classList.remove("over"));
-  box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("over"); handle(e.dataTransfer.files && e.dataTransfer.files[0]); });
+  box.addEventListener("drop", e => { e.preventDefault(); box.classList.remove("over"); handle(e.dataTransfer.files); });
 }
 function loadSchedule(rows, sourceName) {
   const p = parseSchedule(rows);
@@ -841,21 +855,47 @@ function loadSchedule(rows, sourceName) {
     refresh();
   }
 }
-function loadCC(rows, sourceName) {
+/* CC files are additive: card, cash and check exports all land in one combined list. */
+function addCCFile(rows, sourceName) {
   const p = parseCC(rows);
-  if (p.error) { state.cc = []; setStatus("stCC", p.error, "err"); }
+  if (p.error) { setStatus("stCC", `${sourceName || "file"}: ${p.error}`, "err"); return; }
+  const name = sourceName || `file ${state.ccFiles.length + 1}`;
+  const existing = state.ccFiles.findIndex(f => f.name === name);
+  if (existing >= 0) state.ccFiles[existing] = { name, rows: p.rows };
+  else state.ccFiles.push({ name, rows: p.rows });
+  rebuildCC(existing >= 0 ? `${name} reloaded.` : "");
+}
+function removeCCFile(i) { state.ccFiles.splice(i, 1); rebuildCC(); }
+function clearCCFiles() { state.ccFiles = []; rebuildCC(); }
+function rebuildCC(extraMsg) {
+  state.cc = state.ccFiles.flatMap(f => f.rows);
+  renderCCFiles();
+  if (!state.ccFiles.length) { setStatus("stCC", "Nothing loaded.", ""); }
   else {
-    state.cc = p.rows;
-    const blank = p.rows.filter(r => normRef(r.ref) === "").length;
-    const src = sourceName ? ` (${sourceName})` : "";
-    setStatus("stCC", `${p.rows.length} CC transaction(s) loaded${src}, total ${money(p.rows.reduce((a, r) => a + r.amount, 0))}` +
-      (blank ? ` · ⚠ ${blank} row(s) have a blank RO#/Other` : ""), "ok");
+    const blank = state.cc.filter(r => normRef(r.ref) === "").length;
+    setStatus("stCC",
+      `${state.ccFiles.length} file(s) · ${state.cc.length} transaction(s) · total ${money(state.cc.reduce((a, r) => a + r.amount, 0))}` +
+      (blank ? ` · ⚠ ${blank} blank RO#/Other` : "") + (extraMsg ? ` · ${extraMsg}` : "") +
+      (state.notOnSchedule.length ? " · files changed — re-run Unfound Match" : ""), "ok");
   }
   refresh();
 }
+function renderCCFiles() {
+  const el = $("ccFileList");
+  if (!state.ccFiles.length) { el.innerHTML = ""; return; }
+  el.innerHTML = state.ccFiles.map((f, i) => `
+    <div class="filechip"><span class="fname" title="${esc(f.name)}">📄 ${esc(f.name)}</span>
+    <span class="fmeta">${f.rows.length} txn · ${money(f.rows.reduce((a, r) => a + r.amount, 0))}</span>
+    <button class="mini alt" data-ccdel="${i}" title="Remove this file">✕</button></div>`).join("") +
+    `<div class="clearrow"><button class="mini warn" id="btnCCClear">Clear all files</button></div>`;
+  el.querySelectorAll("[data-ccdel]").forEach(b => b.addEventListener("click", e => removeCCFile(Number(e.target.dataset.ccdel))));
+  $("btnCCClear").addEventListener("click", () => { if (confirm("Remove all loaded report files?")) clearCCFiles(); });
+}
 $("btnSample").addEventListener("click", () => {
   loadSchedule(SAMPLE_SCH, "sample");
-  loadCC(SAMPLE_CC, "sample");
+  state.ccFiles = [];
+  addCCFile(SAMPLE_CC_CARDS, "sample-cards.xlsx");
+  addCCFile(SAMPLE_CC_OTHER, "sample-cash-checks.xlsx");
   for (const row of state.schedule) if (row.control === "213835" || row.control === "347151") row.include = true;
   state.deposits = { "CASH": "28.97", "CREDIT": "1991.81", "CHECK": "89.75" };
   state.notOnSchedule = unfoundMatch(state.schedule, state.cc).rows;
@@ -1162,11 +1202,12 @@ $("fileLoad").addEventListener("change", e => {
                  include: /^y$/i.test(recv), manualAmt: /^y$/i.test(recv) ? "" : recv };
       });
       if (Array.isArray(s.notOnSchedule)) s.notOnSchedule = s.notOnSchedule.map(n => ({ category: "", ...n }));
+      // migrate sessions saved before additive CC files
+      if (!Array.isArray(s.ccFiles)) s.ccFiles = (Array.isArray(s.cc) && s.cc.length) ? [{ name: "restored session data", rows: s.cc }] : [];
       Object.assign(state, s);
       $("store").value = state.co; $("cashdate").value = state.cashDate;
       setStatus("stSch", `${state.schedule.length} schedule item(s) restored from session.`, state.schedule.length ? "ok" : "");
-      setStatus("stCC", `${state.cc.length} CC transaction(s) restored from session.`, state.cc.length ? "ok" : "");
-      refresh();
+      rebuildCC("restored from session");
     } catch (err) { alert("Could not read session file: " + err.message); }
   });
   e.target.value = "";
@@ -1306,9 +1347,9 @@ $("setupShare").addEventListener("click", () => {
 try {
   initHeader();
   wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
-  wireImport("dropCC", "btnCCFile", "fileCC", "stCC", loadCC);
+  wireImport("dropCC", "btnCCFile", "fileCC", "stCC", addCCFile, true);
   refresh();
-  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.3)";
+  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.4)";
 } catch (err) { window.onerror(err.message || String(err)); throw err; }
 </script>
 </body>

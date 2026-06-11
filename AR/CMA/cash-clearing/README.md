@@ -38,11 +38,14 @@ no install, no server; everything stays on the local machine.
   numbers (deposit/clearing) and its own Not-On-Schedule categories, all extracted from
   that store's workbook — changing the store updates the accounts, deposit types
   (CO21/CO23 include XTIME) and category options everywhere.
-- **Import**: upload (or drag &amp; drop) the CDK Cash Clearing schedule export and the
-  processor's settlement report — Excel files (`.xlsx`/`.xlsm`) are read natively in the
-  browser (no libraries), and `.csv`/`.tsv`/`.txt` also work. CC columns are located by
+- **Import**: upload (or drag &amp; drop) the CDK Cash Clearing schedule export, plus the
+  processor's settlement reports — the card, cash and check exports are **additive**: drop
+  them on top of each other and they combine, with a loaded-file list showing each file's
+  transaction count/total, a per-file remove button, and a clear-all. Re-adding a file
+  with the same name replaces it. Excel files (`.xlsx`/`.xlsm`) are read natively in the
+  browser (no libraries), and `.csv`/`.tsv`/`.txt` also work. Columns are located by
   header name (`RO#/Other`, `Sale Amount`, `Card`, …). A **Generate using sample data**
-  button loads a built-in balanced example for testing/training.
+  button loads a built-in balanced example (two report files) for testing/training.
 - **Reconcile**: deposit totals by type; automatic CC matching per control (green = exact,
   amber = amount differs). CC-matched items are received automatically — for anything
   received outside the processor you **click “Received in full”** or type the exact amount
