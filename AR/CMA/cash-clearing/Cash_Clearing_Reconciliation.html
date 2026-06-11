@@ -31,13 +31,14 @@
   .body{padding:14px 16px}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   @media(max-width:900px){.cols{grid-template-columns:1fr}}
-  .drop{border:2px dashed var(--line);border-radius:8px;padding:10px;transition:.15s}
+  .drop{border:2px dashed var(--line);border-radius:8px;padding:14px;transition:.15s;text-align:center}
   .drop.over{border-color:var(--accent);background:#eef6fd}
-  .drop h3{margin:2px 0 6px;font-size:13px}
-  .drop textarea{width:100%;height:110px;border:1px solid var(--line);border-radius:6px;padding:8px;font:12px var(--mono);resize:vertical}
-  .drop .status{font-size:12px;color:var(--muted);margin-top:5px;min-height:17px}
+  .drop.loaded{border-style:solid;border-color:var(--greenline);background:var(--green)}
+  .drop h3{margin:2px 0 10px;font-size:13px}
+  .drop .status{font-size:12px;color:var(--muted);margin-top:9px;min-height:17px}
   .drop .status.ok{color:var(--accent2);font-weight:600}
   .drop .status.err{color:#b32f2f;font-weight:600}
+  .drop .hint{font-size:11px;color:var(--muted);margin-top:3px}
   table{border-collapse:collapse;width:100%;font-size:13px}
   th{background:#eef2f6;text-align:left;padding:6px 8px;border-bottom:2px solid var(--line);white-space:nowrap;position:sticky;top:0}
   td{padding:4px 8px;border-bottom:1px solid #edf1f5;vertical-align:middle}
@@ -92,31 +93,38 @@
   <details class="help">
     <summary>How to use this tool (daily workflow)</summary>
     <ol>
-      <li>Select the <b>store</b> (auto-detected from the schedule paste when possible) and enter the <b>cash date</b>.</li>
-      <li>In CDK, run Accounting Schedule 1 — CASH CLEARING (no zero-balance controls, include post-ahead), open the export, copy columns A:F, and paste into the <b>CDK Schedule</b> box. Or drop a .csv/.tsv/.txt file.</li>
-      <li>From the payment processor site, export the day's transactions, select all, copy, and paste into the <b>CC Report</b> box.</li>
+      <li>Select the <b>store</b> (auto-detected from the schedule upload when possible) and enter the <b>cash date</b>.</li>
+      <li>In CDK, run Accounting Schedule 1 — CASH CLEARING (no zero-balance controls, include post-ahead), export to Excel, and upload the file under <b>CDK Schedule</b>.</li>
+      <li>From the payment processor site, export the day's transactions and upload the file under <b>CC Report</b>.</li>
       <li>Enter the actual <b>deposit totals</b> by type.</li>
       <li>Click <b>Run Unfound Match</b> — CC transactions not on the schedule appear under Not&nbsp;On&nbsp;Schedule. Fix any wrong reference numbers there (the amount/note re-match as you type).</li>
       <li>For schedule items paid outside the processor, type <b>Y</b> (or the actual amount) in the Received column. CC-matched rows are received automatically.</li>
-      <li>Record items missing from the schedule entirely under <b>BALFWD Entries</b> (closed RO/invoice, amount, close date).</li>
       <li>When the <b>Variance is 0.00</b>, click <b>Generate Posting</b>, then copy the AGJE lines and paste into CDK AGJE (Expert Mode, right-click → Paste).</li>
       <li>Click <b>Export Record</b> to download the reconciliation record for record keeping. <b>Save Session</b> lets you resume later.</li>
     </ol>
   </details>
 
   <section>
-    <h2><span class="step">1</span> Import Data <small>— paste from Excel (Ctrl+C there, Ctrl+V here) or drop a .csv / .tsv / .txt file</small></h2>
+    <h2><span class="step">1</span> Import Data <small>— upload or drop the exports: Excel (.xlsx / .xlsm), .csv, .tsv or .txt</small></h2>
     <div class="body cols">
       <div class="drop" id="dropSch">
-        <h3>CDK Schedule — Cash Clearing (columns A:F)</h3>
-        <textarea id="txtSch" placeholder="Paste the CDK schedule export here…"></textarea>
+        <h3>CDK Schedule — Cash Clearing</h3>
+        <button id="btnSchFile">Upload schedule…</button>
+        <input type="file" id="fileSch" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt" style="display:none">
+        <div class="hint">or drag &amp; drop the export file here</div>
         <div class="status" id="stSch">Nothing loaded.</div>
       </div>
       <div class="drop" id="dropCC">
         <h3>CC Report — payment processor transactions</h3>
-        <textarea id="txtCC" placeholder="Paste the processor export here (Name / Date / RO#&#47;Other / … / Sale Amount)…"></textarea>
+        <button id="btnCCFile">Upload CC report…</button>
+        <input type="file" id="fileCC" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt" style="display:none">
+        <div class="hint">or drag &amp; drop the export file here</div>
         <div class="status" id="stCC">Nothing loaded.</div>
       </div>
+    </div>
+    <div class="totline">
+      <button id="btnSample" class="mini alt">Generate using sample data</button>
+      <span class="note">Loads a built-in sample schedule, CC report and deposits so you can try the whole workflow without real files.</span>
     </div>
   </section>
 
@@ -141,7 +149,7 @@
           <th>Control</th><th>MoreInfo</th><th class="num">Days</th><th class="num">Amount $</th>
           <th class="num">On CC Stmnt</th><th>Received (Y / amt)</th><th>Note</th><th class="num">For JE</th>
         </tr></thead>
-        <tbody id="schBody"><tr><td colspan="8" class="empty">Paste the CDK schedule above to begin.</td></tr></tbody>
+        <tbody id="schBody"><tr><td colspan="8" class="empty">Upload the CDK schedule above to begin.</td></tr></tbody>
       </table>
     </div>
     <div class="totline">
@@ -166,21 +174,7 @@
   </section>
 
   <section>
-    <h2><span class="step">5</span> BALFWD Entries <small>— RO/invoice closed on or before the cash date</small></h2>
-    <div class="body">
-      <div class="btnrow" style="margin:0 0 10px">
-        <button id="btnAddBf" class="mini alt">+ add row</button>
-        <span class="note">Each entry posts three lines: −amount to BAL-FWD, then +/− wash on the RO control marked “MOVED TO BALFWD”.</span>
-      </div>
-      <table style="max-width:820px">
-        <thead><tr><th>RO / Invoice #</th><th class="num">Amount received</th><th>Closed (e.g. CLOSED 0312)</th><th></th></tr></thead>
-        <tbody id="bfBody"><tr><td colspan="4" class="empty">No balance-forward items.</td></tr></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section>
-    <h2><span class="step">6</span> Posting &amp; Exports</h2>
+    <h2><span class="step">5</span> Posting &amp; Exports</h2>
     <div class="body">
       <div class="btnrow" style="margin:0">
         <button id="btnPost" class="go">Generate Posting</button>
@@ -237,6 +231,12 @@ function splitRows(text) {
   return text.replace(/\r\n?/g, "\n").split("\n")
     .map(line => line.split("\t").map(c => c.trim()));
 }
+/* parsers accept either raw TSV text or an array-of-rows (from the Excel reader) */
+function toRows(input) {
+  return Array.isArray(input)
+    ? input.map(r => r.map(c => String(c == null ? "" : c).trim()))
+    : splitRows(input);
+}
 function parseAmount(s) {
   if (s == null) return NaN;
   s = String(s).trim().replace(/[$,]/g, "");
@@ -254,9 +254,9 @@ function normRef(v) {
 }
 
 /* CDK schedule export, columns A:F → control in col C (index 2), amount in col F (index 5). */
-function parseSchedule(text) {
+function parseSchedule(input) {
   const out = { rows: [], company: null };
-  for (const cells of splitRows(text)) {
+  for (const cells of toRows(input)) {
     const joined = cells.join(" ");
     const m = joined.match(/Company:\s*(\d+)/i);
     if (m) out.company = Number(m[1]);
@@ -269,8 +269,8 @@ function parseSchedule(text) {
 }
 
 /* New processor report. Columns located by header names so extra/reordered columns are fine. */
-function parseCC(text) {
-  const rows = splitRows(text);
+function parseCC(input) {
+  const rows = toRows(input);
   let hdr = -1, col = {};
   for (let i = 0; i < rows.length; i++) {
     const lower = rows[i].map(c => c.toLowerCase());
@@ -369,14 +369,6 @@ function buildPosting(state) {
     if (n.ref && Number.isFinite(amt) && amt !== 0)
       add(ACCTS.schedule, -amt, n.ref, "", n.note || "");
   }
-  for (const b of state.balfwd) {
-    const amt = parseAmount(b.amount);
-    if (!b.ref || !Number.isFinite(amt) || amt === 0) continue;
-    const closed = String(b.closed || "").toUpperCase();
-    add(ACCTS.schedule, -amt, "BAL-FWD", b.ref, closed);
-    add(ACCTS.schedule,  amt, b.ref, "", closed);
-    add(ACCTS.schedule, -amt, b.ref, "", "MOVED TO BALFWD");
-  }
   return lines;
 }
 /* AGJE paste string — identical shape to the workbook: Co.Acct.Cents.Control.Control2.Description.Count */
@@ -397,13 +389,121 @@ function totals(state) {
     const a = parseAmount(n.amount);
     if (n.ref && Number.isFinite(a)) rec += a;
   }
-  for (const b of state.balfwd) {
-    const a = parseAmount(b.amount);
-    if (b.ref && Number.isFinite(a)) rec += a;
-  }
   return { deposit: r2(dep), received: r2(rec), variance: r2(dep - rec) };
 }
 /* ===================== END ENGINE ===================== */
+
+/* ===================== XLSX READER (zip + sheet XML, no dependencies) ===================== */
+async function inflateRaw(u8) {
+  const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+function unzipEntries(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = dv.byteLength - 22; i >= Math.max(0, dv.byteLength - 22 - 65536); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("not a zip/xlsx file");
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  const map = new Map();
+  for (let k = 0; k < count; k++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) throw new Error("bad zip directory");
+    const method = dv.getUint16(off + 10, true);
+    const csize  = dv.getUint32(off + 20, true);
+    const nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true);
+    const lho  = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + nlen));
+    const dstart = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+    map.set(name, { method, data: u8.subarray(dstart, dstart + csize) });
+    off += 46 + nlen + elen + clen;
+  }
+  return map;
+}
+async function entryText(map, name) {
+  const e = map.get(name);
+  if (!e) return null;
+  const raw = e.method === 0 ? e.data : await inflateRaw(e.data);
+  return new TextDecoder().decode(raw);
+}
+const xmlDoc = t => new DOMParser().parseFromString(t, "application/xml");
+function colIndex(ref) {            // "BC12" → 54
+  let n = 0;
+  for (const ch of ref) {
+    if (ch >= "A" && ch <= "Z") n = n * 26 + ch.charCodeAt(0) - 64; else break;
+  }
+  return n - 1;
+}
+/* Returns rows (array of string arrays) from the first non-empty worksheet. */
+async function rowsFromXlsx(buf) {
+  const map = unzipEntries(buf);
+  const wb = xmlDoc(await entryText(map, "xl/workbook.xml") || "");
+  const rels = xmlDoc(await entryText(map, "xl/_rels/workbook.xml.rels") || "");
+  const relTarget = {};
+  for (const r of rels.getElementsByTagName("Relationship"))
+    relTarget[r.getAttribute("Id")] = r.getAttribute("Target").replace(/^\/?(xl\/)?/, "xl/");
+  const sst = [];
+  const sstXml = await entryText(map, "xl/sharedStrings.xml");
+  if (sstXml) for (const si of xmlDoc(sstXml).getElementsByTagName("si")) {
+    let s = "";
+    for (const t of si.getElementsByTagName("t")) s += t.textContent;
+    sst.push(s);
+  }
+  for (const sh of wb.getElementsByTagName("sheet")) {
+    const rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+    const path = relTarget[rid];
+    if (!path || !map.has(path)) continue;
+    const doc = xmlDoc(await entryText(map, path));
+    const rows = [];
+    for (const rowEl of doc.getElementsByTagName("row")) {
+      const cells = [];
+      for (const c of rowEl.getElementsByTagName("c")) {
+        const idx = colIndex(c.getAttribute("r") || "");
+        const t = c.getAttribute("t");
+        let v = "";
+        if (t === "inlineStr") {
+          const is = c.getElementsByTagName("is")[0];
+          if (is) for (const tt of is.getElementsByTagName("t")) v += tt.textContent;
+        } else {
+          const ve = c.getElementsByTagName("v")[0];
+          v = ve ? ve.textContent : "";
+          if (t === "s") v = sst[Number(v)] != null ? sst[Number(v)] : "";
+        }
+        if (idx >= 0) cells[idx] = v;
+      }
+      for (let i = 0; i < cells.length; i++) if (cells[i] == null) cells[i] = "";
+      rows.push(cells);
+    }
+    if (rows.some(r => r.some(c => String(c).trim() !== ""))) return rows;
+  }
+  throw new Error("no worksheet data found in the Excel file");
+}
+/* ===================== END XLSX READER ===================== */
+
+/* ---------- sample data (for testing) ---------- */
+const SAMPLE_SCH = [
+  "Company: 21   CMA'S TOYOTA CHEVROLET OF MART\t\t\t\t\t",
+  "\tAccounting Schedule Report 1 - CASH CLEARING - SUMMARY\t\t\t\t",
+  "\tAccount: 551011 CASH SALES CLEARING\t\t\t\t",
+  "\t\tControl\tMoreInfo\tDays\tAmount $",
+  "\t\t455144\tDetail\t1\t118.92",
+  "\t\t218011\tDetail\t2\t1,062.01",
+  "\t\t213835\tDetail\t1\t89.75",
+  "\t\t347151\tDetail\t1\t28.97",
+  "\t\t809485\tDetail\t4\t469.25",
+  "\t\t5426\tDetail\t1\t785.38",
+].join("\n");
+const SAMPLE_CC = [
+  "CMA's Toyota Chevrolet of Martinsburg\tOpen Transactions",
+  "Name\tDate\tRO#/Other\tCust #\tSale Amount\tOperation\tCard\tLast 4\tAuth Code\tDepartment\tSource\tUser\tTerminal",
+  "HOWARD, THOMAS R\t06-10-26 11:02 AM\t455144\t108266\t118.92\tSale\tDiscover\t0641\t01082R\tService\tCard Present\tBachtell, Neil\tService - 3957",
+  "BERKELEY SPRINGS MGR\t06-10-26 09:35 AM\t218011\t\t62.01\tSale\tMasterCard\t5224\t077181\tParts\tHand Key\tBachtell, Neil\t",
+  "BERKELEY SPRINGS MGR\t06-10-26 02:10 PM\t218011\t\t1000.00\tSale\tVisa\t9052\t05496B\tParts\tCard Present\tBachtell, Neil\t",
+  "BOWMAN, DOUGLASS\t06-10-26 10:57 AM\t5426\t\t785.38\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tBachtell, Neil\t",
+  "ANDERSON, DOUGLAS\t06-10-26 10:43 AM\t999111\t74923\t25.50\tSale\tVisa\t3889\t010915\tParts\tCard Present\tBachtell, Neil\tService - 3957",
+  "WALK-IN CUSTOMER\t06-10-26 10:30 AM\t\t\t77.77\tSale\tVisa\t2222\tABC123\tParts\tHand Key\tBachtell, Neil\t",
+].join("\n");
 
 /* ---------- state ---------- */
 const state = {
@@ -413,8 +513,6 @@ const state = {
   schedule: [],        // {control, moreInfo, days, amount, received}
   cc: [],              // {ref, amount, name, card, op, dept}
   notOnSchedule: [],   // {ref, amount, note}
-  balfwd: [],          // {ref, amount, closed}
-  rawSchedule: "", rawCC: "",
 };
 let lastPosting = null;
 
@@ -431,25 +529,14 @@ function initHeader() {
 }
 
 /* ---------- import panels ---------- */
-function wireDrop(boxId, txtId, stId, onText) {
-  const box = $(boxId), txt = $(txtId);
-  txt.addEventListener("input", () => onText(txt.value));
-  box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("over"); });
-  box.addEventListener("dragleave", () => box.classList.remove("over"));
-  box.addEventListener("drop", e => {
-    e.preventDefault(); box.classList.remove("over");
-    const f = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (!f) return;
-    if (/\.(xlsx?|xlsm)$/i.test(f.name)) {
-      setStatus(stId, "Excel files can't be read directly — open the file, select all, copy, and paste here instead.", "err");
-      return;
-    }
-    f.text().then(t => { txt.value = t.replace(/,(?=\S)/g, m => m); onText(maybeCsv(t)); });
-  });
+function setStatus(id, msg, cls) {
+  const el = $(id);
+  el.textContent = msg;
+  el.className = "status " + (cls || "");
+  el.closest(".drop").classList.toggle("loaded", cls === "ok");
 }
-/* tolerate comma-separated files dropped in (simple CSV → TSV; quoted fields handled) */
-function maybeCsv(t) {
-  if (t.includes("\t")) return t;
+/* simple CSV → rows (quoted fields handled) */
+function csvRows(t) {
   return t.replace(/\r\n?/g, "\n").split("\n").map(line => {
     const cells = []; let cur = "", q = false;
     for (let i = 0; i < line.length; i++) {
@@ -460,35 +547,71 @@ function maybeCsv(t) {
       else cur += ch;
     }
     cells.push(cur);
-    return cells.join("\t");
-  }).join("\n");
+    return cells.map(c => c.trim());
+  });
 }
-function setStatus(id, msg, cls) { const el = $(id); el.textContent = msg; el.className = "status " + (cls || ""); }
+async function fileToRows(file) {
+  if (/\.(xlsx|xlsm)$/i.test(file.name)) return rowsFromXlsx(await file.arrayBuffer());
+  if (/\.xls$/i.test(file.name))
+    throw new Error("Legacy .xls format is not supported — open the file in Excel and save as .xlsx, then upload again.");
+  const text = await file.text();
+  return text.includes("\t") ? splitRows(text) : csvRows(text);
+}
+function wireImport(boxId, btnId, fileId, stId, onRows) {
+  const box = $(boxId);
+  const handle = async file => {
+    if (!file) return;
+    try { onRows(await fileToRows(file), file.name); }
+    catch (err) { setStatus(stId, err.message, "err"); }
+  };
+  $(btnId).addEventListener("click", () => $(fileId).click());
+  $(fileId).addEventListener("change", e => { handle(e.target.files[0]); e.target.value = ""; });
+  box.addEventListener("dragover", e => { e.preventDefault(); box.classList.add("over"); });
+  box.addEventListener("dragleave", () => box.classList.remove("over"));
+  box.addEventListener("drop", e => {
+    e.preventDefault(); box.classList.remove("over");
+    handle(e.dataTransfer.files && e.dataTransfer.files[0]);
+  });
+}
 
-function loadSchedule(text) {
-  state.rawSchedule = text;
-  const p = parseSchedule(text);
+function loadSchedule(rows, sourceName) {
+  const p = parseSchedule(rows);
   state.schedule = p.rows.map(r => ({ ...r, received: "" }));
+  const src = sourceName ? ` (${sourceName})` : "";
   if (p.company && STORES.some(s => s.co === p.company)) {
     state.co = p.company; $("store").value = p.company;
-    setStatus("stSch", `${p.rows.length} schedule item(s) loaded · store auto-detected: CO${p.company}`, "ok");
+    setStatus("stSch", `${p.rows.length} schedule item(s) loaded${src} · store auto-detected: CO${p.company}`, "ok");
   } else {
-    setStatus("stSch", p.rows.length ? `${p.rows.length} schedule item(s) loaded.` : "No schedule rows recognized (need columns A:F with Control in column C).", p.rows.length ? "ok" : "err");
+    setStatus("stSch", p.rows.length ? `${p.rows.length} schedule item(s) loaded${src}.` : "No schedule rows recognized (need columns A:F with Control in column C).", p.rows.length ? "ok" : "err");
   }
   refresh();
 }
-function loadCC(text) {
-  state.rawCC = text;
-  const p = parseCC(text);
+function loadCC(rows, sourceName) {
+  const p = parseCC(rows);
   if (p.error) { state.cc = []; setStatus("stCC", p.error, "err"); }
   else {
     state.cc = p.rows;
     const blank = p.rows.filter(r => normRef(r.ref) === "").length;
-    setStatus("stCC", `${p.rows.length} CC transaction(s) loaded, total ${money(p.rows.reduce((a, r) => a + r.amount, 0))}` +
+    const src = sourceName ? ` (${sourceName})` : "";
+    setStatus("stCC", `${p.rows.length} CC transaction(s) loaded${src}, total ${money(p.rows.reduce((a, r) => a + r.amount, 0))}` +
       (blank ? ` · ⚠ ${blank} row(s) have a blank RO#/Other` : ""), "ok");
   }
   refresh();
 }
+
+/* ---------- sample data ---------- */
+$("btnSample").addEventListener("click", () => {
+  loadSchedule(SAMPLE_SCH, "sample");
+  loadCC(SAMPLE_CC, "sample");
+  // received outside the processor: one cash, one check
+  for (const row of state.schedule) {
+    if (row.control === "213835" || row.control === "347151") row.received = "Y";
+  }
+  // deposits that balance once the unfound item (999111 / 25.50) is brought over
+  state.deposits = { "CASH": "28.97", "CREDIT": "1991.81", "CHECK": "89.75", "PARTS POLICY": "", "SERVICE POLICY": "" };
+  state.notOnSchedule = unfoundMatch(state.schedule, state.cc).rows;
+  refresh();
+});
 
 /* ---------- deposits ---------- */
 function renderDeposits() {
@@ -504,7 +627,7 @@ function renderDeposits() {
 function renderSchedule() {
   const tb = $("schBody");
   if (!state.schedule.length) {
-    tb.innerHTML = `<tr><td colspan="8" class="empty">Paste the CDK schedule above to begin.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="8" class="empty">Upload the CDK schedule above to begin.</td></tr>`;
     $("schCount").textContent = ""; return;
   }
   const idx = ccIndex(state.cc);
@@ -559,27 +682,6 @@ function renderNos() {
   }));
 }
 
-/* ---------- balfwd ---------- */
-function renderBf() {
-  const tb = $("bfBody");
-  if (!state.balfwd.length) {
-    tb.innerHTML = `<tr><td colspan="4" class="empty">No balance-forward items.</td></tr>`;
-    return;
-  }
-  tb.innerHTML = state.balfwd.map((b, i) => `
-    <tr><td><input class="cell wide" data-bfref="${i}" value="${esc(b.ref)}"></td>
-    <td class="num"><input class="cell" data-bfamt="${i}" value="${esc(b.amount)}"></td>
-    <td><input class="cell wide" data-bfcl="${i}" value="${esc(b.closed)}" placeholder="CLOSED 0312"></td>
-    <td><button class="mini alt" data-bfdel="${i}">✕</button></td></tr>`).join("");
-  const wire = (sel, field) => tb.querySelectorAll(sel).forEach(inp => inp.addEventListener("change", e => {
-    state.balfwd[Number(e.target.dataset[field])][{ bfref: "ref", bfamt: "amount", bfcl: "closed" }[field]] = e.target.value; refreshTotals();
-  }));
-  wire("[data-bfref]", "bfref"); wire("[data-bfamt]", "bfamt"); wire("[data-bfcl]", "bfcl");
-  tb.querySelectorAll("[data-bfdel]").forEach(btn => btn.addEventListener("click", e => {
-    state.balfwd.splice(Number(e.target.dataset.bfdel), 1); refresh();
-  }));
-}
-
 /* ---------- totals / posting ---------- */
 function refreshTotals() {
   const t = totals(state);
@@ -589,7 +691,7 @@ function refreshTotals() {
   $("hdrVarWrap").className = Math.abs(t.variance) < 0.005 ? "var-ok" : "var-bad";
   $("depTot").textContent = money(t.deposit);
 }
-function refresh() { renderDeposits(); renderSchedule(); renderNos(); renderBf(); refreshTotals(); }
+function refresh() { renderDeposits(); renderSchedule(); renderNos(); refreshTotals(); }
 
 $("btnUnfound").addEventListener("click", () => {
   if (!state.cc.length) { alert("Load the CC report first."); return; }
@@ -602,7 +704,6 @@ $("btnUnfound").addEventListener("click", () => {
   refresh();
 });
 $("btnAddNos").addEventListener("click", () => { state.notOnSchedule.push({ ref: "", amount: "", note: "" }); renderNos(); });
-$("btnAddBf").addEventListener("click", () => { state.balfwd.push({ ref: "", amount: "", closed: "" }); renderBf(); });
 
 $("btnPost").addEventListener("click", () => {
   const t = totals(state);
@@ -663,8 +764,6 @@ ${DEPOSIT_TYPES.filter(d => parseAmount(state.deposits[d.type])).map(d => tr([d.
 ${sch.map(r => tr([r.control, r.moreInfo, r.days, money(r.amount), r.onCC ? money(r.onCC) : "", r.received, r.receivedAmt ? money(r.receivedAmt) : "", r.note])).join("")}</table>
 <h2>Not On Schedule (${state.notOnSchedule.length})</h2><table>${tr(["RO/Invoice#", "Amount", "Note"], "th")}
 ${state.notOnSchedule.map(n => tr([n.ref, money(parseAmount(n.amount) || 0), n.note || ""])).join("")}</table>
-<h2>BALFWD Entries (${state.balfwd.length})</h2><table>${tr(["RO/Invoice#", "Amount", "Closed"], "th")}
-${state.balfwd.map(b => tr([b.ref, money(parseAmount(b.amount) || 0), b.closed])).join("")}</table>
 <h2>Posting (JE# DD${mmddyy(state.cashDate)})</h2><table>${tr(["Co", "Account", "Amount", "Control", "Control2", "Description"], "th")}
 ${posting.map(l => tr([l.co, l.acct, money(l.amt), l.control, l.control2, l.desc])).join("")}</table>
 <h2>AGJE Paste Lines</h2><pre>${esc(jeStrings(posting).join("\n"))}</pre>
@@ -686,8 +785,6 @@ $("btnCsv").addEventListener("click", () => {
   for (const r of sch) push(r.control, r.moreInfo, r.days, money(r.amount), r.onCC ? money(r.onCC) : "", r.received, r.receivedAmt ? money(r.receivedAmt) : "", r.note);
   push(); push("NOT ON SCHEDULE"); push("RO/Invoice#", "Amount", "Note");
   for (const n of state.notOnSchedule) push(n.ref, money(parseAmount(n.amount) || 0), n.note || "");
-  push(); push("BALFWD"); push("RO/Invoice#", "Amount", "Closed");
-  for (const b of state.balfwd) push(b.ref, money(parseAmount(b.amount) || 0), b.closed);
   push(); push("POSTING JE# DD" + mmddyy(state.cashDate)); push("Co", "Account", "Amount", "Control", "Control2", "Description", "AGJE");
   jeStrings(posting).forEach((s, i) => { const l = posting[i]; push(l.co, l.acct, money(l.amt), l.control, l.control2, l.desc, s); });
   download(fileStem() + "-record.csv", "text/csv", "﻿" + lines.join("\r\n"));
@@ -702,11 +799,11 @@ $("fileLoad").addEventListener("change", e => {
   f.text().then(t => {
     try {
       const s = JSON.parse(t);
+      delete s.balfwd; // sessions saved by older versions
       Object.assign(state, s);
       $("store").value = state.co; $("cashdate").value = state.cashDate;
-      $("txtSch").value = state.rawSchedule || ""; $("txtCC").value = state.rawCC || "";
-      setStatus("stSch", `${state.schedule.length} schedule item(s) restored.`, "ok");
-      setStatus("stCC", `${state.cc.length} CC transaction(s) restored.`, "ok");
+      setStatus("stSch", `${state.schedule.length} schedule item(s) restored from session.`, state.schedule.length ? "ok" : "");
+      setStatus("stCC", `${state.cc.length} CC transaction(s) restored from session.`, state.cc.length ? "ok" : "");
       refresh();
     } catch (err) { alert("Could not read session file: " + err.message); }
   });
@@ -715,8 +812,8 @@ $("fileLoad").addEventListener("change", e => {
 
 /* ---------- boot ---------- */
 initHeader();
-wireDrop("dropSch", "txtSch", "stSch", loadSchedule);
-wireDrop("dropCC", "txtCC", "stCC", loadCC);
+wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
+wireImport("dropCC", "btnCCFile", "fileCC", "stCC", loadCC);
 refresh();
 </script>
 </body>
