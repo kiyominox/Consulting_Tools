@@ -422,9 +422,13 @@ function parseCC(input) {
   const rows = toRows(input);
   let hdr = -1, col = {};
   for (let i = 0; i < rows.length; i++) {
-    const lower = rows[i].map(c => c.toLowerCase());
+    const lower = rows[i].map(c => c.toLowerCase().trim());
     const iRef = lower.findIndex(c => c.replace(/\s/g, "") === "ro#/other");
-    const iAmt = lower.findIndex(c => c === "sale amount");
+    // amount header varies by export: "Sale Amount" (open transactions),
+    // "Total" (settlement report), or plain "Amount"
+    let iAmt = lower.indexOf("sale amount");
+    if (iAmt < 0) iAmt = lower.indexOf("total");
+    if (iAmt < 0) iAmt = lower.indexOf("amount");
     if (iRef >= 0 && iAmt >= 0) {
       hdr = i;
       col = { ref: iRef, amt: iAmt, name: lower.indexOf("name"), card: lower.indexOf("card"),
@@ -432,7 +436,7 @@ function parseCC(input) {
       break;
     }
   }
-  if (hdr < 0) return { error: 'Header row not found — expected columns "RO#/Other" and "Sale Amount".', rows: [] };
+  if (hdr < 0) return { error: 'Header row not found — expected a "RO#/Other" column plus an amount column ("Sale Amount", "Total" or "Amount").', rows: [] };
   const out = [];
   for (let i = hdr + 1; i < rows.length; i++) {
     const c = rows[i];
