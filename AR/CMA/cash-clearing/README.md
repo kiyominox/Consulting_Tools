@@ -78,3 +78,18 @@ no install, no server; everything stays on the local machine.
 Differences from the workbook: rows on the CC report with a blank `RO#/Other` are listed
 for manual review when running Unfound (the workbook skips them silently), and the
 Not-On-Schedule note goes in the JE Description field rather than Control2.
+
+
+## Deposit_Reconciliation_Standalone.html (redesigned UI)
+
+A from-scratch single-file build of the Claude-design "Daily Deposit Reconciliation"
+layout — left rail with store logo/selector, live Deposit/Reconciled/Variance, and the
+five numbered steps (import → deposits → schedule → anything missing → review & post).
+
+Implemented as **plain vanilla JS in one self-contained file** (no React, no bundler, no
+build step — the earlier bundled export failed to load): the proven v1.7 reconciliation
+engine is inlined, store logos are embedded as data URIs, and the exact design markup is
+driven by a small template renderer. Same logic and AGJE/JE output as
+`Cash_Clearing_Reconciliation.html` v1.7 — additive card/cash/check imports, auto date
+detection, donations (round-up + custom), per-store accounts & categories with the Setup
+screen, and PDF/Excel record exports.
