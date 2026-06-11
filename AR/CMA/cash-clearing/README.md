@@ -34,7 +34,9 @@ Changes made:
 no install, no server; everything stays on the local machine.
 
 - **Store**: pick any of the five stores (CO18/19/20/21/23), or let the tool auto-detect
-  from the `Company: NN` line of the schedule. Each store carries its own real account
+  from the `Company: NN` line of the schedule. The **cash date auto-fills from the
+  processor reports** (title line, date column text, or Excel date serials); a manual
+  date pick always wins, and a warning appears if loaded files carry different dates. Each store carries its own real account
   numbers (deposit/clearing) and its own Not-On-Schedule categories, all extracted from
   that store's workbook — changing the store updates the accounts, deposit types
   (CO21/CO23 include XTIME) and category options everywhere.
@@ -58,9 +60,9 @@ no install, no server; everything stays on the local machine.
   next whole dollar or a custom amount the customer typed — the schedule row shows a 🎁
   suggestion with the difference (labeled "round-up" or "donation"); tick it and the
   posting splits — schedule amount to clearing, the donation to the store's donation
-  account (set per store in ⚙ Setup; posting is blocked with a prompt if a donation is
-  marked but no account is configured). JE descriptions distinguish ROUND UP DONATION
-  from CUSTOMER DONATION.
+  account and control (set per store in ⚙ Setup; defaults: back to the clearing account
+  under control `DONATION`). JE descriptions distinguish ROUND UP DONATION from
+  CUSTOMER DONATION.
 - **Setup screen (⚙)**: edit everything per store — names, Co numbers, clearing account,
   round-up donation account,
   deposit types/accounts/control prefixes, and Not-On-Schedule categories with their

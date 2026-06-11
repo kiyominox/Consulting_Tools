@@ -164,10 +164,10 @@ window.onerror = function (msg, src, line) {
   <details class="help">
     <summary>How to use this tool — daily workflow</summary>
     <ol>
-      <li>Pick the <b>store</b> (auto-detected from the schedule when possible) and the <b>cash date</b>. Accounts and Not-On-Schedule categories update to match the store.</li>
+      <li>Pick the <b>store</b> (auto-detected from the schedule when possible). The <b>cash date</b> fills in automatically from the processor reports — adjust it only if it's wrong. Accounts and Not-On-Schedule categories update to match the store.</li>
       <li><b>Upload</b> the CDK Cash Clearing schedule export, then drop the processor's <b>card, cash and check</b> reports together — they add up, and the file list shows each one with a remove button (Excel, CSV or text).</li>
       <li>Enter the actual <b>deposit totals</b> by type.</li>
-      <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount. When a payment came in <b>above the schedule amount as a donation</b> — rounded up to the next dollar or a custom amount the customer typed — the row shows a 🎁 suggestion with the difference; tick it and that amount posts to the donation account from ⚙ Setup.</li>
+      <li>In the schedule grid, CC-matched items are received automatically (green/amber). For anything received outside the processor, <b>click “Received in full”</b> or type the exact amount. When a payment came in <b>above the schedule amount as a donation</b> — rounded up to the next dollar or a custom amount the customer typed — the row shows a 🎁 suggestion with the difference; tick it and that amount posts to the donation account/control from ⚙ Setup (default: back to the clearing account under control DONATION).</li>
       <li>Click <b>Run Unfound Match</b>; for each Not-On-Schedule item pick the <b>category</b> (where applicable) and correct any wrong reference number.</li>
       <li>When <b>Variance is 0.00</b>, click <b>Generate Posting</b>, then <b>Copy AGJE Lines</b> into CDK AGJE (Expert Mode, right-click → Paste).</li>
       <li>Export a <b>PDF</b> or <b>Excel</b> record for record keeping. <b>Save Session</b> to resume later.</li>
@@ -305,25 +305,25 @@ window.onerror = function (msg, src, line) {
 <script type="application/json" id="defaultConfig">
 {
  "stores": [
-  { "co": 18, "name": "Subaru of Winchester", "clearing": "501010", "donation": "",
+  { "co": 18, "name": "Subaru of Winchester", "clearing": "501010", "donation": "", "donationControl": "DONATION",
     "deposits": [
       { "type": "CASH", "acct": "501001", "prefix": "CA" }, { "type": "CREDIT", "acct": "501001", "prefix": "CR" },
       { "type": "CHECK", "acct": "501001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "507750", "prefix": "SP" },
       { "type": "PARTS POLICY", "acct": "507650", "prefix": "PP" } ],
     "nosCats": [] },
-  { "co": 19, "name": "Honda of Winchester", "clearing": "511011", "donation": "",
+  { "co": 19, "name": "Honda of Winchester", "clearing": "511011", "donation": "", "donationControl": "DONATION",
     "deposits": [
       { "type": "CASH", "acct": "511007", "prefix": "CA" }, { "type": "CREDIT", "acct": "511001", "prefix": "CR" },
       { "type": "CHECK", "acct": "511001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "517750", "prefix": "SP" },
       { "type": "PARTS POLICY", "acct": "517650", "prefix": "PP" } ],
     "nosCats": [] },
-  { "co": 20, "name": "Hyundai of Winchester", "clearing": "521011", "donation": "",
+  { "co": 20, "name": "Hyundai of Winchester", "clearing": "521011", "donation": "", "donationControl": "DONATION",
     "deposits": [
       { "type": "CASH", "acct": "521007", "prefix": "CA" }, { "type": "CREDIT", "acct": "521001", "prefix": "CR" },
       { "type": "CHECK", "acct": "521001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "527750", "prefix": "SP" },
       { "type": "PARTS POLICY", "acct": "527650", "prefix": "PP" } ],
     "nosCats": [] },
-  { "co": 21, "name": "CMA's Toyota Chevrolet of Martinsburg", "clearing": "531011", "donation": "",
+  { "co": 21, "name": "CMA's Toyota Chevrolet of Martinsburg", "clearing": "531011", "donation": "", "donationControl": "DONATION",
     "deposits": [
       { "type": "CASH", "acct": "531007", "prefix": "CA" }, { "type": "CREDIT", "acct": "531001", "prefix": "CR" },
       { "type": "CHECK", "acct": "531001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "537750", "prefix": "SP" },
@@ -331,7 +331,7 @@ window.onerror = function (msg, src, line) {
     "nosCats": [
       { "label": "EXT WARRANTY", "acct": "531150" }, { "label": "GM WARRANTY", "acct": "531140" },
       { "label": "TOY WARRANTY", "acct": "541140" }, { "label": "PNC", "acct": "531122" }, { "label": "AR", "acct": "531120" } ] },
-  { "co": 23, "name": "CMA's CDJR of Martinsburg", "clearing": "551011", "donation": "",
+  { "co": 23, "name": "CMA's CDJR of Martinsburg", "clearing": "551011", "donation": "", "donationControl": "DONATION",
     "deposits": [
       { "type": "CASH", "acct": "551007", "prefix": "CA" }, { "type": "CREDIT", "acct": "551001", "prefix": "CR" },
       { "type": "CHECK", "acct": "551001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "557750", "prefix": "SP" },
@@ -359,6 +359,7 @@ function sanitizeConfig(c) {
       name: String(s.name == null ? "" : s.name).trim(),
       clearing: String(s.clearing == null ? "" : s.clearing).trim(),
       donation: String(s.donation == null ? "" : s.donation).trim(),
+      donationControl: String(s.donationControl == null ? "" : s.donationControl).trim(),
       deposits: (Array.isArray(s.deposits) ? s.deposits : [])
         .map(d => ({ type: String(d.type || "").trim().toUpperCase(), acct: String(d.acct || "").trim(), prefix: String(d.prefix || "").trim().toUpperCase() }))
         .filter(d => d.type !== ""),
@@ -418,6 +419,33 @@ function parseSchedule(input) {
   return out;
 }
 
+/* Date detection: report dates show up as Excel serials (xlsx), "MM-DD-YY hh:mm AM" text,
+   or a "June 10, 2026" title line. All are normalized to ISO YYYY-MM-DD. */
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+function excelSerialToISO(n) {
+  if (!Number.isFinite(n) || n < 30000 || n > 70000) return null;   // ~1982..2061
+  const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+function parseDateToken(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (s === "") return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return excelSerialToISO(Number(s));
+  let m = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2}),?\s*(\d{4})$/);
+  if (m) {
+    const mo = MONTHS.findIndex(x => x.startsWith(m[1].toLowerCase()));
+    if (mo >= 0) return `${m[3]}-${String(mo + 1).padStart(2, "0")}-${String(Number(m[2])).padStart(2, "0")}`;
+  }
+  m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/);
+  if (m) {
+    let y = Number(m[3]); if (y < 100) y += 2000;
+    const mo = Number(m[1]), dd = Number(m[2]);
+    if (mo >= 1 && mo <= 12 && dd >= 1 && dd <= 31) return `${y}-${String(mo).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  }
+  return null;
+}
+
 /* New processor report. Columns located by header names so extra/reordered columns are fine. */
 function parseCC(input) {
   const rows = toRows(input);
@@ -433,16 +461,22 @@ function parseCC(input) {
     if (iRef >= 0 && iAmt >= 0) {
       hdr = i;
       col = { ref: iRef, amt: iAmt, name: lower.indexOf("name"), card: lower.indexOf("card"),
-              op: lower.indexOf("operation"), dept: lower.indexOf("department") };
+              op: lower.indexOf("operation"), dept: lower.indexOf("department"), date: lower.indexOf("date") };
       break;
     }
   }
   if (hdr < 0) return { error: 'Header row not found — expected a "RO#/Other" column plus an amount column ("Sale Amount", "Total" or "Amount").', rows: [] };
+  // report date: most common date in the Date column, else any date in the title rows
+  let titleDate = null;
+  for (let i = 0; i < hdr && !titleDate; i++)
+    for (const cell of rows[i]) { const dt = parseDateToken(cell); if (dt) { titleDate = dt; break; } }
+  const tally = new Map();
   const out = [];
   for (let i = hdr + 1; i < rows.length; i++) {
     const c = rows[i];
     const amt = parseAmount(c[col.amt]);
     if (!Number.isFinite(amt)) continue;
+    if (col.date >= 0) { const dt = parseDateToken(c[col.date]); if (dt) tally.set(dt, (tally.get(dt) || 0) + 1); }
     out.push({
       ref: (c[col.ref] || "").trim(), amount: amt,
       name: col.name >= 0 ? (c[col.name] || "").trim() : "",
@@ -451,7 +485,9 @@ function parseCC(input) {
       dept: col.dept >= 0 ? (c[col.dept] || "").trim() : "",
     });
   }
-  return { rows: out };
+  let rowDate = null, best = 0;
+  for (const [dt, n] of tally) if (n > best) { rowDate = dt; best = n; }
+  return { rows: out, date: rowDate || titleDate };
 }
 
 /* Workbook G column: sum of Sale Amounts whose RO#/Other matches the control. */
@@ -535,13 +571,11 @@ function buildPosting(state) {
     if (rec === 0) continue;
     const donation = donationFor(row, onCC);
     if (donation > 0) {
-      if (!store.donation) {
-        const err = new Error(`RO ${row.control} is marked as a round-up donation, but no donation account is set for CO${co}.\n\nOpen ⚙ Setup and fill in the "Round-up donation acct" for this store.`);
-        err.isDonationConfig = true;
-        throw err;
-      }
+      // default: back to the clearing account under a DONATION control
+      const dAcct = store.donation || store.clearing;
+      const dCtrl = store.donationControl || "DONATION";
       add(store.clearing, -(rec - donation), row.control, "", "");
-      add(store.donation, -donation, row.control, "", isRoundUp(row, onCC) ? "ROUND UP DONATION" : "CUSTOMER DONATION");
+      add(dAcct, -donation, dCtrl, "", isRoundUp(row, onCC) ? "ROUND UP DONATION" : "CUSTOMER DONATION");
     } else {
       add(store.clearing, -rec, row.control, "", "");
     }
@@ -802,6 +836,7 @@ let usingCustomConfig = loadConfig();
 const state = {
   co: storeList()[0],
   cashDate: new Date().toISOString().slice(0, 10),
+  dateManual: false,   // true once the user picks a date — auto-detect then stops overriding
   deposits: {},
   schedule: [],        // {control, moreInfo, days, amount, include, manualAmt}
   ccFiles: [],         // {name, rows:[{ref, amount, name, card, op, dept}]} — additive
@@ -827,7 +862,7 @@ function initHeader() {
   renderStoreSelect();
   $("cashdate").value = state.cashDate;
   $("store").onchange = e => { state.co = Number(e.target.value); onStoreChange(); };
-  $("cashdate").onchange = e => { state.cashDate = e.target.value; refresh(); };
+  $("cashdate").onchange = e => { state.cashDate = e.target.value; state.dateManual = true; refresh(); };
 }
 function onStoreChange() {
   // drop deposit amounts for types the new store doesn't have; keep the rest
@@ -899,10 +934,18 @@ function addCCFile(rows, sourceName) {
   if (p.error) { setStatus("stCC", `${sourceName || "file"}: ${p.error}`, "err"); return; }
   const name = sourceName || `file ${state.ccFiles.length + 1}`;
   const existing = state.ccFiles.findIndex(f => f.name === name);
-  if (existing >= 0) state.ccFiles[existing] = { name, rows: p.rows };
-  else state.ccFiles.push({ name, rows: p.rows });
-  rebuildCC(existing >= 0 ? `${name} reloaded.` : "");
+  if (existing >= 0) state.ccFiles[existing] = { name, rows: p.rows, date: p.date };
+  else state.ccFiles.push({ name, rows: p.rows, date: p.date });
+  let extra = existing >= 0 ? `${name} reloaded.` : "";
+  // auto-pull the cash date from the report (unless the user already picked one)
+  if (p.date && !state.dateManual && state.cashDate !== p.date) {
+    state.cashDate = p.date;
+    $("cashdate").value = p.date;
+    extra += (extra ? " " : "") + `cash date set to ${fmtMDY(p.date)}.`;
+  }
+  rebuildCC(extra);
 }
+function fmtMDY(iso) { return iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(2, 4)}` : ""; }
 function removeCCFile(i) { state.ccFiles.splice(i, 1); rebuildCC(); }
 function clearCCFiles() { state.ccFiles = []; rebuildCC(); }
 function rebuildCC(extraMsg) {
@@ -911,9 +954,12 @@ function rebuildCC(extraMsg) {
   if (!state.ccFiles.length) { setStatus("stCC", "Nothing loaded.", ""); }
   else {
     const blank = state.cc.filter(r => normRef(r.ref) === "").length;
+    const dates = [...new Set(state.ccFiles.map(f => f.date).filter(Boolean))];
     setStatus("stCC",
       `${state.ccFiles.length} file(s) · ${state.cc.length} transaction(s) · total ${money(state.cc.reduce((a, r) => a + r.amount, 0))}` +
-      (blank ? ` · ⚠ ${blank} blank RO#/Other` : "") + (extraMsg ? ` · ${extraMsg}` : "") +
+      (blank ? ` · ⚠ ${blank} blank RO#/Other` : "") +
+      (dates.length > 1 ? ` · ⚠ files have different dates (${dates.map(fmtMDY).join(", ")})` : "") +
+      (extraMsg ? ` · ${extraMsg}` : "") +
       (state.notOnSchedule.length ? " · files changed — re-run Unfound Match" : ""), "ok");
   }
   refresh();
@@ -923,7 +969,7 @@ function renderCCFiles() {
   if (!state.ccFiles.length) { el.innerHTML = ""; return; }
   el.innerHTML = state.ccFiles.map((f, i) => `
     <div class="filechip"><span class="fname" title="${esc(f.name)}">📄 ${esc(f.name)}</span>
-    <span class="fmeta">${f.rows.length} txn · ${money(f.rows.reduce((a, r) => a + r.amount, 0))}</span>
+    <span class="fmeta">${f.rows.length} txn · ${money(f.rows.reduce((a, r) => a + r.amount, 0))}${f.date ? " · " + fmtMDY(f.date) : ""}</span>
     <button class="mini alt" data-ccdel="${i}" title="Remove this file">✕</button></div>`).join("") +
     `<div class="clearrow"><button class="mini warn" id="btnCCClear">Clear all files</button></div>`;
   el.querySelectorAll("[data-ccdel]").forEach(b => b.addEventListener("click", e => removeCCFile(Number(e.target.dataset.ccdel))));
@@ -931,6 +977,7 @@ function renderCCFiles() {
 }
 $("btnSample").addEventListener("click", () => {
   loadSchedule(SAMPLE_SCH, "sample");
+  state.dateManual = false;
   state.ccFiles = [];
   addCCFile(SAMPLE_CC_CARDS, "sample-cards.xlsx");
   addCCFile(SAMPLE_CC_OTHER, "sample-cash-checks.xlsx");
@@ -1306,7 +1353,8 @@ function renderSetup() {
       <div style="max-width:110px"><label>Co #</label><input type="number" class="mono" id="suCo" value="${esc(String(s.co))}"></div>
       <div style="flex:2"><label>Store name</label><input type="text" id="suName" value="${esc(s.name)}"></div>
       <div><label>Schedule clearing acct</label><input type="text" class="mono" id="suClearing" value="${esc(s.clearing)}"></div>
-      <div><label>Round-up donation acct</label><input type="text" class="mono" id="suDonation" value="${esc(s.donation || "")}" placeholder="optional"></div>
+      <div><label>Donation acct</label><input type="text" class="mono" id="suDonation" value="${esc(s.donation || "")}" placeholder="blank = clearing acct"></div>
+      <div><label>Donation control</label><input type="text" class="mono" id="suDonCtrl" value="${esc(s.donationControl || "")}" placeholder="blank = DONATION"></div>
     </div>
     <label>Deposit types</label>
     <table><thead><tr><th>Type</th><th>Account</th><th>Control prefix</th><th></th></tr></thead><tbody>${depRows}</tbody></table>
@@ -1320,6 +1368,7 @@ function renderSetup() {
   $("suName").addEventListener("change", e => { s.name = e.target.value; upd(); });
   $("suClearing").addEventListener("change", e => { s.clearing = e.target.value.trim(); });
   $("suDonation").addEventListener("change", e => { s.donation = e.target.value.trim(); });
+  $("suDonCtrl").addEventListener("change", e => { s.donationControl = e.target.value.trim(); });
   pane.querySelectorAll("[data-sd]").forEach(inp => inp.addEventListener("change", e => {
     const [f, i] = e.target.dataset.sd.split(":");
     s.deposits[Number(i)][f] = f === "acct" ? e.target.value.trim() : e.target.value.trim().toUpperCase();
@@ -1405,7 +1454,7 @@ try {
   wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
   wireImport("dropCC", "btnCCFile", "fileCC", "stCC", addCCFile, true);
   refresh();
-  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.6)";
+  const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.7)";
 } catch (err) { window.onerror(err.message || String(err)); throw err; }
 </script>
 </body>
