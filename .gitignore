@@ -12,3 +12,6 @@ build/
 
 # Parts Rec local data (uploaded GL, saved state)
 parts_rec/data/
+
+# Generated build artifact (regenerate with build.py)
+Vehicle-Sales/_shared/vehicle-sales-report/Vehicle Sales Report.html
