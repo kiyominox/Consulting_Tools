@@ -13,7 +13,11 @@ and schedules never leave the machine.
 ## What it does
 
 1. **Load two files** (drag-drop or browse): the CDK floorplan schedule and the
-   bank floorplan statement. Accepts `.xlsx / .xlsm / .xls / .csv / .tsv / .txt`.
+   bank floorplan statement. Accepts `.xlsx / .xlsm / .xls / .csv / .tsv / .txt`
+   **and `.pdf`** — a bank statement that only comes as a PDF is parsed in the
+   browser (pdf.js, inlined; the PDF never leaves the machine) by reconstructing
+   the line-item table from the text positions. Layouts vary, so the mapping
+   panel is the safety net: confirm the detected columns and re-run.
 2. **Auto-detects columns by header content**, not position:
    - the **VIN/serial** column on each side (a header named *VIN* or *Serial*
      wins). Handles full 17-char VINs *and* partial serials in either
@@ -64,10 +68,14 @@ This tool is assembled from `src/` so the libraries stay editable:
 python3 build.py      # → "Floorplan Reconciliation.html"
 ```
 
-`build.py` inlines `vendor/xlsx.full.min.js` (SheetJS, reading) and
-`vendor/exceljs.min.js` (ExcelJS, styled writing) and `src/app.js` into
-`src/index.template.html`. It **aborts if any injected source contains a literal
-`</script>`**. Never hand-edit the built `.html` — edit `src/` and rebuild.
+`build.py` inlines `vendor/xlsx.full.min.js` (SheetJS, reading),
+`vendor/exceljs.min.js` (ExcelJS, styled writing), `vendor/pdf.min.js` +
+`vendor/pdf.worker.min.js` (pdf.js, statement-PDF parsing), and `src/app.js`
+into `src/index.template.html`. The pdf.js worker is inlined as inert text and
+turned into a Blob URL at runtime, so PDF parsing runs **fully offline** with no
+worker fetched from a CDN. The build **aborts if any injected source contains a
+literal `</script>`**. Never hand-edit the built `.html` — edit `src/` and
+rebuild.
 
 ```
 Floorplan/_shared/floorplan-rec/
@@ -79,6 +87,8 @@ Floorplan/_shared/floorplan-rec/
   vendor/
     xlsx.full.min.js
     exceljs.min.js
+    pdf.min.js
+    pdf.worker.min.js
 ```
 
 ## Notes on matching & balances

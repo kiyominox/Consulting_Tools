@@ -74,18 +74,82 @@
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
-        var data = e.target.result, wb;
-        if (/\.(csv|tsv|txt)$/.test(name)) {
-          wb = XLSX.read(data, { type: "binary", raw: true });
-        } else {
-          wb = XLSX.read(new Uint8Array(data), { type: "array" });
-        }
+        var data = e.target.result;
+        if (/\.pdf$/.test(name)) { extractPdf(new Uint8Array(data)).then(function (parsed) { cb(parsed); }, function (err) { cb(null, err); }); return; }
+        var wb;
+        if (/\.(csv|tsv|txt)$/.test(name)) wb = XLSX.read(data, { type: "binary", raw: true });
+        else wb = XLSX.read(new Uint8Array(data), { type: "array" });
         cb(chooseSheet(wb));
       } catch (err) { cb(null, err); }
     };
     if (/\.(csv|tsv|txt)$/.test(name)) reader.readAsBinaryString(file);
     else reader.readAsArrayBuffer(file);
   }
+
+  // ---- PDF: reconstruct a table grid from text positions (fully offline) ----
+  var _pdfReady = false;
+  function initPdf() {
+    if (_pdfReady || typeof pdfjsLib === "undefined") return _pdfReady;
+    try {
+      var src = document.getElementById("pdfWorkerSrc").textContent;
+      var blob = new Blob([src], { type: "application/javascript" });
+      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+      _pdfReady = true;
+    } catch (e) { _pdfReady = false; }
+    return _pdfReady;
+  }
+
+  function extractPdf(bytes) {
+    if (typeof pdfjsLib === "undefined") return Promise.reject(new Error("PDF support not loaded"));
+    initPdf();
+    return pdfjsLib.getDocument({ data: bytes }).promise.then(function (pdf) {
+      var pages = [];
+      var seq = Promise.resolve();
+      for (var p = 1; p <= pdf.numPages; p++) {
+        (function (pn) { seq = seq.then(function () { return pdf.getPage(pn).then(function (page) { return page.getTextContent().then(function (tc) { pages.push(tc.items); }); }); }); })(p);
+      }
+      return seq.then(function () { return parseAoa(pdfItemsToGrid(pages)); });
+    });
+  }
+
+  // group text items into rows (by y) and columns (by clustered x) → array-of-arrays
+  function pdfItemsToGrid(pages) {
+    var items = [];
+    pages.forEach(function (pageItems) {
+      pageItems.forEach(function (it) {
+        var s = (it.str || "").trim();
+        if (!s) return;
+        var x = it.transform[4], y = it.transform[5];
+        items.push({ x: x, y: y, w: it.width || 0, s: s, page: items._pg || 0 });
+      });
+    });
+    if (!items.length) return [];
+    // column boundaries: cluster all left-x values across the doc
+    var xs = items.map(function (i) { return i.x; }).sort(function (a, b) { return a - b; });
+    var cols = [], cur = xs[0], group = [xs[0]];
+    for (var i = 1; i < xs.length; i++) {
+      if (xs[i] - cur > 14) { cols.push(median(group)); group = []; }
+      group.push(xs[i]); cur = xs[i];
+    }
+    if (group.length) cols.push(median(group));
+    function colIndex(x) { var best = 0, bd = Infinity; for (var c = 0; c < cols.length; c++) { var d = Math.abs(cols[c] - x); if (d < bd) { bd = d; best = c; } } return best; }
+    // rows: bucket by rounded y (3px tolerance), descending y = top→bottom
+    var rowsMap = {};
+    items.forEach(function (it) {
+      var key = Math.round(it.y / 3) * 3;
+      (rowsMap[key] = rowsMap[key] || []).push(it);
+    });
+    var ys = Object.keys(rowsMap).map(Number).sort(function (a, b) { return b - a; });
+    var aoa = [];
+    ys.forEach(function (yk) {
+      var line = rowsMap[yk].sort(function (a, b) { return a.x - b.x; });
+      var row = new Array(cols.length).fill("");
+      line.forEach(function (it) { var ci = colIndex(it.x); row[ci] = row[ci] ? (row[ci] + " " + it.s) : it.s; });
+      aoa.push(row);
+    });
+    return aoa;
+  }
+  function median(arr) { var a = arr.slice().sort(function (x, y) { return x - y; }); return a[Math.floor(a.length / 2)]; }
 
   // pick the sheet whose best VIN column covers the most rows
   function chooseSheet(wb) {

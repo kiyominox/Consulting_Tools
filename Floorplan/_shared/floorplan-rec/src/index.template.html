@@ -177,26 +177,26 @@
     <div class="panel data-panel">
       <div class="data-head">
         <span class="stepnum">1</span>
-        <div><h2>Floorplan Schedule</h2><p>CDK floorplan schedule export. Drop the Excel/CSV here &mdash; the tool finds the VIN column and the floorplan account (the one full of vehicle-sized credits).</p></div>
+        <div><h2>Floorplan Schedule</h2><p>CDK floorplan schedule export (Excel/CSV/PDF), any column layout. The tool finds the VIN/serial column and the floorplan account (the one full of vehicle-sized credits).</p></div>
       </div>
       <div class="drop" id="dropSchedule" data-which="schedule">
         <div class="ico">&#8681;</div>
         <h3>Drop schedule file</h3>
         <p class="muted">or <button class="ghost tiny" onclick="document.getElementById('fileSchedule').click()">browse</button></p>
-        <input type="file" id="fileSchedule" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls" />
+        <input type="file" id="fileSchedule" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.pdf" />
         <div class="fname hidden" id="fnameSchedule"></div>
       </div>
     </div>
     <div class="panel data-panel">
       <div class="data-head">
         <span class="stepnum">2</span>
-        <div><h2>Bank Floorplan Statement</h2><p>The lender's billing statement (Honda, Nissan/Truist, GM, etc.). The tool detects the VIN/serial column &mdash; full or partial &mdash; and the principal balance.</p></div>
+        <div><h2>Bank Floorplan Statement</h2><p>The lender's billing statement (Honda, Nissan/Truist, GM, etc.) as Excel/CSV <em>or PDF</em>. The tool detects the VIN/serial column &mdash; full or partial &mdash; and the principal balance, whatever the layout.</p></div>
       </div>
       <div class="drop" id="dropStatement" data-which="statement">
         <div class="ico">&#8681;</div>
         <h3>Drop statement file</h3>
         <p class="muted">or <button class="ghost tiny" onclick="document.getElementById('fileStatement').click()">browse</button></p>
-        <input type="file" id="fileStatement" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls" />
+        <input type="file" id="fileStatement" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls,.pdf" />
         <div class="fname hidden" id="fnameStatement"></div>
       </div>
     </div>
@@ -257,8 +257,11 @@
 
 <div class="toast" id="toast"></div>
 
+<!-- pdf.js worker source, inlined as inert text and turned into a Blob URL at runtime (no network) -->
+<script id="pdfWorkerSrc" type="text/plain">/*__PDFWORKER_LIB__*/</script>
 <script>/*__SHEETJS_LIB__*/</script>
 <script>/*__EXCELJS_LIB__*/</script>
+<script>/*__PDFJS_LIB__*/</script>
 <script>/*__APP_JS__*/</script>
 </body>
 </html>
