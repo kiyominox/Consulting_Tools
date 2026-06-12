@@ -422,6 +422,7 @@
               <div style="width:130px"><label style="font-size:11px;color:#8294A6;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">CLEARING ACCT</label><input value="{{suClearing}}" onChange="{{onSuClearing}}" style="width:100%;padding:7px 9px;border:1.5px solid #DCE3EA;border-radius:7px;font-size:13px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box"></div>
               <div style="width:140px"><label style="font-size:11px;color:#8294A6;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">DONATION ACCT</label><input value="{{suDonation}}" onChange="{{onSuDonation}}" placeholder="blank = clearing" style="width:100%;padding:7px 9px;border:1.5px solid #DCE3EA;border-radius:7px;font-size:13px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box"></div>
               <div style="width:140px"><label style="font-size:11px;color:#8294A6;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">DONATION CONTROL</label><input value="{{suDonCtrl}}" onChange="{{onSuDonCtrl}}" placeholder="blank = DONATION" style="width:100%;padding:7px 9px;border:1.5px solid #DCE3EA;border-radius:7px;font-size:13px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box"></div>
+              <div style="width:140px"><label style="font-size:11px;color:#8294A6;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">DONATION CONTROL 2</label><input value="{{suDonCtrl2}}" onChange="{{onSuDonCtrl2}}" placeholder="optional" style="width:100%;padding:7px 9px;border:1.5px solid #DCE3EA;border-radius:7px;font-size:13px;font-family:'IBM Plex Mono',monospace;box-sizing:border-box"></div>
             </div>
             <div style="font-size:11px;color:#8294A6;font-weight:700;letter-spacing:.04em;margin:16px 0 6px">DEPOSIT TYPES</div>
             <div style="display:grid;grid-template-columns:1fr 130px 110px 34px;gap:8px;font-size:10.5px;font-weight:700;color:#8294A6;padding-bottom:4px"><span>TYPE</span><span>ACCOUNT</span><span>CTRL PREFIX</span><span></span></div>
@@ -483,6 +484,7 @@ function sanitizeConfig(c) {
       clearing: String(s.clearing == null ? "" : s.clearing).trim(),
       donation: String(s.donation == null ? "" : s.donation).trim(),
       donationControl: String(s.donationControl == null ? "" : s.donationControl).trim(),
+      donationControl2: String(s.donationControl2 == null ? "" : s.donationControl2).trim(),
       deposits: (Array.isArray(s.deposits) ? s.deposits : [])
         .map(d => ({ type: String(d.type || "").trim().toUpperCase(), acct: String(d.acct || "").trim(), prefix: String(d.prefix || "").trim().toUpperCase() }))
         .filter(d => d.type !== ""),
@@ -675,19 +677,19 @@ function buildPosting(state, store) {
       add(d.acct, amt, d.prefix + mmdd(state.cashDate), "", d.type);
   }
   const idx = ccIndex(state.cc);
+  let donationTotal = 0;
   for (const row of state.schedule) {
     const onCC = (idx.get(normRef(row.control)) || { total: 0 }).total;
     const rec = receivedFor(row, onCC);
     if (rec === 0) continue;
     const donation = donationFor(row, onCC);
-    if (donation > 0) {
-      const dAcct = store.donation || store.clearing;
-      const dCtrl = store.donationControl || "DONATION";
-      add(store.clearing, -(rec - donation), row.control, "", "");
-      add(dAcct, -donation, dCtrl, "", isRoundUp(row, onCC) ? "ROUND UP DONATION" : "CUSTOMER DONATION");
-    } else {
-      add(store.clearing, -rec, row.control, "", "");
-    }
+    add(store.clearing, -(rec - donation), row.control, "", "");
+    donationTotal = r2(donationTotal + donation);
+  }
+  // all confirmed donations post as a single line
+  if (donationTotal > 0) {
+    add(store.donation || store.clearing, -donationTotal,
+        store.donationControl || "DONATION", store.donationControl2 || "", "DONATIONS");
   }
   for (const n of state.notOnSchedule) {
     const amt = parseAmount(n.amount);
@@ -1026,25 +1028,25 @@ function renderApp(vm) {
 class Component {
   static DEFAULTS = {
     stores: [
-      { co: 18, name: "Subaru of Winchester", clearing: "501010", donation: "502420", donationControl: "DONATION",
+      { co: 18, name: "Subaru of Winchester", clearing: "501010", donation: "502420", donationControl: "DONATION", donationControl2: "",
         deposits: [
           { type: "CASH", acct: "501001", prefix: "CA" }, { type: "CREDIT", acct: "501001", prefix: "CR" },
           { type: "CHECK", acct: "501001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "507750", prefix: "SP" },
           { type: "PARTS POLICY", acct: "507650", prefix: "PP" } ],
         nosCats: [] },
-      { co: 19, name: "Honda of Winchester", clearing: "511011", donation: "512420", donationControl: "DONATION",
+      { co: 19, name: "Honda of Winchester", clearing: "511011", donation: "512420", donationControl: "DONATION", donationControl2: "",
         deposits: [
           { type: "CASH", acct: "511007", prefix: "CA" }, { type: "CREDIT", acct: "511001", prefix: "CR" },
           { type: "CHECK", acct: "511001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "517750", prefix: "SP" },
           { type: "PARTS POLICY", acct: "517650", prefix: "PP" } ],
         nosCats: [] },
-      { co: 20, name: "Hyundai of Winchester", clearing: "521011", donation: "522420", donationControl: "DONATION",
+      { co: 20, name: "Hyundai of Winchester", clearing: "521011", donation: "522420", donationControl: "DONATION", donationControl2: "",
         deposits: [
           { type: "CASH", acct: "521007", prefix: "CA" }, { type: "CREDIT", acct: "521001", prefix: "CR" },
           { type: "CHECK", acct: "521001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "527750", prefix: "SP" },
           { type: "PARTS POLICY", acct: "527650", prefix: "PP" } ],
         nosCats: [] },
-      { co: 21, name: "CMA's Toyota Chevrolet of Martinsburg", clearing: "531011", donation: "532420", donationControl: "DONATION",
+      { co: 21, name: "CMA's Toyota Chevrolet of Martinsburg", clearing: "531011", donation: "532420", donationControl: "DONATION", donationControl2: "",
         deposits: [
           { type: "CASH", acct: "531007", prefix: "CA" }, { type: "CREDIT", acct: "531001", prefix: "CR" },
           { type: "CHECK", acct: "531001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "537750", prefix: "SP" },
@@ -1052,7 +1054,7 @@ class Component {
         nosCats: [
           { label: "EXT WARRANTY", acct: "531150" }, { label: "GM WARRANTY", acct: "531140" },
           { label: "TOY WARRANTY", acct: "541140" }, { label: "PNC", acct: "531122" }, { label: "AR", acct: "531120" } ] },
-      { co: 23, name: "CMA's CDJR of Martinsburg", clearing: "551011", donation: "552420", donationControl: "DONATION",
+      { co: 23, name: "CMA's CDJR of Martinsburg", clearing: "551011", donation: "552420", donationControl: "DONATION", donationControl2: "",
         deposits: [
           { type: "CASH", acct: "551007", prefix: "CA" }, { type: "CREDIT", acct: "551001", prefix: "CR" },
           { type: "CHECK", acct: "551001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "557750", prefix: "SP" },
@@ -1099,7 +1101,7 @@ class Component {
   render() { renderApp(this.renderVals()); }
   store() {
     return this.cfg.stores.find(s => s.co === this.d.co) || this.cfg.stores[0] ||
-      { co: 0, name: "?", clearing: "", donation: "", donationControl: "", deposits: [], nosCats: [] };
+      { co: 0, name: "?", clearing: "", donation: "", donationControl: "", donationControl2: "", deposits: [], nosCats: [] };
   }
   cleanupForStore() {
     const d = this.d, store = this.store();
@@ -1644,6 +1646,7 @@ class Component {
         suClearing: s ? s.clearing : "", onSuClearing: ev => { s.clearing = ev.target.value.trim(); this.refresh(); },
         suDonation: s ? (s.donation || "") : "", onSuDonation: ev => { s.donation = ev.target.value.trim(); this.refresh(); },
         suDonCtrl: s ? (s.donationControl || "") : "", onSuDonCtrl: ev => { s.donationControl = ev.target.value.trim(); this.refresh(); },
+        suDonCtrl2: s ? (s.donationControl2 || "") : "", onSuDonCtrl2: ev => { s.donationControl2 = ev.target.value.trim(); this.refresh(); },
         suDeps: s ? s.deposits.map((x, i) => ({
           type: x.type, acct: x.acct, prefix: x.prefix,
           onType: ev => { x.type = ev.target.value.toUpperCase(); this.refresh(); },
@@ -1662,7 +1665,7 @@ class Component {
         onAddStore: () => {
           const used = new Set(this.su.stores.map(x => x.co));
           let co = 1; while (used.has(co)) co++;
-          this.su.stores.push({ co, name: "New store", clearing: "", donation: "", donationControl: "",
+          this.su.stores.push({ co, name: "New store", clearing: "", donation: "", donationControl: "", donationControl2: "",
             deposits: [{ type: "CASH", acct: "", prefix: "CA" }, { type: "CREDIT", acct: "", prefix: "CR" }, { type: "CHECK", acct: "", prefix: "CK" }],
             nosCats: [] });
           this.suSel = this.su.stores.length - 1; this.refresh();
