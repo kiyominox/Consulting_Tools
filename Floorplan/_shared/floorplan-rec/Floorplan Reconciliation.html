@@ -384,6 +384,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     if (s.length < 11 || s.length > 17) return false;
     return /[A-Z]/.test(s) && /[0-9]/.test(s);
   }
+  // serial-like: a full VIN OR a partial serial (CDK schedules print only the
+  // last 6 of the VIN, e.g. "757192"/"022896"). Excludes age/year (1–4 digits).
+  function serialLike(v) {
+    var s = normVin(v);
+    if (s.length < 5 || s.length > 17) return false;
+    return /[0-9]/.test(s);
+  }
   function looksLikeAccount(v) {
     if (v == null || v === "") return false;
     var s = String(v).trim();
@@ -418,7 +425,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       var parsed = parseAoa(aoa);
       if (!parsed) return;
       var vinCol = scoreVinColumn(parsed.headers, parsed.rows);
-      var cover = vinCol < 0 ? 0 : parsed.rows.reduce(function (a, r) { return a + (looksLikeVin(r[vinCol]) ? 1 : 0); }, 0);
+      var cover = vinCol < 0 ? 0 : parsed.rows.reduce(function (a, r) { return a + (serialLike(r[vinCol]) ? 1 : 0); }, 0);
       if (cover > bestScore) { bestScore = cover; best = parsed; }
     });
     return best;
@@ -460,16 +467,29 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   // ============================================================ column scoring
   function colValues(rows, idx) { return rows.map(function (r) { return r[idx]; }); }
 
+  // Find the VIN/serial column. A header literally named VIN/Serial wins (this
+  // is how every CDK schedule and lender statement labels it, and lets us pick
+  // up partial-serial columns of pure digits); otherwise fall back to a
+  // full-VIN content heuristic.
   function scoreVinColumn(headers, rows) {
-    var best = -1, bestScore = 0;
+    var byHeader = -1, byHeaderScore = 0;
     for (var c = 0; c < headers.length; c++) {
+      if (!/vin|serial/i.test(headers[c] || "")) continue;
       var vals = colValues(rows, c), hit = 0, n = 0;
-      for (var i = 0; i < vals.length; i++) { if (vals[i] === "" || vals[i] == null) continue; n++; if (looksLikeVin(vals[i])) hit++; }
+      for (var i = 0; i < vals.length; i++) { if (vals[i] === "" || vals[i] == null) continue; n++; if (serialLike(vals[i])) hit++; }
       if (n === 0) continue;
       var frac = hit / n;
-      var hdrBonus = /vin|serial/i.test(headers[c]) ? 0.25 : 0;
-      var score = frac + hdrBonus;
-      if (frac >= 0.4 && score > bestScore) { bestScore = score; best = c; }
+      if (frac >= 0.5 && frac > byHeaderScore) { byHeaderScore = frac; byHeader = c; }
+    }
+    if (byHeader >= 0) return byHeader;
+    // fallback: best full-VIN column by content
+    var best = -1, bestScore = 0;
+    for (var c2 = 0; c2 < headers.length; c2++) {
+      var v2 = colValues(rows, c2), h2 = 0, n2 = 0;
+      for (var j = 0; j < v2.length; j++) { if (v2[j] === "" || v2[j] == null) continue; n2++; if (looksLikeVin(v2[j])) h2++; }
+      if (n2 === 0) continue;
+      var f2 = h2 / n2;
+      if (f2 >= 0.4 && f2 > bestScore) { bestScore = f2; best = c2; }
     }
     return best;
   }
@@ -538,8 +558,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       setMap("sch.vin", scoreVinColumn(H, R));
       setMap("sch.account", scoreAccountColumn(H, R));
       setMap("sch.amount", scoreAmountColumn(H, R, /balance|amount|net|principal|outstanding/i, /interest|fee|payment|due|rate|days/i));
-      setMap("sch.stock", scoreLabelColumn(H, R, /stock/i));
-      setMap("sch.desc", scoreLabelColumn(H, R, /desc|model|make/i));
+      setMap("sch.stock", scoreLabelColumn(H, R, /stock|^vehicle$/i));
+      setMap("sch.desc", scoreLabelColumn(H, R, /desc|model|^mdl$|make/i));
       state.autoMap.schedule = true;
     } else {
       setMap("stmt.vin", scoreVinColumn(H, R));
@@ -556,8 +576,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     var byVin = {};
     for (var i = 0; i < d.rows.length; i++) {
       var row = d.rows[i];
+      if (!serialLike(row[vinCol])) continue;        // skips Total:/Dealer Total: and other non-unit rows
       var vin = normVin(row[vinCol]);
-      if (!vin) continue;
       if (acctFilter != null && acctCol >= 0 && String(row[acctCol]).trim() !== acctFilter) continue;
       var amt = toNum(row[amtCol]);
       if (!byVin[vin]) byVin[vin] = { vin: vin, amt: 0, stock: "", desc: "", lines: 0, raw: String(row[vinCol]) };
@@ -596,6 +616,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   function findMatch(key, otherKeys, mode) {
     if (otherKeys.has(key)) return key;
     if (mode === "full") return null;
+    // exact last-N comparison (both sides trimmed to N)
     function tryLen(n) {
       if (key.length < n) return null;
       var suf = key.slice(-n), hit = null, count = 0;
@@ -604,7 +625,20 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
     if (mode === "8") return tryLen(8);
     if (mode === "6") return tryLen(6);
-    return tryLen(8) || tryLen(6);                 // auto
+    // auto: one side may be a partial serial — match when the shorter key is a
+    // suffix of the longer (or they share a long-enough tail), uniquely.
+    function contain(minLen) {
+      if (key.length < minLen) return null;
+      var hit = null, count = 0;
+      otherKeys.forEach(function (k) {
+        var ok = (k === key) ||
+                 (k.length > key.length && k.length >= minLen && k.slice(-key.length) === key) ||
+                 (key.length > k.length && k.length >= minLen && key.slice(-k.length) === k);
+        if (ok) { hit = k; count++; }
+      });
+      return count === 1 ? hit : null;
+    }
+    return tryLen(8) || contain(6) || contain(5);
   }
 
   function reconcile() {
@@ -639,13 +673,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
           vin: s.raw || s.vin, stock: s.stock || t.stock, desc: s.desc || t.desc,
           sch: schAbs, stmt: stmtAbs, diff: diff, balanced: Math.abs(diff) < EPS
         });
-      } else {
+      } else if (Math.abs(s.amt) >= EPS) {           // ignore zero-balance (paid/sold) units
         schOnly.push({ vin: s.raw || s.vin, stock: s.stock, desc: s.desc, sch: Math.abs(s.amt), stmt: 0, diff: round2(Math.abs(s.amt)) });
       }
     });
     Object.keys(stmt).forEach(function (k) {
       if (used.has(k)) return;
       var t = stmt[k];
+      if (Math.abs(t.amt) < EPS) return;             // bank still lists sold units at $0 — not on the floorplan
       stmtOnly.push({ vin: t.raw || t.vin, stock: t.stock, desc: t.desc, sch: 0, stmt: Math.abs(t.amt), diff: round2(-Math.abs(t.amt)) });
     });
 
@@ -907,16 +942,15 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       ["2026-02-24", "5961", "2026 Honda CR-V", "5J6RS4H73TL005961", "H30714", 37500, 37500, 157.19, 37500],
       ["2026-02-10", "6200", "2026 Honda CR-V", "7FARS4H78TE006200", "H30794", 37500, 37500, 121.69, 35000]   // off by 2,500
     ];
-    var schHeaders = ["Account", "Stock #", "VIN", "Vehicle", "Floorplan Balance"];
+    // CDK floorplan schedule prints only the last 6 of the VIN under "Serial".
+    var schHeaders = ["Vehicle", "Yr", "Mdl", "Serial", "Sold Date", "Amount $"];
     var schRows = [
-      ["302000", "H30289", "5FPYK3F57TB000947", "26 RIDGELINE", -43000],
-      ["302000", "H30290", "1HGCY2F86TA001605", "26 ACCORD", -38277.70],
-      ["302000", "H30295", "1HGCY2F54TA003665", "26 ACCORD", -33832.98],
-      ["302000", "H30714", "5J6RS4H73TL005961", "26 CR-V", -37500],
-      ["302000", "H30794", "7FARS4H78TE006200", "26 CR-V", -37500],          // schedule says 37,500; bank 35,000
-      ["302000", "H30501", "5FNYF6H59TB099999", "26 PILOT", -41000],          // on schedule, not on statement (sold)
-      ["120100", "", "", "Down payment clearing", -250],                       // a second, non-floorplan account
-      ["120100", "", "", "Misc", 175]
+      ["H30289", "26", "RIDGELINE", "000947", "", -43000],
+      ["H30290", "26", "ACCORD", "001605", "", -38277.70],
+      ["H30295", "26", "ACCORD", "003665", "", -33832.98],
+      ["H30714", "26", "CR-V", "005961", "", -37500],
+      ["H30794", "26", "CR-V", "006200", "", -37500],                         // schedule says 37,500; bank 35,000
+      ["H30501", "26", "PILOT", "099999", "2026-03-12", -41000]              // on schedule, not on statement (sold)
     ];
     state.schedule = { headers: schHeaders, rows: schRows, name: "SAMPLE — schedule.csv" };
     state.statement = { headers: stmtHeaders, rows: stmtRows.concat([["2026-03-30", "9001", "2026 Honda HRV", "3CZRZ2H50TM008888", "H30999", 31000, 0, 5, 31000]]), name: "SAMPLE — statement.csv" };

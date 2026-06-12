@@ -15,9 +15,12 @@ and schedules never leave the machine.
 1. **Load two files** (drag-drop or browse): the CDK floorplan schedule and the
    bank floorplan statement. Accepts `.xlsx / .xlsm / .xls / .csv / .tsv / .txt`.
 2. **Auto-detects columns by header content**, not position:
-   - the **VIN/serial** column on each side (handles full 17-char VINs *and*
-     partial serials — Nissan/Truist serials carry an embedded space like
-     `5N1AZ3DS7TC 110100`, which is stripped before matching);
+   - the **VIN/serial** column on each side (a header named *VIN* or *Serial*
+     wins). Handles full 17-char VINs *and* partial serials in either
+     direction: the CDK floorplan schedule prints only the **last 6 of the VIN**
+     under *Serial* (e.g. `757192`), while lender statements show the full VIN —
+     often with an embedded space (Truist: `5N1AZ3DS7TC 110100`). Spaces are
+     stripped and units are matched by suffix overlap;
    - the **balance** column (e.g. *Ending Balance*, *Current Principal*),
      avoiding interest/fee/payment/due columns;
    - on the schedule, the **floorplan account** — when the schedule holds more
@@ -83,7 +86,12 @@ Floorplan/_shared/floorplan-rec/
 - Balances are compared by **absolute value**, so it doesn't matter whether the
   schedule stores the floorplan as a credit (negative) or the statement shows a
   positive principal — a unit is *balanced* when the two magnitudes agree.
-- Total/subtotal rows on a statement are ignored automatically because they
-  carry no VIN.
+- Total/subtotal rows (e.g. *Total: NEW SUBARU*, *Dealer Total:*, *Total:*) are
+  ignored automatically — only rows with a real VIN/serial are counted, so the
+  grand-total line a lender repeats in the balance column never double-counts.
+- Units the lender still lists at **$0 principal** (sold/paid but not yet
+  removed) are treated as not on the floorplan and don't clutter the
+  one-sided buckets; a unit on the schedule that the statement zeros out still
+  surfaces as *out of balance*.
 - Multiple schedule lines for the same VIN (e.g. split across helper rows) are
   summed per VIN before comparing.
