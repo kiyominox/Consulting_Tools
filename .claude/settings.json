@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 build.py)",
+      "Bash(python3 *build.py)",
+      "Bash(python3 parts_rec.py:*)",
+      "Bash(python3 -m http.server:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Read",
+      "Glob",
+      "Grep"
+    ]
+  }
+}
