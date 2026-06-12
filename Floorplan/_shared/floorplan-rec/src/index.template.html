@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Floorplan Reconciliation</title>
+<style>
+  /* ============================================================ DESIGN TOKENS */
+  :root{
+    --ink:#16191d; --ink-2:#434a52; --muted:#79808a;
+    --paper:#ffffff; --bg:#eceff3; --line:#e3e7ec; --line-2:#d3d9e0;
+    --accent:#1f74cf; --accent-strong:#175ca8; --accent-ink:#0f4d8f;
+    --accent-soft:#e8f1fb; --accent-line:#c4ddf5;
+    --pos:#15784c; --pos-soft:#f1f8f4; --neg:#c0392b; --neg-soft:#fbeceb;
+    --warn:#9a6207; --warn-soft:#fbf2dd; --warn-line:#eed8a6;
+    --shadow:0 1px 2px rgba(22,25,29,.05),0 1px 1px rgba(22,25,29,.04);
+    --shadow-lg:0 12px 32px rgba(22,25,29,.16);
+    --r:10px; --r-sm:7px;
+    --cell-py:8px; --cell-px:11px; --tbl-fs:13px;
+    --font:"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
+       font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .muted{color:var(--muted)}
+  .num{font-variant-numeric:tabular-nums}
+  .grow{flex:1}
+  select,input,button,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+
+  button{cursor:pointer;border-radius:var(--r-sm);border:1px solid var(--line-2);background:#fff;
+       padding:8px 13px;font-weight:600;color:var(--ink);transition:background .12s,border-color .12s}
+  button:hover{background:#f4f6f9}
+  button:active{transform:translateY(.5px)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+  button.ghost{background:transparent;border-color:transparent;color:var(--accent-ink);padding:7px 9px}
+  button.ghost:hover{background:var(--accent-soft)}
+  button.tiny{padding:4px 9px;font-size:12px}
+  button.danger{color:var(--neg);border-color:transparent;background:transparent}
+  button.danger:hover{background:var(--neg-soft)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+
+  header.app{position:sticky;top:0;z-index:40;background:var(--paper);
+       border-bottom:1px solid var(--line);display:flex;align-items:center;gap:16px;padding:11px 22px}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .brand .mark{width:30px;height:30px;border-radius:7px;background:var(--accent);position:relative;flex:none}
+  .brand .mark::before,.brand .mark::after{content:"";position:absolute;background:#fff;border-radius:1px}
+  .brand .mark::before{left:7px;right:7px;top:9px;height:2.5px}
+  .brand .mark::after{left:7px;right:13px;bottom:9px;height:2.5px;opacity:.7}
+  .brand h1{font-size:15.5px;margin:0;font-weight:700;letter-spacing:-.1px;white-space:nowrap}
+  .brand .sub{font-size:11px;color:var(--muted);margin-top:1px;white-space:nowrap}
+  .topbar-actions{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+
+  main{max-width:1680px;margin:0 auto;padding:18px 22px 80px}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+  .row{display:flex;gap:16px;flex-wrap:wrap}
+  .section-eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+
+  /* ============================================================ VARIANCE BAND */
+  .vband{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1px;background:var(--line);
+       border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-bottom:16px}
+  .vband .vcell{background:var(--paper);padding:14px 18px}
+  .vband .vlab{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700}
+  .vband .vval{font-size:22px;font-weight:750;margin-top:4px;letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+  .vband .vcell.variance{background:var(--neg-soft)}
+  .vband .vcell.variance .vval{color:var(--neg)}
+  .vband .vcell.variance.balanced{background:var(--pos-soft)}
+  .vband .vcell.variance.balanced .vval{color:var(--pos)}
+  .vband .vsub{font-size:11.5px;color:var(--muted);margin-top:3px}
+
+  /* ============================================================ UPLOAD */
+  .uploads{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media(max-width:760px){.uploads{grid-template-columns:1fr}}
+  .data-panel{padding:20px}
+  .data-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:14px}
+  .data-head .stepnum{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--accent-line);
+       color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;
+       font-size:13px;font-weight:700;flex:none;background:var(--accent-soft)}
+  .data-head h2{font-size:16px;margin:0 0 2px;font-weight:700}
+  .data-head p{margin:0;font-size:12.5px;color:var(--muted);max-width:54ch}
+  .drop{border:1.5px dashed var(--line-2);border-radius:var(--r);padding:22px 18px;text-align:center;
+       transition:.15s;background:#fafbfd}
+  .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+  .drop.loaded{border-style:solid;border-color:var(--pos);background:var(--pos-soft)}
+  .drop .ico{width:34px;height:34px;border-radius:8px;background:#fff;border:1px solid var(--line-2);
+       display:inline-flex;align-items:center;justify-content:center;margin-bottom:10px;color:var(--accent-ink);font-size:17px}
+  .drop.loaded .ico{background:var(--pos);border-color:var(--pos);color:#fff}
+  .drop h3{margin:0 0 4px;font-size:14px;font-weight:700}
+  .drop .fname{font-weight:700;color:var(--pos);font-size:13px;margin-top:8px;word-break:break-word}
+  .drop input[type=file]{display:none}
+
+  /* ============================================================ MAPPING */
+  .mapping{padding:16px 20px;margin-bottom:16px}
+  .mapgrid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){.mapgrid{grid-template-columns:1fr}}
+  .mapcol h3{font-size:13px;margin:0 0 8px;font-weight:700}
+  .maprow{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+  .maprow label{font-size:12px;color:var(--ink-2);width:128px;flex:none;font-weight:600}
+  .maprow select{flex:1;padding:6px 9px;border-radius:var(--r-sm);border:1px solid var(--line-2);background:#fff}
+  .maprow .auto{font-size:10.5px;color:var(--accent-ink);background:var(--accent-soft);
+       border:1px solid var(--accent-line);border-radius:20px;padding:1px 7px;font-weight:700}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:4px}
+
+  /* ============================================================ RESULTS */
+  .tabs{display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap}
+  .tab{padding:7px 13px;border-radius:20px;border:1px solid var(--line-2);background:#fff;font-size:12.5px;
+       font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+  .tab .cnt{background:rgba(0,0,0,.08);border-radius:20px;padding:0 7px;font-size:11px;font-weight:700}
+  .tab.active .cnt{background:rgba(255,255,255,.22)}
+  .tab.warn:not(.active){border-color:var(--warn-line);color:var(--warn);background:var(--warn-soft)}
+
+  table{border-collapse:collapse;width:100%;font-size:var(--tbl-fs)}
+  thead th{position:sticky;top:0;background:#f6f8fa;text-align:left;padding:9px var(--cell-px);
+       font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;
+       border-bottom:1px solid var(--line-2);white-space:nowrap}
+  tbody td{padding:var(--cell-py) var(--cell-px);border-bottom:1px solid var(--line)}
+  tbody tr:hover{background:#f8fafc}
+  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+  tr.off td{background:#fdf4f3}
+  tr.off:hover td{background:#fbeceb}
+  .pill{display:inline-block;padding:1px 8px;border-radius:20px;font-size:11px;font-weight:700}
+  .pill.ok{background:var(--pos-soft);color:var(--pos)}
+  .pill.off{background:var(--neg-soft);color:var(--neg)}
+  .pill.warn{background:var(--warn-soft);color:var(--warn)}
+  .tbl-wrap{max-height:560px;overflow:auto;border:1px solid var(--line);border-radius:var(--r);background:#fff}
+  .empty{padding:60px 20px;text-align:center;color:var(--muted)}
+  .results-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  .results-head h2{font-size:16px;margin:0;font-weight:700}
+  .acct-strip{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .acct-chip{border:1px solid var(--line-2);border-radius:var(--r-sm);padding:7px 12px;font-size:12px;background:#fff}
+  .acct-chip.fp{border-color:var(--accent-line);background:var(--accent-soft)}
+  .acct-chip b{font-size:13px}
+  .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;
+       padding:10px 18px;border-radius:var(--r);font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);
+       z-index:90;opacity:0;pointer-events:none;transition:opacity .2s}
+  .toast.show{opacity:1}
+  .hidden{display:none!important}
+
+  @media print{
+    header.app,.uploads,.mapping,.topbar-actions,.tabs button,.acct-strip button,#exportBar{display:none!important}
+    .tbl-wrap{max-height:none;overflow:visible;border:none}
+    body{background:#fff}
+  }
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>Floorplan Reconciliation</h1>
+      <div class="sub">Bank floorplan statement &harr; CDK floorplan schedule &middot; offline</div>
+    </div>
+  </div>
+  <div class="topbar-actions">
+    <button class="ghost tiny" id="btnSample">Load sample data</button>
+    <button class="ghost tiny" id="btnExportJson">Backup (JSON)</button>
+    <button class="ghost tiny" id="btnImportJson">Restore</button>
+    <input type="file" id="jsonFile" accept="application/json" class="hidden" />
+    <button class="danger tiny" id="btnReset">Reset</button>
+  </div>
+</header>
+
+<main>
+  <!-- live variance band -->
+  <div class="vband" id="vband">
+    <div class="vcell"><div class="vlab">Schedule total</div><div class="vval num" id="vSchedule">$0.00</div><div class="vsub" id="vScheduleSub">floorplan account</div></div>
+    <div class="vcell"><div class="vlab">Statement total</div><div class="vval num" id="vStatement">$0.00</div><div class="vsub" id="vStatementSub">bank balance</div></div>
+    <div class="vcell variance balanced" id="vVarCell"><div class="vlab">Variance</div><div class="vval num" id="vVariance">$0.00</div><div class="vsub" id="vVarSub">schedule &minus; statement</div></div>
+    <div class="vcell"><div class="vlab">Out of balance</div><div class="vval num" id="vUnits">0</div><div class="vsub" id="vUnitsSub">units needing attention</div></div>
+  </div>
+
+  <!-- uploads -->
+  <div class="uploads">
+    <div class="panel data-panel">
+      <div class="data-head">
+        <span class="stepnum">1</span>
+        <div><h2>Floorplan Schedule</h2><p>CDK floorplan schedule export. Drop the Excel/CSV here &mdash; the tool finds the VIN column and the floorplan account (the one full of vehicle-sized credits).</p></div>
+      </div>
+      <div class="drop" id="dropSchedule" data-which="schedule">
+        <div class="ico">&#8681;</div>
+        <h3>Drop schedule file</h3>
+        <p class="muted">or <button class="ghost tiny" onclick="document.getElementById('fileSchedule').click()">browse</button></p>
+        <input type="file" id="fileSchedule" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls" />
+        <div class="fname hidden" id="fnameSchedule"></div>
+      </div>
+    </div>
+    <div class="panel data-panel">
+      <div class="data-head">
+        <span class="stepnum">2</span>
+        <div><h2>Bank Floorplan Statement</h2><p>The lender's billing statement (Honda, Nissan/Truist, GM, etc.). The tool detects the VIN/serial column &mdash; full or partial &mdash; and the principal balance.</p></div>
+      </div>
+      <div class="drop" id="dropStatement" data-which="statement">
+        <div class="ico">&#8681;</div>
+        <h3>Drop statement file</h3>
+        <p class="muted">or <button class="ghost tiny" onclick="document.getElementById('fileStatement').click()">browse</button></p>
+        <input type="file" id="fileStatement" accept=".csv,.tsv,.txt,.xlsx,.xlsm,.xls" />
+        <div class="fname hidden" id="fnameStatement"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- column mapping -->
+  <div class="panel mapping hidden" id="mapping">
+    <div class="row" style="align-items:center;margin-bottom:12px">
+      <div class="grow"><span class="section-eyebrow">Column mapping</span>
+        <div class="hint">Auto-detected from headers &mdash; override any dropdown if a column was guessed wrong, then re-run.</div>
+      </div>
+      <button class="primary" id="btnReconcile">Reconcile</button>
+    </div>
+    <div class="mapgrid">
+      <div class="mapcol" id="mapSchedule">
+        <h3>Schedule columns <span class="auto" id="autoSchedule">auto</span></h3>
+        <div class="maprow"><label>VIN / serial</label><select data-map="sch.vin"></select></div>
+        <div class="maprow"><label>Account #</label><select data-map="sch.account"></select></div>
+        <div class="maprow"><label>Floorplan balance</label><select data-map="sch.amount"></select></div>
+        <div class="maprow"><label>Stock #</label><select data-map="sch.stock"></select></div>
+        <div class="maprow"><label>Description</label><select data-map="sch.desc"></select></div>
+        <div class="hint" id="schAcctHint"></div>
+      </div>
+      <div class="mapcol" id="mapStatement">
+        <h3>Statement columns <span class="auto" id="autoStatement">auto</span></h3>
+        <div class="maprow"><label>VIN / serial</label><select data-map="stmt.vin"></select></div>
+        <div class="maprow"><label>Principal balance</label><select data-map="stmt.amount"></select></div>
+        <div class="maprow"><label>Stock #</label><select data-map="stmt.stock"></select></div>
+        <div class="maprow"><label>Description</label><select data-map="stmt.desc"></select></div>
+        <div class="maprow"><label>VIN match</label>
+          <select data-map="opt.match">
+            <option value="full">Full VIN (exact, space-insensitive)</option>
+            <option value="8">Last 8 of VIN</option>
+            <option value="6">Last 6 of VIN</option>
+            <option value="auto" selected>Auto (suffix overlap)</option>
+          </select>
+        </div>
+        <div class="hint">Nissan/Truist serials carry a space (e.g. <code>5N1AZ3DS7TC 110100</code>) &mdash; spaces are stripped before matching.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- results -->
+  <div id="results" class="hidden">
+    <div class="acct-strip" id="acctStrip"></div>
+    <div class="results-head">
+      <h2>Reconciliation</h2>
+      <div class="grow"></div>
+      <div id="exportBar" style="display:flex;gap:8px">
+        <button class="tiny" id="btnPrint">Print / PDF</button>
+        <button class="primary tiny" id="btnXlsx">Export .xlsx</button>
+      </div>
+    </div>
+    <div class="tabs" id="tabs"></div>
+    <div class="tbl-wrap"><table id="resultTable"><thead></thead><tbody></tbody></table></div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>/*__SHEETJS_LIB__*/</script>
+<script>/*__EXCELJS_LIB__*/</script>
+<script>/*__APP_JS__*/</script>
+</body>
+</html>

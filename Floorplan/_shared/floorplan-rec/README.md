@@ -1,0 +1,89 @@
+# Floorplan Reconciliation
+
+Reconciles a **bank floorplan billing statement** against the **CDK floorplan
+schedule** and shows exactly which units are out of balance. Store- and
+group-agnostic — it figures out the columns and the floorplan account itself, so
+the same file works for any dealer and any lender (Honda, Nissan/Truist, GM,
+etc.).
+
+The deliverable is a single offline file: **`Floorplan Reconciliation.html`**.
+Double-click it. **No install, no server, no network calls** — the statements
+and schedules never leave the machine.
+
+## What it does
+
+1. **Load two files** (drag-drop or browse): the CDK floorplan schedule and the
+   bank floorplan statement. Accepts `.xlsx / .xlsm / .xls / .csv / .tsv / .txt`.
+2. **Auto-detects columns by header content**, not position:
+   - the **VIN/serial** column on each side (handles full 17-char VINs *and*
+     partial serials — Nissan/Truist serials carry an embedded space like
+     `5N1AZ3DS7TC 110100`, which is stripped before matching);
+   - the **balance** column (e.g. *Ending Balance*, *Current Principal*),
+     avoiding interest/fee/payment/due columns;
+   - on the schedule, the **floorplan account** — when the schedule holds more
+     than one GL account, the floorplan account is identified as the one filled
+     with **vehicle-sized credit balances** and reconciled in isolation.
+3. **Matches units on VIN** (full, last-8, last-6, or automatic suffix overlap).
+4. **Reports**:
+   - a live **Schedule / Statement / Variance** header that turns **green at
+     `0.00`**;
+   - **Out of balance** — matched units whose schedule balance ≠ statement
+     balance, with the per-unit difference;
+   - **On schedule, not on statement** — units still on the books the bank no
+     longer shows (sold/paid, or an error);
+   - **On statement, not on schedule** — units the bank is billing that aren't on
+     the books yet (newly floored, or an error);
+   - a per-account strip showing every account found on the schedule and which
+     one was treated as the floorplan account.
+
+Every auto-detected column is shown in a **mapping panel** with dropdowns — if a
+column was guessed wrong, override it and press **Reconcile** again.
+
+## Outputs
+
+- **Styled `.xlsx`** with a summary tab plus one tab per bucket.
+- **Print / PDF** record (the variance band and the active table).
+- **JSON backup / restore** and **`localStorage`** persistence so you can close
+  and resume, or move the work to another machine.
+
+## Try it
+
+Open the HTML and click **Load sample data** — it loads a small Honda-style
+statement and a matching schedule (with one off-balance unit, one schedule-only
+"sold" unit, and one statement-only "newly floored" unit) and reconciles them so
+you can see the layout without real files.
+
+## Building
+
+This tool is assembled from `src/` so the libraries stay editable:
+
+```
+python3 build.py      # → "Floorplan Reconciliation.html"
+```
+
+`build.py` inlines `vendor/xlsx.full.min.js` (SheetJS, reading) and
+`vendor/exceljs.min.js` (ExcelJS, styled writing) and `src/app.js` into
+`src/index.template.html`. It **aborts if any injected source contains a literal
+`</script>`**. Never hand-edit the built `.html` — edit `src/` and rebuild.
+
+```
+Floorplan/_shared/floorplan-rec/
+  build.py
+  Floorplan Reconciliation.html   ← built artifact (double-click this)
+  src/
+    index.template.html
+    app.js
+  vendor/
+    xlsx.full.min.js
+    exceljs.min.js
+```
+
+## Notes on matching & balances
+
+- Balances are compared by **absolute value**, so it doesn't matter whether the
+  schedule stores the floorplan as a credit (negative) or the statement shows a
+  positive principal — a unit is *balanced* when the two magnitudes agree.
+- Total/subtotal rows on a statement are ignored automatically because they
+  carry no VIN.
+- Multiple schedule lines for the same VIN (e.g. split across helper rows) are
+  summed per VIN before comparing.

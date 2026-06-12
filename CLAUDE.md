@@ -29,6 +29,7 @@ managers. Tools must be trustworthy with real money and real GL accounts.
 | `Powerposting/` PDF→AGJE | `Powerposting/CMA/*.html` | Honda/Hyundai invoices; Toyota/GM warranty |
 | `Vehicle-Sales/` report | `Vehicle-Sales/_shared/vehicle-sales-report/` (built from `src/`) | **MacDonald, Hillside** |
 | `Parts/` reconciliation | `Parts/_shared/parts-rec/` (Python CLI + Flask + standalone HTML) | `_shared` only so far |
+| `Floorplan/` reconciliation | `Floorplan/_shared/floorplan-rec/` (built from `src/`) | `_shared` only (store/group agnostic) |
 | `GL-Reconciliation/` validator | `GL-Reconciliation/Hickman's/gl-posting-validator.html` | Hickman's |
 | `AP/` | placeholder — coming soon | — |
 
