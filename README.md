@@ -32,6 +32,9 @@ the CDK floorplan schedule. Store- and group-agnostic: it auto-detects the VIN
 account on the schedule by its vehicle-sized credit balances, matches units on
 VIN, and reports per-unit and total variances (plus units on only one side).
 
+A **CMA-branded** build (logo, navy/orange palette) lives at
+`Floorplan/CMA/floorplan-rec/` — same tool, skinned for Carter Myers Automotive.
+
 See `Floorplan/_shared/floorplan-rec/README.md` for details.
 
 ### GL-Reconciliation/_shared/GL-Posting-Validator
