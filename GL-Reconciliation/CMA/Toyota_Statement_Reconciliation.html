@@ -92,6 +92,11 @@
   th.tick, td.tick { width: 34px; text-align: center; padding-left: 8px; padding-right: 4px; }
   td.tick input { width: 16px; height: 16px; cursor: pointer; }
   .manualhint { font-size: .78rem; color: var(--gray); margin: 0; padding: 10px 16px; background: #fbfbfd; border-bottom: 1px solid #eee; }
+  #reconHint { border: 1px solid #ddd; border-radius: 10px 10px 0 0; border-bottom: none; margin-bottom: 0; }
+  .recon-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; margin-bottom: 18px; }
+  .recon-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .recon-col section.block { margin-bottom: 0; }
+  @media (max-width: 860px) { .recon-cols { grid-template-columns: 1fr; } }
 
   #selBar { position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 120%); transition: transform .2s;
     background: var(--dark); color: #fff; padding: 12px 20px; border-radius: 12px 12px 0 0; box-shadow: 0 -4px 18px rgba(0,0,0,.25);
@@ -160,15 +165,27 @@
       <div class="body"><div class="scrollwrap" id="tblReview"></div></div>
     </section>
 
-    <section class="block" id="secMissing">
-      <h3>On Statement, NOT Found in GL <span class="count red" id="cntMissing">0</span><span class="chev">&#9662;</span></h3>
-      <div class="body"><div class="scrollwrap" id="tblMissing"></div></div>
-    </section>
+    <p class="manualhint" id="reconHint">Reconcile open items like a bank rec: tick a statement or incentive item on the <b>left</b> and the GL entry (or entries) on the <b>right</b> that actually covers it, then click <b>Mark these reconciled</b> in the bar at the bottom.</p>
+    <div class="recon-cols">
+      <div class="recon-col">
+        <section class="block" id="secMissing">
+          <h3>On Statement, NOT Found in GL <span class="count red" id="cntMissing">0</span><span class="chev">&#9662;</span></h3>
+          <div class="body"><div class="scrollwrap" id="tblMissing"></div></div>
+        </section>
 
-    <section class="block" id="secIncMissing">
-      <h3>Incentives NOT Found in GL <span class="count red" id="cntIncMissing">0</span><span class="chev">&#9662;</span></h3>
-      <div class="body"><div class="scrollwrap" id="tblIncMissing"></div></div>
-    </section>
+        <section class="block" id="secIncMissing">
+          <h3>Incentives NOT Found in GL <span class="count red" id="cntIncMissing">0</span><span class="chev">&#9662;</span></h3>
+          <div class="body"><div class="scrollwrap" id="tblIncMissing"></div></div>
+        </section>
+      </div>
+
+      <div class="recon-col">
+        <section class="block" id="secGlOther">
+          <h3>GL Entries Not on Statement <span class="count" id="cntGlOther">0</span><span class="chev">&#9662;</span></h3>
+          <div class="body"><div class="scrollwrap" id="tblGlOther"></div></div>
+        </section>
+      </div>
+    </div>
 
     <section class="block" id="secManual">
       <h3>Manually Reconciled <span class="count green" id="cntManual">0</span><span class="chev">&#9662;</span></h3>
@@ -178,14 +195,6 @@
     <section class="block collapsed" id="secMatched">
       <h3>Matched Items (auto) <span class="count green" id="cntMatched">0</span><span class="chev">&#9662;</span></h3>
       <div class="body"><div class="scrollwrap" id="tblMatched"></div></div>
-    </section>
-
-    <section class="block collapsed" id="secGlOther">
-      <h3>GL Entries Not on Statement <span class="count" id="cntGlOther">0</span><span class="chev">&#9662;</span></h3>
-      <div class="body">
-        <p class="manualhint">Tick a statement or incentive item above (in the &ldquo;Not Found in GL&rdquo; lists) and the GL entry/entries here that actually cover it, then use the bar at the bottom to mark them reconciled together &mdash; like clearing items in a bank rec.</p>
-        <div class="scrollwrap" id="tblGlOther"></div>
-      </div>
     </section>
   </div>
 </main>
