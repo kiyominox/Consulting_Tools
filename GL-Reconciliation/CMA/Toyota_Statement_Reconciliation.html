@@ -89,8 +89,18 @@
   .recon-eq .net.ok { color: var(--green); }
   .recon-eq .net.bad { color: var(--toyota-red); }
 
+  th.tick, td.tick { width: 34px; text-align: center; padding-left: 8px; padding-right: 4px; }
+  td.tick input { width: 16px; height: 16px; cursor: pointer; }
+  .manualhint { font-size: .78rem; color: var(--gray); margin: 0; padding: 10px 16px; background: #fbfbfd; border-bottom: 1px solid #eee; }
+
+  #selBar { position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 120%); transition: transform .2s;
+    background: var(--dark); color: #fff; padding: 12px 20px; border-radius: 12px 12px 0 0; box-shadow: 0 -4px 18px rgba(0,0,0,.25);
+    display: flex; gap: 20px; align-items: center; font-size: .85rem; z-index: 50; font-variant-numeric: tabular-nums; max-width: 96vw; flex-wrap: wrap; }
+  #selBar.show { transform: translate(-50%, 0); }
+  #selBar button { margin: 0; }
+
   @media print {
-    header .sub, .cards, .actions, button, .dropzone, .chev { display: none !important; }
+    header .sub, .cards, .actions, button, .dropzone, .chev, .tick, #selBar, .manualhint { display: none !important; }
     body { background: #fff; }
     section.block.collapsed .body { display: block; }
     .scrollwrap { max-height: none; overflow: visible; }
@@ -160,17 +170,27 @@
       <div class="body"><div class="scrollwrap" id="tblIncMissing"></div></div>
     </section>
 
+    <section class="block" id="secManual">
+      <h3>Manually Reconciled <span class="count green" id="cntManual">0</span><span class="chev">&#9662;</span></h3>
+      <div class="body"><div class="scrollwrap" id="tblManual"></div></div>
+    </section>
+
     <section class="block collapsed" id="secMatched">
-      <h3>Matched Items <span class="count green" id="cntMatched">0</span><span class="chev">&#9662;</span></h3>
+      <h3>Matched Items (auto) <span class="count green" id="cntMatched">0</span><span class="chev">&#9662;</span></h3>
       <div class="body"><div class="scrollwrap" id="tblMatched"></div></div>
     </section>
 
     <section class="block collapsed" id="secGlOther">
-      <h3>GL Entries Not on Statement (informational) <span class="count" id="cntGlOther">0</span><span class="chev">&#9662;</span></h3>
-      <div class="body"><div class="scrollwrap" id="tblGlOther"></div></div>
+      <h3>GL Entries Not on Statement <span class="count" id="cntGlOther">0</span><span class="chev">&#9662;</span></h3>
+      <div class="body">
+        <p class="manualhint">Tick a statement or incentive item above (in the &ldquo;Not Found in GL&rdquo; lists) and the GL entry/entries here that actually cover it, then use the bar at the bottom to mark them reconciled together &mdash; like clearing items in a bank rec.</p>
+        <div class="scrollwrap" id="tblGlOther"></div>
+      </div>
     </section>
   </div>
 </main>
+
+<div id="selBar"></div>
 
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -181,8 +201,11 @@ const state = {
   statement: null,   // { meta, lines:[{invoice, date, refType, amount}] }
   incentive: null,   // { meta, lines:[{product, date, ref, amount}] }
   gl: null,          // { meta, lines:[{account, journal, reference, date, amount, control2}] }
-  recon: null
+  recon: null,
+  manual: [],        // [{ id, sIds:[], iIds:[], gIds:[] }] user-cleared bundles (bank-rec style)
+  sel: { s: new Set(), i: new Set(), g: new Set() } // currently ticked items awaiting a manual match
 };
+let manualSeq = 1;
 
 // ---------- helpers ----------
 const fmt = n => (n < 0 ? "(" : "") + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2}) + (n < 0 ? ")" : "");
@@ -366,13 +389,20 @@ function parseGl(wb) {
 // ---------- reconciliation engine ----------
 function reconcile() {
   const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  // reset any prior manual clearings / selection on a fresh reconcile
+  state.manual = [];
+  state.sel = { s: new Set(), i: new Set(), g: new Set() };
+  // tag source items with stable ids for manual matching
+  stmt.lines.forEach((l, i) => l._id = "s" + i);
+  if (inc) inc.lines.forEach((l, i) => l._id = "i" + i);
+  gl.lines.forEach((l, i) => l._id = "g" + i);
   // group GL lines by normalized reference (CDK may post several lines under one ref)
   const glGroups = new Map();
   gl.lines.forEach((l, idx) => {
     const k = normRef(l.reference);
     if (!glGroups.has(k)) glGroups.set(k, { key: k, lines: [], total: 0 });
     const g = glGroups.get(k);
-    g.lines.push({ ...l, idx });
+    g.lines.push({ ...l, idx, _id: l._id });
     g.total = r2(g.total + l.amount);
   });
   const groups = [...glGroups.values()];
@@ -420,9 +450,28 @@ function reconcile() {
 }
 
 // ---------- rendering ----------
+// id -> item lookups (statement / incentive / GL line)
+function lookups() {
+  const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  const sById = new Map(stmt.lines.map(l => [l._id, l]));
+  const iById = new Map((inc?.lines || []).map(l => [l._id, l]));
+  const gById = new Map(gl.lines.map(l => [l._id, l]));
+  return { sById, iById, gById };
+}
+// sets of ids cleared via a manual (bank-rec style) bundle
+function manualSets() {
+  const s = new Set(), i = new Set(), g = new Set();
+  for (const b of state.manual) {
+    b.sIds.forEach(x => s.add(x)); b.iIds.forEach(x => i.add(x)); b.gIds.forEach(x => g.add(x));
+  }
+  return { s, i, g };
+}
+
 function recompute() {
   const { matches, missing, incMissing, glOther } = state.recon;
   const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  const { sById, iById } = lookups();
+  const man = manualSets();
   const stmtTotal = r2(stmt.lines.reduce((s, l) => s + l.amount, 0));
   const incTotal = inc ? r2(inc.lines.reduce((s, l) => s + l.amount, 0)) : 0;
   const ok = m => m.status === "auto" || m.status === "confirmed";
@@ -433,14 +482,26 @@ function recompute() {
   const rejectedStmt = matches.filter(m => m.source === "statement" && m.status === "rejected");
   const rejectedInc = matches.filter(m => m.source === "incentive" && m.status === "rejected");
 
-  const matchedStmtAmt = r2(matchedStmt.reduce((s, m) => s + m.item.amount, 0));
-  const matchedIncAmt = r2(matchedInc.reduce((s, m) => s + m.item.amount, 0));
+  // manually cleared source items (exclude any already auto/confirmed-matched, just in case)
+  const manStmtItems = [...man.s].map(id => sById.get(id)).filter(Boolean);
+  const manIncItems = [...man.i].map(id => iById.get(id)).filter(Boolean);
+
+  const matchedStmtAmt = r2(matchedStmt.reduce((s, m) => s + m.item.amount, 0) + manStmtItems.reduce((s, it) => s + it.amount, 0));
+  const matchedIncAmt = r2(matchedInc.reduce((s, m) => s + m.item.amount, 0) + manIncItems.reduce((s, it) => s + it.amount, 0));
   const unpostedStmt = r2(stmtTotal - matchedStmtAmt);
   const unpostedInc = r2(incTotal - matchedIncAmt);
+
+  // exceptions, minus anything the user has manually cleared
+  const missingAll = [...missing, ...rejectedStmt.map(m => m.item)].filter(it => !man.s.has(it._id));
+  const incMissingAll = [...incMissing, ...rejectedInc.map(m => m.item)].filter(it => !man.i.has(it._id));
+  // GL lines still unaccounted: not in an auto/confirmed group and not manually cleared
+  const glLinesOpen = glOther.flatMap(g => g.lines).filter(l => !man.g.has(l._id));
+
   return { stmtTotal, incTotal, matchedStmt, matchedInc, pending, rejectedStmt, rejectedInc,
            matchedStmtAmt, matchedIncAmt, unpostedStmt, unpostedInc,
-           missingAll: [...missing, ...rejectedStmt.map(m => m.item)],
-           incMissingAll: [...incMissing, ...rejectedInc.map(m => m.item)] };
+           manStmtItems, manIncItems, glLinesOpen,
+           matchedCount: matchedStmt.length + matchedInc.length + manStmtItems.length + manIncItems.length,
+           missingAll, incMissingAll };
 }
 
 function render() {
@@ -463,7 +524,7 @@ function render() {
     ["Statement Amount Due", fmt(stmt.meta.amountDue ?? R.stmtTotal), ""],
     ["Incentive (Net from TFS)", fmt(inc?.meta.netDue ?? R.incTotal), ""],
     ["GL Control Balance", fmt(gl.meta.controlTotal ?? r2(gl.lines.reduce((s,l)=>s+l.amount,0))), ""],
-    ["Matched to GL", `${R.matchedStmt.length + R.matchedInc.length} items`, "ok"],
+    ["Matched to GL", `${R.matchedCount} items`, "ok"],
     ["Needs Review", `${R.pending.length} items`, R.pending.length ? "warn" : "ok"],
     ["Not Posted", `${R.missingAll.length + R.incMissingAll.length} items / ${fmt(r2(R.unpostedStmt - R.unpostedInc))}`,
       (R.missingAll.length + R.incMissingAll.length) ? "bad" : "ok"]
@@ -492,19 +553,21 @@ function render() {
     }).join("") + "</tbody></table>"
     : `<div class="empty">Nothing needs review.</div>`;
 
-  // missing tables
+  // missing tables (with tick boxes for manual clearing)
   document.getElementById("cntMissing").textContent = R.missingAll.length;
   document.getElementById("tblMissing").innerHTML = R.missingAll.length ? `<table><thead><tr>
-      <th>Invoice #</th><th>Invoice Date</th><th>Type</th><th class="num">Amount $</th><th>Expected GL Posting</th></tr></thead><tbody>` +
-    R.missingAll.map(it => `<tr><td>${esc(it.invoice)}</td><td>${esc(it.date)}</td><td>${esc(it.refType)}</td>
+      <th class="tick"></th><th>Invoice #</th><th>Invoice Date</th><th>Type</th><th class="num">Amount $</th><th>Expected GL Posting</th></tr></thead><tbody>` +
+    R.missingAll.map(it => `<tr><td class="tick"><input type="checkbox" data-sel="s" value="${it._id}" ${state.sel.s.has(it._id)?"checked":""}></td>
+      <td>${esc(it.invoice)}</td><td>${esc(it.date)}</td><td>${esc(it.refType)}</td>
       <td class="num">${fmt(it.amount)}</td><td class="reason">Post ${fmt(r2(-it.amount))} to the Toyota control with ref ${esc(it.invoice)}</td></tr>`).join("")
     + "</tbody></table>" : `<div class="empty">Every statement line was found in the GL. &#127881;</div>`;
 
   document.getElementById("cntIncMissing").textContent = R.incMissingAll.length;
   document.getElementById("secIncMissing").style.display = inc ? "" : "none";
   document.getElementById("tblIncMissing").innerHTML = R.incMissingAll.length ? `<table><thead><tr>
-      <th>Product</th><th>Date</th><th>Trans Ref #</th><th class="num">Amount $</th></tr></thead><tbody>` +
-    R.incMissingAll.map(it => `<tr><td>${esc(it.product)}</td><td>${esc(it.date)}</td><td>${esc(it.ref || "—")}</td>
+      <th class="tick"></th><th>Product</th><th>Date</th><th>Trans Ref #</th><th class="num">Amount $</th></tr></thead><tbody>` +
+    R.incMissingAll.map(it => `<tr><td class="tick"><input type="checkbox" data-sel="i" value="${it._id}" ${state.sel.i.has(it._id)?"checked":""}></td>
+      <td>${esc(it.product)}</td><td>${esc(it.date)}</td><td>${esc(it.ref || "—")}</td>
       <td class="num">${fmt(it.amount)}</td></tr>`).join("") + "</tbody></table>"
     : `<div class="empty">Every incentive line was found in the GL. &#127881;</div>`;
 
@@ -524,17 +587,82 @@ function render() {
         <td><span class="pill ${m.status === "auto" ? "exact" : "confirmed"}">${m.status === "auto" ? "auto" : "confirmed"}</span></td></tr>`;
     }).join("") + "</tbody></table>" : `<div class="empty">No matches yet.</div>`;
 
-  // GL other
-  document.getElementById("cntGlOther").textContent = glOther.reduce((s, g) => s + g.lines.length, 0);
-  document.getElementById("tblGlOther").innerHTML = glOther.length ? `<table><thead><tr>
-      <th>Reference</th><th>Journal</th><th>Date</th><th class="num">Amount $</th><th>Control2</th></tr></thead><tbody>` +
-    glOther.flatMap(g => g.lines).sort((a, b) => a.date.localeCompare(b.date))
-      .map(l => `<tr><td>${esc(l.reference)}</td><td>${esc(l.journal)}</td><td>${esc(l.date)}</td>
+  // GL not on statement (open lines only) — tickable to manually clear against statement/incentive items
+  document.getElementById("cntGlOther").textContent = R.glLinesOpen.length;
+  document.getElementById("tblGlOther").innerHTML = R.glLinesOpen.length ? `<table><thead><tr>
+      <th class="tick"></th><th>Reference</th><th>Journal</th><th>Date</th><th class="num">Amount $</th><th>Control2</th></tr></thead><tbody>` +
+    R.glLinesOpen.slice().sort((a, b) => a.date.localeCompare(b.date))
+      .map(l => `<tr><td class="tick"><input type="checkbox" data-sel="g" value="${l._id}" ${state.sel.g.has(l._id)?"checked":""}></td>
+        <td>${esc(l.reference)}</td><td>${esc(l.journal)}</td><td>${esc(l.date)}</td>
         <td class="num">${fmt(l.amount)}</td><td>${esc(l.control2)}</td></tr>`).join("") + "</tbody></table>"
     : `<div class="empty">None.</div>`;
 
+  // manually reconciled bundles
+  renderManual(R);
+  renderSelBar(R);
+
   document.getElementById("btnExport").disabled = false;
   document.getElementById("btnPrint").disabled = false;
+}
+
+function renderManual(R) {
+  const { sById, iById, gById } = lookups();
+  const sec = document.getElementById("secManual");
+  sec.style.display = state.manual.length ? "" : "none";
+  document.getElementById("cntManual").textContent = state.manual.length;
+  document.getElementById("tblManual").innerHTML = !state.manual.length ? "" : `<table><thead><tr>
+      <th>Cleared items (Statement / Incentive)</th><th>Matched GL entries</th>
+      <th class="num">Net diff $</th><th></th></tr></thead><tbody>` +
+    state.manual.map(b => {
+      const sItems = b.sIds.map(id => sById.get(id)).filter(Boolean);
+      const iItems = b.iIds.map(id => iById.get(id)).filter(Boolean);
+      const gItems = b.gIds.map(id => gById.get(id)).filter(Boolean);
+      const sSum = r2(sItems.reduce((s, x) => s + x.amount, 0));
+      const iSum = r2(iItems.reduce((s, x) => s + x.amount, 0));
+      const gSum = r2(gItems.reduce((s, x) => s + x.amount, 0));
+      // statement posts as a credit (-), incentive as a debit (+): expected GL = -stmt + inc
+      const diff = r2(gSum - (-sSum + iSum));
+      const left = [...sItems.map(x => `Stmt ${esc(x.invoice)} ${fmt(x.amount)}`),
+                    ...iItems.map(x => `Inc ${esc(x.ref || x.product)} ${fmt(x.amount)}`)].join("<br>") || "—";
+      const right = gItems.map(x => `${esc(x.reference)} (j${esc(x.journal)}) ${fmt(x.amount)}`).join("<br>") || "—";
+      return `<tr class="confirmed"><td>${left}</td><td>${right}</td>
+        <td class="num" style="color:${Math.abs(diff) < 0.005 ? "var(--green)" : "var(--amber)"}">${fmt(diff)}${Math.abs(diff) < 0.005 ? " &#10004;" : ""}</td>
+        <td><button class="btn-secondary btn-sm" onclick="unManual('${b.id}')">unmatch</button></td></tr>`;
+    }).join("") + "</tbody></table>";
+}
+
+function renderSelBar(R) {
+  const { sById, iById, gById } = lookups();
+  const bar = document.getElementById("selBar");
+  const n = state.sel.s.size + state.sel.i.size + state.sel.g.size;
+  if (!n) { bar.classList.remove("show"); return; }
+  const sSum = r2([...state.sel.s].reduce((s, id) => s + (sById.get(id)?.amount || 0), 0));
+  const iSum = r2([...state.sel.i].reduce((s, id) => s + (iById.get(id)?.amount || 0), 0));
+  const gSum = r2([...state.sel.g].reduce((s, id) => s + (gById.get(id)?.amount || 0), 0));
+  const diff = r2(gSum - (-sSum + iSum));
+  const balanced = Math.abs(diff) < 0.005;
+  bar.classList.add("show");
+  bar.innerHTML = `<span><b>${n}</b> selected</span>
+    <span>Stmt ${fmt(sSum)} · Inc ${fmt(iSum)} · GL ${fmt(gSum)}</span>
+    <span style="color:${balanced ? "#7CFFB0" : "#FFD27C"}">net diff ${fmt(diff)}${balanced ? " &#10004; balances" : ""}</span>
+    <button class="btn-green btn-sm" onclick="doManualMatch()">Mark these reconciled</button>
+    <button class="btn-secondary btn-sm" onclick="clearSel()">Clear</button>`;
+}
+
+function toggleSel(kind, id, on) {
+  if (on) state.sel[kind].add(id); else state.sel[kind].delete(id);
+  renderSelBar(recompute());
+}
+function clearSel() { state.sel = { s: new Set(), i: new Set(), g: new Set() }; render(); }
+function doManualMatch() {
+  if (!(state.sel.s.size + state.sel.i.size + state.sel.g.size)) return;
+  state.manual.push({ id: "m" + (manualSeq++), sIds: [...state.sel.s], iIds: [...state.sel.i], gIds: [...state.sel.g] });
+  state.sel = { s: new Set(), i: new Set(), g: new Set() };
+  render();
+}
+function unManual(id) {
+  state.manual = state.manual.filter(b => b.id !== id);
+  render();
 }
 
 function decide(i, status) {
@@ -562,8 +690,9 @@ function exportReport() {
     ["Expected Net to Toyota (Statement - Incentives)", r2(R.stmtTotal - R.incTotal)],
     ["GL Control Balance", gl.meta.controlTotal ?? r2(gl.lines.reduce((s, l) => s + l.amount, 0))],
     [],
-    ["Statement items matched to GL", R.matchedStmt.length, R.matchedStmtAmt],
-    ["Incentive items matched to GL", R.matchedInc.length, R.matchedIncAmt],
+    ["Statement items reconciled (auto + confirmed + manual)", R.matchedStmt.length + R.manStmtItems.length, R.matchedStmtAmt],
+    ["Incentive items reconciled (auto + confirmed + manual)", R.matchedInc.length + R.manIncItems.length, R.matchedIncAmt],
+    ["Manually reconciled bundles", state.manual.length],
     ["Statement items NOT posted", R.missingAll.length, R.unpostedStmt],
     ["Incentive items NOT posted", R.incMissingAll.length, R.unpostedInc],
     ["Items still pending review", R.pending.length],
@@ -594,9 +723,26 @@ function exportReport() {
     ...R.incMissingAll.map(it => [it.product, it.date, it.ref, it.amount, "Not found in GL - needs posting"])
   ]), "Incentives Not Posted");
 
+  // manually reconciled bundles
+  const { sById, iById, gById } = lookups();
+  if (state.manual.length) {
+    const rows = [["Bundle", "Type", "Ref / Invoice #", "Date", "Amount", "Bundle net diff"]];
+    for (const b of state.manual) {
+      const sItems = b.sIds.map(id => sById.get(id)).filter(Boolean);
+      const iItems = b.iIds.map(id => iById.get(id)).filter(Boolean);
+      const gItems = b.gIds.map(id => gById.get(id)).filter(Boolean);
+      const diff = r2(gItems.reduce((s, x) => s + x.amount, 0) - (-r2(sItems.reduce((s, x) => s + x.amount, 0)) + r2(iItems.reduce((s, x) => s + x.amount, 0))));
+      sItems.forEach(x => rows.push([b.id, "Statement", x.invoice, x.date, x.amount, ""]));
+      iItems.forEach(x => rows.push([b.id, "Incentive", x.ref || x.product, x.date, x.amount, ""]));
+      gItems.forEach(x => rows.push([b.id, "GL", x.reference, x.date, x.amount, ""]));
+      rows[rows.length - 1][5] = diff;
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Manually Reconciled");
+  }
+
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
     ["Reference", "Journal", "Date", "Amount", "Control2"],
-    ...glOther.flatMap(g => g.lines).map(l => [l.reference, l.journal, l.date, l.amount, l.control2])
+    ...R.glLinesOpen.map(l => [l.reference, l.journal, l.date, l.amount, l.control2])
   ]), "GL Not On Statement");
 
   const tag = (stmt.meta.statementDate || today).replace(/\//g, "-");
@@ -658,6 +804,11 @@ document.getElementById("btnExport").addEventListener("click", exportReport);
 document.getElementById("btnPrint").addEventListener("click", () => window.print());
 document.querySelectorAll("section.block > h3").forEach(h =>
   h.addEventListener("click", () => h.parentElement.classList.toggle("collapsed")));
+// delegated tick-box handling for manual (bank-rec style) clearing
+document.getElementById("results").addEventListener("change", e => {
+  const cb = e.target.closest('input[data-sel]');
+  if (cb) toggleSel(cb.dataset.sel, cb.value, cb.checked);
+});
 </script>
 </body>
 </html>
