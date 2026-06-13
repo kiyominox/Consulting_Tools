@@ -16,6 +16,7 @@ Current tool types:
 |---|---|
 | `AP/` | Accounts Payable tools (coming soon) |
 | `AR/` | Cash Clearing reconciliation template (CMA) |
+| `Floorplan/` | Floorplan Reconciliation (bank statement ↔ CDK schedule) |
 | `GL-Reconciliation/` | GL Posting Validator |
 | `Parts/` | Parts Inventory Reconciliation |
 | `Powerposting/` | Powerposting tools (coming soon) |
@@ -23,6 +24,18 @@ Current tool types:
 | `Documentation/` | Reference documents and quick guides |
 
 ## Tools
+
+### Floorplan/_shared/floorplan-rec
+Standalone HTML tool that reconciles a bank floorplan billing statement against
+the CDK floorplan schedule. Store- and group-agnostic: it auto-detects the VIN
+(full or partial) and balance columns on either side, identifies the floorplan
+account on the schedule by its vehicle-sized credit balances, matches units on
+VIN, and reports per-unit and total variances (plus units on only one side).
+
+A **CMA-branded** build (logo, navy/orange palette) lives at
+`Floorplan/CMA/floorplan-rec/` — same tool, skinned for Carter Myers Automotive.
+
+See `Floorplan/_shared/floorplan-rec/README.md` for details.
 
 ### GL-Reconciliation/_shared/GL-Posting-Validator
 Standalone HTML tool for validating GL postings.
