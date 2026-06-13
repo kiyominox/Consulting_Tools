@@ -1,0 +1,178 @@
+name: Publish Tool Releases
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'AR/CMA/**'
+      - 'Powerposting/CMA/**'
+      - 'Floorplan/CMA/**'
+      - 'GL-Reconciliation/CMA/**'
+      - "GL-Reconciliation/Hickman's/**"
+      - 'AR/_shared/**'
+      - 'Powerposting/_shared/**'
+      - 'Floorplan/_shared/**'
+      - 'GL-Reconciliation/_shared/**'
+      - 'Parts/_shared/**'
+      - 'Vehicle-Sales/_shared/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # ── CMA Tools ────────────────────────────────────────────────────────────────
+  release-cma:
+    name: CMA Tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete existing release + tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'cma-latest';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner, repo: context.repo.repo, tag
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner, repo: context.repo.repo,
+                release_id: rel.data.id
+              });
+            } catch (e) { if (e.status !== 404) throw e; }
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner, repo: context.repo.repo,
+                ref: `tags/${tag}`
+              });
+            } catch (e) { if (e.status !== 422 && e.status !== 404) throw e; }
+
+      - name: Publish CMA release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cma-latest
+          name: "CMA Tools – Latest"
+          body: |
+            Latest CMA dealership tools. Download the files you need and double-click to open — no install required.
+
+            | File | Description |
+            |---|---|
+            | `Cash_Clearing_Reconciliation.html` | AR cash-clearing reconciliation |
+            | `Deposit_Reconciliation_Standalone.html` | Standalone deposit reconciliation |
+            | `CASHCLEARINGTEMPLATE_CO18–23.xlsm` | Cash-clearing Excel templates (one per company) |
+            | `Invoice_to_CDK_PowerPosting.html` | Honda / Hyundai invoice → AGJE posting |
+            | `Warranty_Claims_to_CDK_PowerPosting.html` | Toyota / GM warranty → AGJE posting |
+            | `Floorplan Reconciliation - CMA.html` | Floorplan reconciliation |
+            | `Toyota_Statement_Reconciliation.html` | Toyota statement GL reconciliation |
+          files: |
+            AR/CMA/cash-clearing/Cash_Clearing_Reconciliation.html
+            AR/CMA/cash-clearing/Deposit_Reconciliation_Standalone.html
+            AR/CMA/cash-clearing/CASHCLEARINGTEMPLATE_CO18.xlsm
+            AR/CMA/cash-clearing/CASHCLEARINGTEMPLATE_CO19.xlsm
+            AR/CMA/cash-clearing/CASHCLEARINGTEMPLATE_CO20.xlsm
+            AR/CMA/cash-clearing/CASHCLEARINGTEMPLATE_CO21.xlsm
+            AR/CMA/cash-clearing/CASHCLEARINGTEMPLATE_CO23.xlsm
+            Powerposting/CMA/Invoice_to_CDK_PowerPosting.html
+            Powerposting/CMA/Warranty_Claims_to_CDK_PowerPosting.html
+            Floorplan/CMA/floorplan-rec/Floorplan Reconciliation - CMA.html
+            GL-Reconciliation/CMA/Toyota_Statement_Reconciliation.html
+
+  # ── Hickman's Tools ──────────────────────────────────────────────────────────
+  release-hickmans:
+    name: Hickman's Tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete existing release + tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'hickmans-latest';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner, repo: context.repo.repo, tag
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner, repo: context.repo.repo,
+                release_id: rel.data.id
+              });
+            } catch (e) { if (e.status !== 404) throw e; }
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner, repo: context.repo.repo,
+                ref: `tags/${tag}`
+              });
+            } catch (e) { if (e.status !== 422 && e.status !== 404) throw e; }
+
+      - name: Publish Hickman's release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hickmans-latest
+          name: "Hickman's Tools – Latest"
+          body: |
+            Latest Hickman's dealership tools. Download and double-click — no install required.
+
+            | File | Description |
+            |---|---|
+            | `gl-posting-validator.html` | GL posting validator |
+          files: |
+            GL-Reconciliation/Hickman's/gl-posting-validator.html
+
+  # ── Master (_shared) Tools ───────────────────────────────────────────────────
+  release-master:
+    name: Master Tools
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Delete existing release + tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const tag = 'master-latest';
+            try {
+              const rel = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner, repo: context.repo.repo, tag
+              });
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner, repo: context.repo.repo,
+                release_id: rel.data.id
+              });
+            } catch (e) { if (e.status !== 404) throw e; }
+            try {
+              await github.rest.git.deleteRef({
+                owner: context.repo.owner, repo: context.repo.repo,
+                ref: `tags/${tag}`
+              });
+            } catch (e) { if (e.status !== 422 && e.status !== 404) throw e; }
+
+      - name: Publish Master release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: master-latest
+          name: "Master Tools – Latest"
+          body: |
+            Latest master (store-agnostic) tools. These are the shared templates seeded with demo data — use them to evaluate a tool before deploying a store-specific build.
+
+            | File | Description |
+            |---|---|
+            | `Cash_Clearing_Reconciliation.html` | AR cash-clearing reconciliation |
+            | `Floorplan Reconciliation.html` | Floorplan reconciliation |
+            | `gl-posting-validator.html` | GL posting validator |
+            | `Statement_Reconciliation.html` | GL statement reconciliation |
+            | `parts_rec_standalone.html` | Parts inventory reconciliation (standalone) |
+            | `Invoice_to_CDK_PowerPosting.html` | Invoice → AGJE posting |
+            | `Warranty_Claims_to_CDK_PowerPosting.html` | Warranty claims → AGJE posting |
+            | `Vehicle Sales Report.html` | Vehicle sales report |
+          files: |
+            AR/_shared/cash-clearing/Cash_Clearing_Reconciliation.html
+            Floorplan/_shared/floorplan-rec/Floorplan Reconciliation.html
+            GL-Reconciliation/_shared/gl-posting-validator/gl-posting-validator.html
+            GL-Reconciliation/_shared/statement-reconciliation/Statement_Reconciliation.html
+            Parts/_shared/parts-rec/parts_rec_standalone.html
+            Powerposting/_shared/Invoice_to_CDK_PowerPosting.html
+            Powerposting/_shared/Warranty_Claims_to_CDK_PowerPosting.html
+            Vehicle-Sales/_shared/vehicle-sales-report/Vehicle Sales Report.html
