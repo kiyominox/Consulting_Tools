@@ -41,12 +41,14 @@
 *{box-sizing:border-box;}
 html,body{margin:0;padding:0;}
 body{
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  font-family:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
   background:var(--bg); color:var(--text); font-size:14px; line-height:1.45;
+  -webkit-font-smoothing:antialiased;
 }
 a{color:var(--primary-2); text-decoration:none; cursor:pointer;}
 a:hover{text-decoration:underline;}
-code,.mono{font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.92em;}
+code,.mono{font-family:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace; font-size:.92em; font-variant-numeric:tabular-nums;}
+.mono,.data-table .r,.data-table td.r,.data-table th.r{font-variant-numeric:tabular-nums;}
 
 /* Top nav */
 .topnav{background:var(--primary); color:#fff; border-bottom:3px solid var(--primary-2);}
@@ -146,7 +148,7 @@ code,.mono{font-family:'SF Mono',Menlo,Consolas,monospace; font-size:.92em;}
 .form-grid label > span{display:block; font-size:11px; font-weight:600; color:var(--text-soft); margin-bottom:3px; text-transform:uppercase; letter-spacing:.3px;}
 .form-grid label > span em{color:var(--muted); font-weight:400; text-transform:none;}
 .form-grid input,.form-grid select,.form-select{width:100%; padding:6px 9px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;}
-.form-grid input:focus,.form-grid select:focus{outline:none; border-color:var(--primary-2); box-shadow:0 0 0 2px rgba(46,116,181,.15);}
+.form-grid input:focus,.form-grid select:focus{outline:2px solid var(--primary); outline-offset:0; border-color:var(--primary-2);}
 .form-grid input[type=number]{font-variant-numeric:tabular-nums;}
 
 h3.grp{margin:18px 0 8px 0; font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--primary); padding-bottom:4px; border-bottom:1px solid var(--border-soft);}
@@ -258,7 +260,7 @@ h3.grp:first-child{margin-top:0;}
 .bulk-table thead .fld-row th{background:#f3f6fa; font-size:10px; color:var(--text-soft); font-weight:600; top:23px;}
 .bulk-table td input{width:88px; padding:3px 5px; border:1px solid transparent; border-radius:3px; font-size:12px; text-align:right; font-variant-numeric:tabular-nums; background:transparent;}
 .bulk-table td input:hover{border-color:var(--border);}
-.bulk-table td input:focus{outline:none; border-color:var(--primary-2); box-shadow:0 0 0 2px rgba(46,116,181,.15); background:#fff;}
+.bulk-table td input:focus{outline:2px solid var(--primary); outline-offset:-1px; border-color:var(--primary-2); background:#fff;}
 .bulk-table td input.deal{width:120px; text-align:left;}
 .bulk-table .mcol{position:sticky; left:0; z-index:3; background:#fff; font-weight:600; box-shadow:1px 0 0 var(--border);}
 .bulk-table thead .mcol{z-index:5; background:#f3f6fa;}
@@ -281,7 +283,7 @@ h3.grp:first-child{margin-top:0;}
 .store-card.active-store{border-color:var(--primary-2); background:#f0f5fb;}
 .store-card .store-name-input{flex:1; padding:5px 8px; border:1px solid transparent; border-radius:4px; font-size:13px; font-weight:500; font-family:inherit; background:transparent; color:var(--text);}
 .store-card .store-name-input:hover{border-color:var(--border);}
-.store-card .store-name-input:focus{outline:none; border-color:var(--primary-2); background:#fff; box-shadow:0 0 0 2px rgba(46,116,181,.15);}
+.store-card .store-name-input:focus{outline:2px solid var(--primary); outline-offset:0; border-color:var(--primary-2); background:#fff;}
 .store-card .store-meta{font-size:11px; color:var(--muted); white-space:nowrap;}
 .store-card .active-badge{font-size:11px; font-weight:700; color:var(--primary); background:#d9e6f7; padding:2px 8px; border-radius:10px; white-space:nowrap;}
 .site-footer .dot{margin:0 6px;}
@@ -1107,6 +1109,31 @@ window.copyGLSection = async function(mkey, which) {
 // ── Renderers ─────────────────────────────────────────────────
 const app = document.getElementById('app');
 
+// Tab/Enter navigation for plain (non-grid) forms: Enter advances to the next
+// editable field in DOM order, Shift+Enter goes back, and focus selects text so
+// typing replaces.  (The bulk grid uses its own columnar bulkKeyNav.)
+function wireEnterNav(root) {
+  if (!root) return;
+  root.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' || e.isComposing) return;
+    const el = e.target;
+    if (!el.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]),select')) return;
+    e.preventDefault();
+    const all = Array.prototype.slice
+      .call(root.querySelectorAll('input:not([type=hidden]):not([disabled]),select,textarea'))
+      .filter(x => x.offsetParent !== null && !x.readOnly);
+    const i = all.indexOf(el);
+    const next = all[i + (e.shiftKey ? -1 : 1)];
+    if (next) { next.focus(); if (next.select) { try { next.select(); } catch (_) {} } }
+  });
+  root.addEventListener('focusin', function(e) {
+    const el = e.target;
+    if (el.matches('input[type=number],input[type=text]') && el.select) {
+      try { el.select(); } catch (_) {}
+    }
+  });
+}
+
 function setActiveNav(name) {
   document.querySelectorAll('.topnav-links a[data-nav]').forEach(a => {
     a.classList.toggle('active', a.dataset.nav === name);
@@ -1144,6 +1171,7 @@ function renderDashboard() {
       <p class="page-sub">Multi-month parts inventory to GL reconciliation overview</p>
     </div>
     <div class="ph-right">
+      <button class="btn btn-link" onclick="loadSampleData()">Generate sample data</button>
       ${recs.length ? '<button class="btn btn-primary" onclick="exportAllExcel()">Export to Excel</button>' : ''}
     </div>
   </div>
@@ -1381,6 +1409,79 @@ window.clearGL = function() {
   saveState(state);
   toast('GL file cleared', 'success');
   renderDashboard();
+};
+
+// ── Sample data ───────────────────────────────────────────────
+// Injects a small, self-contained demo (no real file) and runs the normal
+// render path.  Two rec months — one in balance, one off — plus 8 part-number
+// GL detail rows and a YTD RAD figure.  Uses the fictional cast.
+window.loadSampleData = function() {
+  const existing = loadState();
+  if (Object.keys(existing.inputs || {}).length) {
+    if (!confirm('Replace the current data for this store with the sample dataset?')) return;
+  }
+
+  const iso = (y, m, d) => new Date(y, m - 1, d, 12, 0, 0).toISOString();
+  const glRows = [
+    {Account:'24200', Journal:'PUR', Reference:'PS-4471', 'Acctg. Date':iso(2026,5,12), 'Amount $': 842.50,  Control:'04152-YZZA1',   Control2:'', Description:'Oil filter case'},
+    {Account:'24200', Journal:'PUR', Reference:'PS-4472', 'Acctg. Date':iso(2026,5,12), 'Amount $': 1260.00, Control:'90915-YZZD1',   Control2:'', Description:'Brake pad set'},
+    {Account:'24200', Journal:'PUR', Reference:'PS-4480', 'Acctg. Date':iso(2026,5,18), 'Amount $': 318.75,  Control:'00279-1FUEL1',  Control2:'', Description:'Fuel additive'},
+    {Account:'24300', Journal:'PUR', Reference:'PS-4490', 'Acctg. Date':iso(2026,5,22), 'Amount $': 2090.00, Control:'42611-TIRE-18', Control2:'', Description:'Tire, 18in'},
+    {Account:'24401', Journal:'PUR', Reference:'PS-4495', 'Acctg. Date':iso(2026,5,28), 'Amount $': 540.00,  Control:'08880-OIL-5W', Control2:'', Description:'Bulk oil 5W-30'},
+    {Account:'24200', Journal:'PUR', Reference:'PS-4501', 'Acctg. Date':iso(2026,5,30), 'Amount $': 615.40,  Control:'52119-PNL2',    Control2:'2026-06', Description:'Bumper cover (posted, not received)'},
+    {Account:'24200', Journal:'PUR', Reference:'PS-4510', 'Acctg. Date':iso(2026,6,4),  'Amount $': 477.25,  Control:'53301-HOOD9',   Control2:'2026-05', Description:'In physical, not in GL'},
+    {Account:'24200', Journal:'PUR', Reference:'PS-4511', 'Acctg. Date':iso(2026,6,9),  'Amount $': 233.10,  Control:'81110-LAMP3',   Control2:'2026-05', Description:'In physical, not in GL'},
+  ];
+
+  const rad = {
+    '2026-01': 110.00, '2026-02': -45.00, '2026-03': 60.00,
+    '2026-04': 25.00,  '2026-05': -30.00,
+  };
+
+  const partsSide = (inv) => ({
+    inventory: inv, tires: 4180.00, oil: 1620.00,
+    paint: 250.00, cores_new: 380.00, cores_used: 210.00,
+    npn: 95.00, bowman: 0,
+    returns_11933: -120.00, claims: 0,
+    open_ros_service: 540.00, counter_tickets_parts: 175.00,
+    mfg_packing_slips: 0, prepaid_special_orders: 0,
+    inv_adjustments_rpm: 0, oil_shop_supply_adj: 0,
+    gl_24300: 4180.00, gl_24401: 1620.00, gl_other: 0,
+  });
+
+  const mkMonth = (mkey, inv, offsetBy) => {
+    const inputs = Object.assign({dealership: 'Rivendell Parts Dept'}, partsSide(inv));
+    const tmp = calculateRec(inputs, 0, 0, 0);
+    const step8 = tmp.step8;
+    const {year, month} = parseMonthKey(mkey);
+    const cls = classifyAll(glRows, year, month, {});
+    const s1Total = cls.s1.reduce((t,r)=>t+Number(r['Amount $']||0),0);
+    const s2Total = cls.s2.reduce((t,r)=>t+Number(r['Amount $']||0),0);
+    const radY = ytdRad(rad, year, month, 1);
+    const nonInvGl = inputs.gl_24300 + inputs.gl_24401 + inputs.gl_other;
+    inputs.gl_24200 = (step8 + offsetBy) - (nonInvGl + s2Total + radY - s1Total);
+    inputs.gl_24200 = Math.round(inputs.gl_24200 * 100) / 100;
+    return inputs;
+  };
+
+  const state = _blankState();
+  state.inputs['2026-04'] = mkMonth('2026-04', 131301.68, 0);        // in balance
+  state.inputs['2026-05'] = mkMonth('2026-05', 138920.40, 1875.00);  // off by $1,875.00
+  state.rad = rad;
+  state.radCycleStartMonth = 1;
+  state.glFilename = 'SAMPLE_GL_Detail.xlsx';
+  state.glUploadedAt = new Date().toLocaleString();
+  saveState(state);
+  saveGL(glRows);
+
+  const meta = loadMeta() || _blankMeta(_activeStoreId);
+  if (meta.stores[_activeStoreId]) meta.stores[_activeStoreId].name = 'Rivendell Parts Dept';
+  saveMeta(meta);
+  updateStoreNav();
+
+  toast('Sample data loaded: 2 months (Apr in balance, May off by $1,875.00), 8 GL rows, YTD RAD.', 'success');
+  location.hash = '#/month/2026-05';
+  route();
 };
 
 window.handleAcctHistUpload = async function(ev) {
@@ -1664,6 +1765,7 @@ function renderInputsEdit(mkey) {
     </div>
   </form>`;
   app.innerHTML = html;
+  wireEnterNav(document.getElementById('inputs-form'));
 }
 
 window.saveInputs = function(ev, currentMkey) {
