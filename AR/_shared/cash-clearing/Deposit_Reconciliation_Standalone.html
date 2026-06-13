@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daily Deposit Reconciliation</title>
+<script>
+/* early theme apply — before paint, so no flash. localStorage key 'deposit_theme'. */
+(function(){
+  var KEY='deposit_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  window.__toggleTheme=function(){
+    var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+    document.documentElement.setAttribute('data-theme',cur);
+    try{localStorage.setItem(KEY,cur);}catch(e){}
+    if(window.__app&&window.__app.refresh) window.__app.refresh();
+  };
+})();
+</script>
+<style>
+  :root{
+    --ui:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  body { margin: 0; background: #f6f1fa; font-family: var(--ui); }
+  input, select, button { font-family: var(--ui); }
+  .num,.money,.mono{font-variant-numeric:tabular-nums}
+  #__err { display:none; position:fixed; left:0; right:0; bottom:0; background:#8e1f1f; color:#fff; padding:10px 16px; font:12px/1.4 ui-monospace,monospace; z-index:9999; white-space:pre-wrap; }
+
+  /* ============================================================ DARK MODE
+     This tool renders its surfaces with inline styles, so dark mode overrides
+     the light hardcoded surfaces here with !important on the structural colors. */
+  html[data-theme="dark"] body{background:#15121b}
+  html[data-theme="dark"] [style*="background:#ffffff"],
+  html[data-theme="dark"] [style*="background:#fff"]{background:#211b29 !important;color:#e9e6ef}
+  html[data-theme="dark"] [style*="background:#faf6fc"],
+  html[data-theme="dark"] [style*="background:#fbf8fd"],
+  html[data-theme="dark"] [style*="background:#f3eaf8"],
+  html[data-theme="dark"] [style*="background:#f6f1fa"]{background:#1c1726 !important}
+  html[data-theme="dark"] [style*="color:#16191d"],
+  html[data-theme="dark"] [style*="color:#5a3a6b"]{color:#e9e6ef !important}
+  html[data-theme="dark"] [style*="color:#561f70"]{color:#c79fe0 !important}
+  html[data-theme="dark"] [style*="color:#79808a"],
+  html[data-theme="dark"] [style*="color:#9089a0"]{color:#9089a0 !important}
+  html[data-theme="dark"] input,html[data-theme="dark"] select,
+  html[data-theme="dark"] textarea{background:#2a2333 !important;color:#e9e6ef !important;border-color:#4a3357 !important}
+  html[data-theme="dark"] [style*="border:1px solid #dcc4e8"],
+  html[data-theme="dark"] [style*="border:1.5px solid #c4a8d8"],
+  html[data-theme="dark"] [style*="border:1.5px solid #dcc4e8"]{border-color:#4a3357 !important}
+  html[data-theme="dark"] [style*="border-bottom:1px solid #e8dcf0"],
+  html[data-theme="dark"] [style*="border-top:1px solid #e8dcf0"]{border-color:#332b3d !important}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="__err"></div>
+<template id="__tpl"><sc-if value="{{notReady}}" hint-placeholder-val="{{false}}">
+  <div style="font-family:var(--ui);color:#79808a;padding:40px;text-align:center;font-size:14px">Loading the reconciliation engine…</div>
+</sc-if>
+
+<sc-if value="{{ready}}" hint-placeholder-val="{{true}}">
+<div style="display:grid;grid-template-columns:300px minmax(0,1fr);min-height:100vh;font-family:var(--ui);color:#16191d">
+
+  <!-- ══════════ RAIL ══════════ -->
+  <div style="background:#561f70">
+    <div style="position:sticky;top:0;height:100vh;box-sizing:border-box;overflow:auto;display:flex;flex-direction:column;gap:12px;padding:18px 16px">
+
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="flex:1;background:#ffffff;border-radius:10px;padding:10px 14px;display:flex;align-items:center;justify-content:center;gap:9px;min-height:54px">
+          <div style="width:32px;height:32px;border-radius:8px;background:#6B298C;color:#fff;display:flex;align-items:center;justify-content:center;font-family:var(--ui);font-weight:800;font-size:12px">{{storeInitials}}</div>
+          <span style="font-family:var(--ui);font-weight:700;font-size:13px;color:#561f70">{{storeName}}</span>
+        </div>
+        <button id="btnTheme" onClick="{{onTheme}}" title="Toggle dark mode" aria-label="Toggle dark mode" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:9px;width:40px;height:40px;font-size:17px;cursor:pointer;flex-shrink:0">{{themeIcon}}</button>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:7px">
+        <x-select value="{{coStr}}" onChange="{{onStoreSel}}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:#45195a;color:#fff;font-size:13px;font-weight:600;box-sizing:border-box">
+          <sc-for list="{{storeOpts}}" as="o" hint-placeholder-count="2">
+            <x-option value="{{o.v}}">{{o.label}}</x-option>
+          </sc-for>
+        </x-select>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="color:#c79fe0;font-size:11.5px;font-weight:600;white-space:nowrap">Cash date</span>
+          <input type="date" value="{{cashDate}}" onChange="{{onDateChange}}" style="flex:1;padding:6px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:#45195a;color:#fff;font-size:12.5px;box-sizing:border-box;min-width:0">
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">
+        <sc-for list="{{railItems}}" as="it" hint-placeholder-count="5">
+          <div onClick="{{it.onClick}}" style="{{it.rowStyle}}">
+            <div style="{{it.iconStyle}}">{{it.icon}}</div>
+            <div style="min-width:0">
+              <div style="color:#ffffff;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{it.title}}</div>
+              <div style="{{it.subStyle}}">{{it.sub}}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+
+      <div style="margin-top:auto;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.12);border-radius:11px;padding:14px 16px;display:flex;flex-direction:column;gap:9px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="color:#c79fe0;font-size:11.5px;font-weight:600;letter-spacing:.05em">DEPOSIT</span>
+          <span style="font-family:var(--mono);font-size:14.5px;color:#ffffff">{{depStr}}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="color:#c79fe0;font-size:11.5px;font-weight:600;letter-spacing:.05em">RECONCILED</span>
+          <span style="font-family:var(--mono);font-size:14.5px;color:#ffffff">{{recStr}}</span>
+        </div>
+        <div style="height:1px;background:rgba(255,255,255,.15)"></div>
+        <div style="display:flex;justify-content:space-between;align-items:baseline">
+          <span style="color:#c79fe0;font-size:11.5px;font-weight:700;letter-spacing:.05em">VARIANCE</span>
+          <span style="{{varStyle}}">{{varStr}}</span>
+        </div>
+        <div style="color:#c79fe0;font-size:11px;line-height:1.4">{{varNote}}</div>
+      </div>
+
+      <div style="display:flex;gap:6px">
+        <button onClick="{{onSaveSession}}" style="flex:1;background:none;border:1px solid rgba(255,255,255,.25);color:#dcc4e8;border-radius:7px;padding:7px 4px;font-size:11.5px;font-weight:600;cursor:pointer">Save session</button>
+        <button onClick="{{onLoadSessionClick}}" style="flex:1;background:none;border:1px solid rgba(255,255,255,.25);color:#dcc4e8;border-radius:7px;padding:7px 4px;font-size:11.5px;font-weight:600;cursor:pointer">Load session</button>
+        <button onClick="{{onOpenSetup}}" style="flex:1;background:none;border:1px solid rgba(255,255,255,.25);color:#dcc4e8;border-radius:7px;padding:7px 4px;font-size:11.5px;font-weight:600;cursor:pointer">{{setupLabel}}</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ MAIN ══════════ -->
+  <div style="padding:20px 26px 60px;display:flex;flex-direction:column;gap:13px;min-width:0">
+
+    <div style="display:flex;align-items:center;gap:14px;padding:2px 2px 4px">
+      <div>
+        <div style="font-family:var(--ui);font-weight:800;font-size:20px;color:#561f70">Daily Deposit Reconciliation</div>
+        <div style="font-size:12.5px;color:#79808a;margin-top:1px">{{headerSub}}</div>
+      </div>
+      <sc-if value="{{scanChip}}" hint-placeholder-val="{{false}}">
+        <div style="margin-left:auto;background:#E4F3EB;border:1px solid #9CD4B2;border-radius:8px;padding:6px 13px;font-size:12px;color:#1E7A4C;font-weight:700">✓ Matching &amp; missing-payment check ran automatically</div>
+      </sc-if>
+    </div>
+
+    <!-- ── SECTION 1 · IMPORT ── -->
+    <div id="sec1">
+      <sc-if value="{{closed1}}" hint-placeholder-val="{{false}}">
+        <div onClick="{{onToggle1}}" style="background:#ffffff;border:1px solid #dcc4e8;border-radius:11px;padding:13px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <span style="width:22px;height:22px;border-radius:50%;background:#E4F3EB;border:1.5px solid #9CD4B2;color:#1E7A4C;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>
+          <span style="font-size:13.5px;font-weight:600;color:#5a3a6b">1 · Import files — {{sum1}}</span>
+          <span style="margin-left:auto;font-size:12.5px;color:#79808a">Change files ▾</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{open1}}" hint-placeholder-val="{{true}}">
+        <div style="background:#ffffff;border:1.5px solid #c4a8d8;border-radius:12px;overflow:hidden">
+          <div style="padding:15px 18px;border-bottom:1px solid #e8dcf0;display:flex;align-items:flex-start;gap:12px">
+            <div>
+              <div style="font-family:var(--ui);font-weight:700;font-size:15px;color:#561f70">1 · Import files</div>
+              <div style="font-size:12.5px;color:#79808a;margin-top:3px">Drop the CDK schedule and the processor's card / cash / check reports. Excel (.xlsx&nbsp;/&nbsp;.xlsm), .csv, .tsv or .txt. The moment both are in, matching and the missing-payment check run on their own.</div>
+            </div>
+            <span onClick="{{onToggle1}}" style="margin-left:auto;font-size:12.5px;color:#79808a;cursor:pointer;white-space:nowrap">collapse ▴</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px 18px">
+            <div onDragOver="{{onSchDragOver}}" onDrop="{{onSchDrop}}" style="border:2px dashed #dcc4e8;border-radius:10px;padding:18px;text-align:center;background:#fbf8fd;display:flex;flex-direction:column;gap:9px;align-items:center">
+              <div style="font-size:13px;font-weight:700;color:#561f70">CDK Schedule — Cash Clearing</div>
+              <button onClick="{{onPickSch}}" style="background:#561f70;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">Upload schedule…</button>
+              <div style="font-size:11px;color:#79808a">or drag &amp; drop the export file here</div>
+              <div style="{{schStatusStyle}}">{{schStatus}}</div>
+            </div>
+            <div onDragOver="{{onCCDragOver}}" onDrop="{{onCCDrop}}" style="border:2px dashed #dcc4e8;border-radius:10px;padding:18px;text-align:center;background:#fbf8fd;display:flex;flex-direction:column;gap:9px;align-items:center">
+              <div style="font-size:13px;font-weight:700;color:#561f70">Processor Reports — cards, cash &amp; checks</div>
+              <button onClick="{{onPickCC}}" style="background:#561f70;color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer">Add report file(s)…</button>
+              <div style="font-size:11px;color:#79808a">files add together — re-adding a file with the same name replaces it</div>
+              <sc-if value="{{hasCCChips}}" hint-placeholder-val="{{false}}">
+                <div style="display:flex;flex-direction:column;gap:5px;width:100%;text-align:left">
+                  <sc-for list="{{ccChips}}" as="f" hint-placeholder-count="2">
+                    <div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #dcc4e8;border-radius:7px;padding:5px 10px;font-size:12px">
+                      <span style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📄 {{f.name}}</span>
+                      <span style="margin-left:auto;color:#79808a;font-family:var(--mono);font-size:11px;white-space:nowrap">{{f.meta}}</span>
+                      <button onClick="{{f.onRemove}}" style="background:none;border:1px solid #dcc4e8;border-radius:5px;color:#79808a;font-size:11px;cursor:pointer;padding:1px 7px">✕</button>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <div style="{{ccStatusStyle}}">{{ccStatus}}</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 18px;background:#faf6fc;border-top:1px solid #e8dcf0">
+            <button onClick="{{onSample}}" style="background:#79808a;color:#fff;border:0;border-radius:7px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer">Generate using sample data</button>
+            <span style="font-size:12px;color:#79808a">Try the whole workflow without real files — everything runs locally in this browser; no data leaves the page.</span>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ── SECTION 2 · DEPOSITS ── -->
+    <div id="sec2">
+      <sc-if value="{{closed2}}" hint-placeholder-val="{{false}}">
+        <div onClick="{{onToggle2}}" style="background:#ffffff;border:1px solid #dcc4e8;border-radius:11px;padding:13px 18px;display:flex;align-items:center;gap:12px;cursor:pointer">
+          <span style="width:22px;height:22px;border-radius:50%;background:#E4F3EB;border:1.5px solid #9CD4B2;color:#1E7A4C;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">✓</span>
+          <span style="font-size:13.5px;font-weight:600;color:#5a3a6b">2 · Deposit totals — {{sum2}}</span>
+          <span style="margin-left:auto;font-size:12.5px;color:#79808a">Edit ▾</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{open2}}" hint-placeholder-val="{{true}}">
+        <div style="background:#ffffff;border:1.5px solid #c4a8d8;border-radius:12px;overflow:hidden">
+          <div style="padding:15px 18px;border-bottom:1px solid #e8dcf0;display:flex;align-items:flex-start;gap:12px">
+            <div>
+              <div style="font-family:var(--ui);font-weight:700;font-size:15px;color:#561f70">2 · Deposit totals</div>
+              <div style="font-size:12.5px;color:#79808a;margin-top:3px">Type the actual totals from today's deposit slip, by type. {{depHint}}</div>
+            </div>
+            <span onClick="{{onToggle2}}" style="margin-left:auto;font-size:12.5px;color:#79808a;cursor:pointer;white-space:nowrap">collapse ▴</span>
+          </div>
+          <div style="padding:6px 18px 14px;max-width:680px">
+            <div style="display:grid;grid-template-columns:170px 150px 130px 130px;gap:12px;padding:9px 0;font-size:11.5px;font-weight:700;color:#79808a;letter-spacing:.04em;border-bottom:1px solid #e8dcf0"><span>TYPE</span><span style="text-align:right">AMOUNT $</span><span>ACCOUNT</span><span>CONTROL</span></div>
+            <sc-for list="{{depRows}}" as="dr" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:170px 150px 130px 130px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid #f3eaf8">
+                <span style="font-size:13px;font-weight:600">{{dr.type}}</span>
+                <input value="{{dr.val}}" onChange="{{dr.onChange}}" placeholder="0.00" style="border:1.5px solid #dcc4e8;border-radius:7px;padding:8px 10px;font-family:var(--mono);font-size:13px;text-align:right;width:100%;box-sizing:border-box">
+                <span style="font-family:var(--mono);font-size:13px;color:#79808a">{{dr.acct}}</span>
+                <span style="font-family:var(--mono);font-size:13px;color:#79808a">{{dr.control}}</span>
+              </div>
+            </sc-for>
+            <div style="display:grid;grid-template-columns:170px 150px;gap:12px;padding:10px 0 2px;font-size:13.5px">
+              <b>Total deposit</b>
+              <b style="font-family:var(--mono);text-align:right">{{depTotStr}}</b>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <!-- ── SECTION 3 · SCHEDULE ── -->
+    <div id="sec3" style="background:#ffffff;border:1.5px solid #c4a8d8;border-radius:12px;overflow:hidden">
+      <div style="padding:15px 18px;border-bottom:1px solid #e8dcf0">
+        <div style="font-family:var(--ui);font-weight:700;font-size:15px;color:#561f70">3 · Check the schedule</div>
+        <div style="font-size:12.5px;color:#79808a;margin-top:3px">Items paid by card matched on their own — they're done. For the rest, only mark what was actually in today's deposit; anything not received simply stays on the list for tomorrow.</div>
+      </div>
+      <sc-if value="{{schedEmpty}}" hint-placeholder-val="{{false}}">
+        <div style="padding:26px;text-align:center;color:#79808a;font-size:13px">Upload the CDK schedule in step 1 to begin.</div>
+      </sc-if>
+      <sc-if value="{{schedLoaded}}" hint-placeholder-val="{{true}}">
+        <div style="padding:12px 18px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #e8dcf0">
+          <button onClick="{{onTabNeeds}}" style="{{tabNeedsStyle}}">Not matched · {{needsCount}}</button>
+          <button onClick="{{onTabDone}}" style="{{tabDoneStyle}}">Matched &amp; answered · {{doneCount}}</button>
+          <button onClick="{{onTabAll}}" style="{{tabAllStyle}}">All · {{allCount}}</button>
+          <span style="margin-left:auto;font-size:12.5px;color:#79808a">Schedule received&nbsp; <b style="font-family:var(--mono);color:#16191d">{{schedRecTot}}</b></span>
+        </div>
+        <div style="display:grid;grid-template-columns:150px 64px 105px 175px 1fr 115px;gap:14px;padding:9px 18px;background:#faf6fc;font-size:11.5px;font-weight:700;color:#79808a;letter-spacing:.04em;border-bottom:1px solid #e8dcf0">
+          <span>CONTROL</span><span>DAYS</span><span style="text-align:right">OWED $</span><span>PAID BY CARD</span><span style="text-align:right">YOUR ANSWER</span><span style="text-align:right">RECEIVED $</span>
+        </div>
+        <sc-for list="{{schedRows}}" as="r" hint-placeholder-count="4">
+          <div style="{{r.rowStyle}}">
+            <div><div style="font-family:var(--mono);font-size:13.5px;font-weight:600">{{r.control}}</div><div style="font-size:11px;color:#79808a">{{r.moreInfo}}</div></div>
+            <div><span style="{{r.daysStyle}}">{{r.days}}</span></div>
+            <div style="font-family:var(--mono);font-size:13.5px;text-align:right">{{r.owed}}</div>
+            <div>
+              <sc-if value="{{r.hasCC}}" hint-placeholder-val="{{false}}">
+                <div style="font-family:var(--mono);font-size:13px;color:#1E7A4C;font-weight:600">✓ {{r.found}}</div>
+                <div style="font-size:11px;color:#79808a">{{r.cards}}</div>
+              </sc-if>
+              <sc-if value="{{r.noCC}}" hint-placeholder-val="{{false}}">
+                <span style="color:#c4a8d8;font-size:13px">—</span>
+              </sc-if>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+              <sc-if value="{{r.donPending}}" hint-placeholder-val="{{false}}">
+                <span style="font-size:12px;color:#7A540E;font-weight:600">🎁 {{r.donQuestion}}</span>
+                <button onClick="{{r.onDonYes}}" style="background:#1E7A4C;color:#fff;border:0;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">Yes, donation</button>
+                <button onClick="{{r.onDonNo}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 11px;font-size:12px;font-weight:600;color:#79808a;cursor:pointer">No</button>
+              </sc-if>
+              <sc-if value="{{r.donYes}}" hint-placeholder-val="{{false}}">
+                <span style="background:#E4F3EB;border:1px solid #9CD4B2;color:#1E7A4C;border-radius:12px;padding:4px 11px;font-size:12px;font-weight:700">🎁 {{r.donChip}}</span>
+                <button onClick="{{r.onDonUndo}}" style="background:none;border:0;color:#79808a;font-size:11.5px;cursor:pointer;text-decoration:underline;padding:0">undo</button>
+              </sc-if>
+              <sc-if value="{{r.noCC}}" hint-placeholder-val="{{false}}">
+                <button onClick="{{r.onInc}}" style="{{r.incStyle}}">{{r.incLabel}}</button>
+              </sc-if>
+              <input value="{{r.manualAmt}}" onChange="{{r.onMan}}" placeholder="{{r.manPlaceholder}}" style="width:104px;border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 9px;font-family:var(--mono);font-size:12.5px;text-align:right">
+            </div>
+            <div style="font-family:var(--mono);font-size:13.5px;font-weight:600;text-align:right">{{r.recCell}}</div>
+          </div>
+        </sc-for>
+        <sc-if value="{{needsEmpty}}" hint-placeholder-val="{{false}}">
+          <div style="padding:20px;text-align:center;color:#1E7A4C;font-size:13px;font-weight:600">Nothing left to review — every item is matched or answered. ✓</div>
+        </sc-if>
+      </sc-if>
+    </div>
+
+    <!-- ── SECTION 4 · ANYTHING MISSING ── -->
+    <div id="sec4" style="background:#ffffff;border:1.5px solid #c4a8d8;border-radius:12px;overflow:hidden">
+      <div style="padding:15px 18px;border-bottom:1px solid #e8dcf0;display:flex;align-items:flex-start;gap:12px">
+        <div>
+          <div style="font-family:var(--ui);font-weight:700;font-size:15px;color:#561f70">4 · Anything missing?</div>
+          <div style="font-size:12.5px;color:#79808a;margin-top:3px">{{nosHint}}</div>
+        </div>
+        <sc-if value="{{nosRanChip}}" hint-placeholder-val="{{false}}">
+          <span style="margin-left:auto;background:#E4F3EB;border:1px solid #9CD4B2;border-radius:14px;padding:4px 12px;font-size:11.5px;color:#1E7A4C;font-weight:700;white-space:nowrap">checked automatically ✓</span>
+        </sc-if>
+      </div>
+
+      <sc-if value="{{hasSkipped}}" hint-placeholder-val="{{false}}">
+        <div style="margin:14px 18px 0;background:#FBF1DC;border:1.5px solid #E4C887;border-radius:10px;padding:13px 16px">
+          <div style="font-size:13px;font-weight:700;color:#7A540E">⚠ {{skippedTitle}}</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px">
+            <sc-for list="{{skippedRows}}" as="sk" hint-placeholder-count="1">
+              <div style="display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #EEDCAB;border-radius:8px;padding:7px 12px;font-size:12.5px">
+                <b style="font-family:var(--mono)">{{sk.amt}}</b>
+                <span style="color:#79808a">{{sk.desc}}</span>
+                <button onClick="{{sk.onAdd}}" style="margin-left:auto;background:#561f70;color:#fff;border:0;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Add as line — type the RO #</button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{nosWaiting}}" hint-placeholder-val="{{false}}">
+        <div style="padding:24px;text-align:center;color:#79808a;font-size:13px">Waiting for files — this check runs automatically once the schedule and a processor report are loaded.</div>
+      </sc-if>
+      <sc-if value="{{nosAllGood}}" hint-placeholder-val="{{false}}">
+        <div style="padding:22px;text-align:center;color:#1E7A4C;font-size:13px;font-weight:600">Every processor payment is on the schedule — nothing missing. ✓</div>
+      </sc-if>
+
+      <sc-if value="{{hasNos}}" hint-placeholder-val="{{true}}">
+        <div style="padding:6px 18px 4px">
+          <div style="display:grid;grid-template-columns:150px 110px 240px 1fr 90px 36px;gap:12px;padding:9px 0;font-size:11.5px;font-weight:700;color:#79808a;letter-spacing:.04em;border-bottom:1px solid #e8dcf0">
+            <span>RO / INVOICE #</span><span style="text-align:right">AMOUNT $</span><span>{{nosCatHdr}}</span><span>NOTE</span><span>JE ACCT</span><span></span>
+          </div>
+          <sc-for list="{{nosRows}}" as="n" hint-placeholder-count="2">
+            <div style="display:grid;grid-template-columns:150px 110px 240px 1fr 90px 36px;gap:12px;align-items:center;padding:7px 0;border-bottom:1px solid #f3eaf8">
+              <input value="{{n.ref}}" onChange="{{n.onRef}}" onBlur="{{n.onRefBlur}}" placeholder="RO #" style="{{n.refStyle}}">
+              <input value="{{n.amount}}" onChange="{{n.onAmt}}" style="border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 9px;font-family:var(--mono);font-size:12.5px;text-align:right;width:100%;box-sizing:border-box">
+              <sc-if value="{{n.hasCats}}" hint-placeholder-val="{{false}}">
+                <x-select value="{{n.catVal}}" onChange="{{n.onCat}}" style="border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 8px;font-size:12.5px;width:100%;box-sizing:border-box;background:#fff">
+                  <sc-for list="{{n.catOpts}}" as="c" hint-placeholder-count="2">
+                    <x-option value="{{c.v}}">{{c.label}}</x-option>
+                  </sc-for>
+                </x-select>
+              </sc-if>
+              <sc-if value="{{n.noCats}}" hint-placeholder-val="{{true}}">
+                <span style="font-family:var(--mono);font-size:12.5px;color:#79808a">{{n.acct}}</span>
+              </sc-if>
+              <input value="{{n.note}}" onChange="{{n.onNote}}" style="border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 9px;font-size:12.5px;width:100%;box-sizing:border-box">
+              <span style="font-family:var(--mono);font-size:12.5px;color:#79808a">{{n.acct}}</span>
+              <button onClick="{{n.onDel}}" style="background:none;border:1px solid #dcc4e8;border-radius:6px;color:#79808a;font-size:12px;cursor:pointer;padding:4px 0;width:30px">✕</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <div style="padding:10px 18px 14px">
+        <button onClick="{{onAddNos}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 13px;font-size:12.5px;font-weight:600;color:#5a3a6b;cursor:pointer">+ add a line manually</button>
+      </div>
+    </div>
+
+    <!-- ── SECTION 5 · REVIEW & POST ── -->
+    <div id="sec5">
+      <sc-if value="{{locked5}}" hint-placeholder-val="{{false}}">
+        <div style="background:#f3eaf8;border:1px dashed #dcc4e8;border-radius:12px;padding:15px 18px;display:flex;align-items:center;gap:12px;color:#9089a0">
+          <span style="font-size:16px">🔒</span>
+          <span style="font-size:13.5px;font-weight:600">5 · Review &amp; post — {{lockMsg}}</span>
+        </div>
+      </sc-if>
+      <sc-if value="{{open5}}" hint-placeholder-val="{{true}}">
+        <div style="background:#ffffff;border:1.5px solid #c4a8d8;border-radius:12px;overflow:hidden">
+          <div style="padding:15px 18px;border-bottom:1px solid #e8dcf0">
+            <div style="font-family:var(--ui);font-weight:700;font-size:15px;color:#561f70">5 · Review &amp; post</div>
+            <div style="font-size:12.5px;color:#79808a;margin-top:3px">Read the recap, sign off, then generate the posting and paste it into CDK AGJE (Expert Mode, right-click → Paste).</div>
+          </div>
+          <div style="padding:16px 18px;display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:16px">
+            <div style="display:flex;flex-direction:column;gap:13px;min-width:0">
+              <div style="display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:10px">
+                <div style="background:#faf6fc;border:1px solid #dcc4e8;border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.05em">DEPOSIT</div><div style="font-family:var(--mono);font-size:21px;font-weight:600;margin-top:3px">{{kDep}}</div></div>
+                <div style="background:#faf6fc;border:1px solid #dcc4e8;border-radius:11px;padding:13px 15px"><div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.05em">RECONCILED</div><div style="font-family:var(--mono);font-size:21px;font-weight:600;margin-top:3px">{{kRec}}</div></div>
+                <div style="{{kVarBoxStyle}}">
+                  <div><div style="{{kVarLabelStyle}}">VARIANCE</div><div style="{{kVarValStyle}}">{{kVar}}</div></div>
+                  <div style="{{kBadgeStyle}}">{{kBadge}}</div>
+                </div>
+              </div>
+              <div style="background:#faf6fc;border:1px solid #dcc4e8;border-radius:11px;padding:15px 17px">
+                <div style="font-family:var(--ui);font-weight:700;font-size:13px;color:#561f70;margin-bottom:10px">What happened today</div>
+                <div style="display:flex;flex-direction:column;gap:7px">
+                  <sc-for list="{{recapLines}}" as="rl" hint-placeholder-count="4">
+                    <div style="display:flex;gap:9px;font-size:13px;color:#5a3a6b;line-height:1.45"><span style="{{rl.markStyle}}">{{rl.mark}}</span><span>{{rl.t}}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="background:#faf6fc;border:1px solid #dcc4e8;border-radius:11px;padding:15px 17px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+                <div style="flex:1;min-width:160px">
+                  <div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.05em;margin-bottom:5px">RECONCILED BY</div>
+                  <input value="{{signName}}" onChange="{{onSignName}}" placeholder="your name" style="width:100%;border:1.5px solid #dcc4e8;border-radius:8px;padding:8px 11px;font-size:13.5px;box-sizing:border-box">
+                </div>
+                <div>
+                  <div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.05em;margin-bottom:5px">DATE</div>
+                  <div style="font-family:var(--mono);font-size:13.5px;padding:8px 0">{{signDate}}</div>
+                </div>
+                <label style="display:flex;align-items:center;gap:9px;font-size:12.5px;color:#5a3a6b;max-width:230px;line-height:1.4;cursor:pointer">
+                  <input type="checkbox" checked="{{signChecked}}" onChange="{{onSignCheck}}" style="width:16px;height:16px;accent-color:#1E7A4C;flex-shrink:0">
+                  Deposit slip totals were verified against the drawer count
+                </label>
+              </div>
+            </div>
+
+            <div style="background:#faf6fc;border:1px solid #dcc4e8;border-radius:11px;padding:15px 17px;display:flex;flex-direction:column;gap:11px;align-self:start">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <div style="font-family:var(--ui);font-weight:700;font-size:13px;color:#561f70">Posting</div>
+                <div style="font-family:var(--mono);font-size:12px;background:#fff;border:1px solid #dcc4e8;border-radius:6px;padding:3px 9px">JE# {{jeRefStr}}</div>
+              </div>
+              <button onClick="{{onGenerate}}" style="background:#6B298C;color:#fff;border:0;border-radius:9px;padding:12px;font-size:14px;font-weight:700;cursor:pointer" style-hover="filter:brightness(1.07)">Generate posting</button>
+              <sc-if value="{{generated}}" hint-placeholder-val="{{false}}">
+                <div style="font-size:12.5px;color:#79808a">{{jeCount}} lines · JE balance <b style="{{jeBalStyle}}">{{jeBalStr}}</b></div>
+                <div style="max-height:210px;overflow:auto;border:1px solid #dcc4e8;border-radius:8px;background:#fff">
+                  <div style="display:grid;grid-template-columns:36px 76px 86px 1fr;gap:8px;padding:6px 10px;font-size:10.5px;font-weight:700;color:#79808a;border-bottom:1px solid #e8dcf0;position:sticky;top:0;background:#fff"><span>CO</span><span>ACCT</span><span style="text-align:right">AMOUNT</span><span>CONTROL · DESC</span></div>
+                  <sc-for list="{{jeRows}}" as="j" hint-placeholder-count="4">
+                    <div style="display:grid;grid-template-columns:36px 76px 86px 1fr;gap:8px;padding:4px 10px;font-family:var(--mono);font-size:11.5px;border-bottom:1px solid #f6f1fa"><span>{{j.co}}</span><span>{{j.acct}}</span><span style="text-align:right">{{j.amt}}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{j.ctrl}}</span></div>
+                  </sc-for>
+                </div>
+                <pre style="background:#3a1252;color:#9FE2B5;font-family:var(--mono);font-size:10.5px;line-height:1.65;border-radius:8px;padding:10px 12px;margin:0;max-height:130px;overflow:auto">{{jeText}}</pre>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <button onClick="{{onCopy}}" style="border:1.5px solid #561f70;background:#561f70;color:#fff;border-radius:8px;padding:9px;font-size:12.5px;font-weight:700;cursor:pointer">{{copyLabel}}</button>
+                  <button onClick="{{onDlJe}}" style="border:1.5px solid #dcc4e8;background:#fff;color:#5a3a6b;border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;cursor:pointer">Download AGJE (.txt)</button>
+                </div>
+              </sc-if>
+              <div style="height:1px;background:#e8dcf0"></div>
+              <div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.05em">RECORD KEEPING</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <button onClick="{{onPdf}}" style="border:1.5px solid #dcc4e8;background:#fff;color:#5a3a6b;border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;cursor:pointer">Export PDF record</button>
+                <button onClick="{{onXlsx}}" style="border:1.5px solid #dcc4e8;background:#fff;color:#5a3a6b;border-radius:8px;padding:9px;font-size:12.5px;font-weight:600;cursor:pointer">Export Excel record</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+
+    <div style="font-size:11px;color:#9089a0;padding:4px 2px">Daily Deposit Reconciliation · offline. Everything runs locally in the browser; no data leaves this page. AGJE lines and JE numbering are identical to the workbook format.</div>
+  </div>
+</div>
+
+<!-- ══════════ SETUP MODAL ══════════ -->
+<sc-if value="{{setupOpen}}" hint-placeholder-val="{{false}}">
+  <div onClick="{{onOverlayClick}}" style="position:fixed;inset:0;background:rgba(15,30,50,.55);z-index:100;display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto;font-family:var(--ui)">
+    <div onClick="{{stop}}" style="background:#fff;border-radius:14px;max-width:920px;width:100%;box-shadow:0 12px 40px rgba(0,0,0,.3);overflow:hidden;color:#16191d">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 20px;background:#561f70;color:#fff">
+        <span style="font-family:var(--ui);font-weight:700;font-size:15px">⚙ Store setup — accounts &amp; categories</span>
+        <button onClick="{{onSetupClose}}" style="margin-left:auto;background:none;border:0;color:#fff;font-size:20px;cursor:pointer;opacity:.8;padding:0 4px">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:225px 1fr;gap:18px;padding:16px 20px">
+        <div>
+          <div style="border:1px solid #dcc4e8;border-radius:9px;overflow:hidden">
+            <sc-for list="{{suStores}}" as="s" hint-placeholder-count="5">
+              <div onClick="{{s.onSel}}" style="{{s.style}}">{{s.label}}</div>
+            </sc-for>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button onClick="{{onAddStore}}" style="flex:1;background:#79808a;color:#fff;border:0;border-radius:7px;padding:6px;font-size:12px;font-weight:600;cursor:pointer">+ add store</button>
+            <button onClick="{{onDelStore}}" style="flex:1;background:#561f70;color:#fff;border:0;border-radius:7px;padding:6px;font-size:12px;font-weight:600;cursor:pointer">remove</button>
+          </div>
+        </div>
+        <sc-if value="{{hasSuStore}}" hint-placeholder-val="{{true}}">
+          <div>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <div style="width:90px"><label style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">CO #</label><input type="number" value="{{suCo}}" onChange="{{onSuCo}}" style="width:100%;padding:7px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:13px;font-family:var(--mono);box-sizing:border-box"></div>
+              <div style="flex:2;min-width:180px"><label style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">STORE NAME</label><input value="{{suName}}" onChange="{{onSuName}}" style="width:100%;padding:7px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:13px;box-sizing:border-box"></div>
+              <div style="width:130px"><label style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">CLEARING ACCT</label><input value="{{suClearing}}" onChange="{{onSuClearing}}" style="width:100%;padding:7px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:13px;font-family:var(--mono);box-sizing:border-box"></div>
+              <div style="width:140px"><label style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">DONATION ACCT</label><input value="{{suDonation}}" onChange="{{onSuDonation}}" placeholder="blank = clearing" style="width:100%;padding:7px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:13px;font-family:var(--mono);box-sizing:border-box"></div>
+              <div style="width:140px"><label style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">DONATION CONTROL</label><input value="{{suDonCtrl}}" onChange="{{onSuDonCtrl}}" placeholder="blank = DONATION" style="width:100%;padding:7px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:13px;font-family:var(--mono);box-sizing:border-box"></div>
+              <div style="width:140px"><label style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;display:block;margin-bottom:4px">DONATION CONTROL 2</label><input value="{{suDonCtrl2}}" onChange="{{onSuDonCtrl2}}" placeholder="optional" style="width:100%;padding:7px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:13px;font-family:var(--mono);box-sizing:border-box"></div>
+            </div>
+            <div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;margin:16px 0 6px">DEPOSIT TYPES</div>
+            <div style="display:grid;grid-template-columns:1fr 130px 110px 34px;gap:8px;font-size:10.5px;font-weight:700;color:#79808a;padding-bottom:4px"><span>TYPE</span><span>ACCOUNT</span><span>CTRL PREFIX</span><span></span></div>
+            <sc-for list="{{suDeps}}" as="sd" hint-placeholder-count="3">
+              <div style="display:grid;grid-template-columns:1fr 130px 110px 34px;gap:8px;margin-bottom:6px">
+                <input value="{{sd.type}}" onChange="{{sd.onType}}" style="padding:6px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:12.5px;box-sizing:border-box;width:100%">
+                <input value="{{sd.acct}}" onChange="{{sd.onAcct}}" style="padding:6px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:12.5px;font-family:var(--mono);box-sizing:border-box;width:100%">
+                <input value="{{sd.prefix}}" onChange="{{sd.onPrefix}}" maxLength="4" style="padding:6px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:12.5px;font-family:var(--mono);box-sizing:border-box;width:100%">
+                <button onClick="{{sd.onDel}}" style="background:none;border:1px solid #dcc4e8;border-radius:6px;color:#79808a;cursor:pointer;font-size:12px">✕</button>
+              </div>
+            </sc-for>
+            <button onClick="{{onAddDep}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;color:#5a3a6b;cursor:pointer">+ add deposit type</button>
+            <div style="font-size:11px;color:#79808a;font-weight:700;letter-spacing:.04em;margin:16px 0 6px">NOT-ON-SCHEDULE CATEGORIES <span style="font-weight:400">(empty = always post to clearing)</span></div>
+            <sc-for list="{{suCats}}" as="sc" hint-placeholder-count="2">
+              <div style="display:grid;grid-template-columns:1fr 130px 34px;gap:8px;margin-bottom:6px">
+                <input value="{{sc.label}}" onChange="{{sc.onLabel}}" style="padding:6px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:12.5px;box-sizing:border-box;width:100%">
+                <input value="{{sc.acct}}" onChange="{{sc.onAcct}}" style="padding:6px 9px;border:1.5px solid #dcc4e8;border-radius:7px;font-size:12.5px;font-family:var(--mono);box-sizing:border-box;width:100%">
+                <button onClick="{{sc.onDel}}" style="background:none;border:1px solid #dcc4e8;border-radius:6px;color:#79808a;cursor:pointer;font-size:12px">✕</button>
+              </div>
+            </sc-for>
+            <button onClick="{{onAddCat}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;color:#5a3a6b;cursor:pointer">+ add category</button>
+          </div>
+        </sc-if>
+      </div>
+      <div style="display:flex;gap:9px;align-items:center;padding:14px 20px;border-top:1px solid #dcc4e8;background:#faf6fc;flex-wrap:wrap">
+        <span style="flex:1;font-size:12px;color:#79808a;min-width:200px">Changes save in this browser. Use “Export settings” to share the setup with someone else — they import it from this same screen.</span>
+        <button onClick="{{onSetupReset}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:600;color:#5a3a6b;cursor:pointer">Reset to defaults</button>
+        <button onClick="{{onSetupExport}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:600;color:#5a3a6b;cursor:pointer">Export settings</button>
+        <button onClick="{{onSetupImportClick}}" style="background:#fff;border:1.5px solid #dcc4e8;border-radius:7px;padding:7px 12px;font-size:12px;font-weight:600;color:#5a3a6b;cursor:pointer">Import settings</button>
+        <button onClick="{{onSetupApply}}" style="background:#1E7A4C;border:0;color:#fff;border-radius:7px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">Apply &amp; save</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<input type="file" ref="{{schRef}}" onChange="{{onSchFile}}" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt" style="display:none">
+<input type="file" ref="{{ccRef}}" onChange="{{onCCFile}}" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt" multiple="{{true}}" style="display:none">
+<input type="file" ref="{{sesRef}}" onChange="{{onSesFile}}" accept=".json" style="display:none">
+<input type="file" ref="{{cfgRef}}" onChange="{{onCfgFile}}" accept=".json" style="display:none">
+</sc-if></template>
+<script>
+window.onerror = function (m, s, l) {
+  var e = document.getElementById("__err");
+  if (e) { e.style.display = "block"; e.textContent = "Error: " + m + (l ? " (line " + l + ")" : "") + "\n" + navigator.userAgent; }
+  return false;
+};
+</script>
+<script>
+const E = (function(){
+/* Deposit Reconciliation engine — pure logic, no DOM.
+   Ported from Cash_Clearing_Reconciliation.html v1.7. Parsing, matching,
+   posting order and AGJE line format are byte-identical to the original. */
+
+function sanitizeConfig(c) {
+  const stores = (c && Array.isArray(c.stores) ? c.stores : [])
+    .map(s => ({
+      co: Number(s.co) || 0,
+      name: String(s.name == null ? "" : s.name).trim(),
+      clearing: String(s.clearing == null ? "" : s.clearing).trim(),
+      donation: String(s.donation == null ? "" : s.donation).trim(),
+      donationControl: String(s.donationControl == null ? "" : s.donationControl).trim(),
+      donationControl2: String(s.donationControl2 == null ? "" : s.donationControl2).trim(),
+      deposits: (Array.isArray(s.deposits) ? s.deposits : [])
+        .map(d => ({ type: String(d.type || "").trim().toUpperCase(), acct: String(d.acct || "").trim(), prefix: String(d.prefix || "").trim().toUpperCase() }))
+        .filter(d => d.type !== ""),
+      nosCats: (Array.isArray(s.nosCats) ? s.nosCats : [])
+        .map(x => ({ label: String(x.label || "").trim().toUpperCase(), acct: String(x.acct || "").trim() }))
+        .filter(x => x.label !== ""),
+    }))
+    .filter(s => s.co > 0);
+  return { stores };
+}
+function nosAccount(store, category) {
+  if (!category) return store.clearing;
+  const c = store.nosCats.find(x => x.label === category);
+  return c ? c.acct : store.clearing;
+}
+
+function splitRows(text) {
+  return text.replace(/\r\n?/g, "\n").split("\n").map(line => line.split("\t").map(c => c.trim()));
+}
+function toRows(input) {
+  return Array.isArray(input)
+    ? input.map(r => r.map(c => String(c == null ? "" : c).trim()))
+    : splitRows(input);
+}
+function parseAmount(s) {
+  if (s == null) return NaN;
+  s = String(s).trim().replace(/[$,]/g, "");
+  if (/^\(.*\)$/.test(s)) s = "-" + s.slice(1, -1);
+  if (s === "" || s === "-") return NaN;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+/* Same normalization as the workbook macro: numeric-looking → number, else upper-cased text */
+function normRef(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (s === "") return "";
+  const n = Number(s.replace(/,/g, ""));
+  return Number.isFinite(n) ? String(n) : s.toUpperCase();
+}
+
+/* CDK schedule export, columns A:F → control in col C (index 2), amount in col F (index 5). */
+function parseSchedule(input) {
+  const out = { rows: [], company: null };
+  for (const cells of toRows(input)) {
+    const m = cells.join(" ").match(/Company:\s*(\d+)/i);
+    if (m) out.company = Number(m[1]);
+    if (cells.length < 6) continue;
+    const control = cells[2], amt = parseAmount(cells[5]);
+    if (control === "" || /^control$/i.test(control) || !Number.isFinite(amt)) continue;
+    out.rows.push({ control, moreInfo: cells[3] || "", days: cells[4] || "", amount: amt });
+  }
+  return out;
+}
+
+const MONTHS = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+function excelSerialToISO(n) {
+  if (!Number.isFinite(n) || n < 30000 || n > 70000) return null;   // ~1982..2061
+  const d = new Date(Date.UTC(1899, 11, 30) + Math.floor(n) * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+function parseDateToken(v) {
+  if (v == null) return null;
+  const s = String(v).trim();
+  if (s === "") return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return excelSerialToISO(Number(s));
+  let m = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2}),?\s*(\d{4})$/);
+  if (m) {
+    const mo = MONTHS.findIndex(x => x.startsWith(m[1].toLowerCase()));
+    if (mo >= 0) return `${m[3]}-${String(mo + 1).padStart(2, "0")}-${String(Number(m[2])).padStart(2, "0")}`;
+  }
+  m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})\b/);
+  if (m) {
+    let y = Number(m[3]); if (y < 100) y += 2000;
+    const mo = Number(m[1]), dd = Number(m[2]);
+    if (mo >= 1 && mo <= 12 && dd >= 1 && dd <= 31) return `${y}-${String(mo).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+  }
+  return null;
+}
+
+/* Processor report. Columns located by header names so extra/reordered columns are fine. */
+function parseCC(input) {
+  const rows = toRows(input);
+  let hdr = -1, col = {};
+  for (let i = 0; i < rows.length; i++) {
+    const lower = rows[i].map(c => c.toLowerCase().trim());
+    const iRef = lower.findIndex(c => c.replace(/\s/g, "") === "ro#/other");
+    let iAmt = lower.indexOf("sale amount");
+    if (iAmt < 0) iAmt = lower.indexOf("total");
+    if (iAmt < 0) iAmt = lower.indexOf("amount");
+    if (iRef >= 0 && iAmt >= 0) {
+      hdr = i;
+      col = { ref: iRef, amt: iAmt, name: lower.indexOf("name"), card: lower.indexOf("card"),
+              op: lower.indexOf("operation"), dept: lower.indexOf("department"), date: lower.indexOf("date") };
+      break;
+    }
+  }
+  if (hdr < 0) return { error: 'Header row not found — expected a "RO#/Other" column plus an amount column ("Sale Amount", "Total" or "Amount").', rows: [] };
+  let titleDate = null;
+  for (let i = 0; i < hdr && !titleDate; i++)
+    for (const cell of rows[i]) { const dt = parseDateToken(cell); if (dt) { titleDate = dt; break; } }
+  const tally = new Map();
+  const out = [];
+  for (let i = hdr + 1; i < rows.length; i++) {
+    const c = rows[i];
+    const amt = parseAmount(c[col.amt]);
+    if (!Number.isFinite(amt)) continue;
+    if (col.date >= 0) { const dt = parseDateToken(c[col.date]); if (dt) tally.set(dt, (tally.get(dt) || 0) + 1); }
+    out.push({
+      ref: (c[col.ref] || "").trim(), amount: amt,
+      name: col.name >= 0 ? (c[col.name] || "").trim() : "",
+      card: col.card >= 0 ? (c[col.card] || "").trim() : "",
+      op:   col.op   >= 0 ? (c[col.op]   || "").trim() : "",
+      dept: col.dept >= 0 ? (c[col.dept] || "").trim() : "",
+    });
+  }
+  let rowDate = null, best = 0;
+  for (const [dt, n] of tally) if (n > best) { rowDate = dt; best = n; }
+  return { rows: out, date: rowDate || titleDate };
+}
+
+/* Sum of Sale Amounts whose RO#/Other matches the control. */
+function ccIndex(ccRows) {
+  const idx = new Map();
+  for (const r of ccRows) {
+    const k = normRef(r.ref);
+    if (k === "") continue;
+    const e = idx.get(k) || { total: 0, cards: new Set() };
+    e.total += r.amount;
+    if (r.card) e.cards.add(r.card);
+    idx.set(k, e);
+  }
+  return idx;
+}
+
+/* Received: explicit amount wins; else the CC match; else "received in full" → schedule amount. */
+function receivedFor(row, onCC) {
+  const m = parseAmount(row.manualAmt);
+  if (Number.isFinite(m) && m !== 0) return m;
+  if (Math.abs(onCC) > 0.004) return onCC;
+  if (row.include) return row.amount;
+  return 0;
+}
+
+/* CC refs not present among schedule controls. */
+function unfoundMatch(schRows, ccRows) {
+  const schSet = new Set(schRows.map(r => normRef(r.control)).filter(k => k !== ""));
+  const out = [], skipped = [];
+  for (const r of ccRows) {
+    const k = normRef(r.ref);
+    if (k === "") { skipped.push(r); continue; }
+    if (!schSet.has(k)) out.push({ ref: r.ref, amount: r.amount, note: noteFor(r), category: "" });
+  }
+  return { rows: out, skipped };
+}
+function noteFor(ccRow) { return [ccRow.card, ccRow.name].filter(Boolean).join(" · "); }
+
+const r2 = v => Math.round(v * 100) / 100;
+const cents = v => Math.round(v * 100);
+function money(v) { return (Math.abs(v) < 0.005 ? 0 : v).toFixed(2); }
+function fmtUSD(v) { const n = Math.abs(v) < 0.005 ? 0 : v; return (n < 0 ? "−$" : "$") + Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function mmdd(dateStr)   { return dateStr ? dateStr.slice(5, 7) + dateStr.slice(8, 10) : "????"; }
+function mmddyy(dateStr) { return dateStr ? mmdd(dateStr) + dateStr.slice(2, 4) : "??????"; }
+function fmtMDY(iso) { return iso ? `${iso.slice(5, 7)}/${iso.slice(8, 10)}/${iso.slice(2, 4)}` : ""; }
+
+/* Donations: round-up to the next whole dollar, or a custom amount typed at the terminal. */
+function donationCandidate(row, onCC) {
+  if (String(row.manualAmt || "").trim() !== "") return 0;
+  const diff = r2(onCC - row.amount);
+  return diff > 0.004 ? diff : 0;
+}
+function isRoundUp(row, onCC) {
+  const diff = r2(onCC - row.amount);
+  return diff > 0.004 && diff < 1 && cents(onCC) % 100 === 0;
+}
+function donationFor(row, onCC) {
+  if (!row.donate || String(row.manualAmt || "").trim() !== "") return 0;
+  const diff = r2(onCC - row.amount);
+  return diff > 0.004 ? diff : 0;
+}
+
+/* Full posting in the same order as the workbook's POST macro. */
+function buildPosting(state, store) {
+  const co = state.co, lines = [];
+  const add = (acct, amt, control, control2, desc) =>
+    lines.push({ co, acct: String(acct), amt: r2(amt), control: String(control || ""), control2: String(control2 || ""), desc: String(desc || "") });
+
+  for (const d of store.deposits) {
+    const amt = parseAmount(state.deposits[d.type]);
+    if (Number.isFinite(amt) && amt !== 0)
+      add(d.acct, amt, d.prefix + mmdd(state.cashDate), "", d.type);
+  }
+  const idx = ccIndex(state.cc);
+  let donationTotal = 0;
+  for (const row of state.schedule) {
+    const onCC = (idx.get(normRef(row.control)) || { total: 0 }).total;
+    const rec = receivedFor(row, onCC);
+    if (rec === 0) continue;
+    const donation = donationFor(row, onCC);
+    add(store.clearing, -(rec - donation), row.control, "", "");
+    donationTotal = r2(donationTotal + donation);
+  }
+  // all confirmed donations post as a single line
+  if (donationTotal > 0) {
+    add(store.donation || store.clearing, -donationTotal,
+        store.donationControl || "DONATION", store.donationControl2 || "", "DONATIONS");
+  }
+  for (const n of state.notOnSchedule) {
+    const amt = parseAmount(n.amount);
+    if (n.ref && Number.isFinite(amt) && amt !== 0)
+      add(nosAccount(store, n.category), -amt, n.ref, "", n.note || "");
+  }
+  return lines;
+}
+/* AGJE paste string — identical shape to the workbook: Co.Acct.Cents.Control.Control2.Description.Count */
+function jeStrings(lines) {
+  return lines.map(l => [l.co, l.acct, cents(l.amt), l.control, l.control2, l.desc, ""].join("."));
+}
+function totals(state, store) {
+  let dep = 0;
+  for (const d of store.deposits) {
+    const a = parseAmount(state.deposits[d.type]);
+    if (Number.isFinite(a)) dep += a;
+  }
+  const idx = ccIndex(state.cc);
+  let rec = 0;
+  for (const row of state.schedule)
+    rec += receivedFor(row, (idx.get(normRef(row.control)) || { total: 0 }).total);
+  for (const n of state.notOnSchedule) {
+    const a = parseAmount(n.amount);
+    if (n.ref && Number.isFinite(a)) rec += a;
+  }
+  return { deposit: r2(dep), received: r2(rec), variance: r2(dep - rec) };
+}
+
+/* ===================== XLSX READER (zip + sheet XML, no dependencies) ===================== */
+async function inflateRaw(u8) {
+  const stream = new Blob([u8]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+function unzipEntries(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = dv.byteLength - 22; i >= Math.max(0, dv.byteLength - 22 - 65536); i--)
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  if (eocd < 0) throw new Error("not a zip/xlsx file");
+  const count = dv.getUint16(eocd + 10, true);
+  let off = dv.getUint32(eocd + 16, true);
+  const map = new Map();
+  for (let k = 0; k < count; k++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) throw new Error("bad zip directory");
+    const method = dv.getUint16(off + 10, true);
+    const csize = dv.getUint32(off + 20, true);
+    const nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true);
+    const lho = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(u8.subarray(off + 46, off + 46 + nlen));
+    const dstart = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+    map.set(name, { method, data: u8.subarray(dstart, dstart + csize) });
+    off += 46 + nlen + elen + clen;
+  }
+  return map;
+}
+async function entryText(map, name) {
+  const e = map.get(name);
+  if (!e) return null;
+  const raw = e.method === 0 ? e.data : await inflateRaw(e.data);
+  return new TextDecoder().decode(raw);
+}
+const xmlDoc = t => new DOMParser().parseFromString(t, "application/xml");
+function colIndex(ref) { let n = 0; for (const ch of ref) { if (ch >= "A" && ch <= "Z") n = n * 26 + ch.charCodeAt(0) - 64; else break; } return n - 1; }
+async function rowsFromXlsx(buf) {
+  const map = unzipEntries(buf);
+  const wb = xmlDoc(await entryText(map, "xl/workbook.xml") || "");
+  const rels = xmlDoc(await entryText(map, "xl/_rels/workbook.xml.rels") || "");
+  const relTarget = {};
+  for (const r of rels.getElementsByTagName("Relationship"))
+    relTarget[r.getAttribute("Id")] = r.getAttribute("Target").replace(/^\/?(xl\/)?/, "xl/");
+  const sst = [];
+  const sstXml = await entryText(map, "xl/sharedStrings.xml");
+  if (sstXml) for (const si of xmlDoc(sstXml).getElementsByTagName("si")) {
+    let s = ""; for (const t of si.getElementsByTagName("t")) s += t.textContent; sst.push(s);
+  }
+  for (const sh of wb.getElementsByTagName("sheet")) {
+    const rid = sh.getAttribute("r:id") || sh.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+    const path = relTarget[rid];
+    if (!path || !map.has(path)) continue;
+    const doc = xmlDoc(await entryText(map, path));
+    const rows = [];
+    for (const rowEl of doc.getElementsByTagName("row")) {
+      const cells = [];
+      for (const c of rowEl.getElementsByTagName("c")) {
+        const idx = colIndex(c.getAttribute("r") || "");
+        const t = c.getAttribute("t");
+        let v = "";
+        if (t === "inlineStr") { const is = c.getElementsByTagName("is")[0]; if (is) for (const tt of is.getElementsByTagName("t")) v += tt.textContent; }
+        else { const ve = c.getElementsByTagName("v")[0]; v = ve ? ve.textContent : ""; if (t === "s") v = sst[Number(v)] != null ? sst[Number(v)] : ""; }
+        if (idx >= 0) cells[idx] = v;
+      }
+      for (let i = 0; i < cells.length; i++) if (cells[i] == null) cells[i] = "";
+      rows.push(cells);
+    }
+    if (rows.some(r => r.some(c => String(c).trim() !== ""))) return rows;
+  }
+  throw new Error("no worksheet data found in the Excel file");
+}
+
+function csvRows(t) {
+  return t.replace(/\r\n?/g, "\n").split("\n").map(line => {
+    const cells = []; let cur = "", q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+      else if (ch === '"') q = true;
+      else if (ch === ",") { cells.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    cells.push(cur);
+    return cells.map(c => c.trim());
+  });
+}
+async function fileToRows(file) {
+  if (/\.(xlsx|xlsm)$/i.test(file.name)) return rowsFromXlsx(await file.arrayBuffer());
+  if (/\.xls$/i.test(file.name)) throw new Error("Legacy .xls is not supported — open it in Excel, save as .xlsx, then upload again.");
+  const text = await file.text();
+  return text.includes("\t") ? splitRows(text) : csvRows(text);
+}
+
+/* ===================== XLSX WRITER (zip + styled sheets, no dependencies) ===================== */
+const CRC_TABLE = (() => { const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+async function deflateRaw(u8) {
+  const s = new Blob([u8]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(s).arrayBuffer());
+}
+async function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  for (const f of files) {
+    const data = typeof f.data === "string" ? enc.encode(f.data) : f.data;
+    const comp = await deflateRaw(data), crc = crc32(data), nameB = enc.encode(f.name);
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(8, 8, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, comp.length, true); lh.setUint32(22, data.length, true);
+    lh.setUint16(26, nameB.length, true);
+    parts.push(new Uint8Array(lh.buffer), nameB, comp);
+    central.push({ crc, comp: comp.length, raw: data.length, nameB, offset });
+    offset += 30 + nameB.length + comp.length;
+  }
+  const cd = []; let cdSize = 0;
+  for (const c of central) {
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint16(10, 8, true); ch.setUint32(16, c.crc, true); ch.setUint32(20, c.comp, true);
+    ch.setUint32(24, c.raw, true); ch.setUint16(28, c.nameB.length, true); ch.setUint32(42, c.offset, true);
+    cd.push(new Uint8Array(ch.buffer), c.nameB); cdSize += 46 + c.nameB.length;
+  }
+  const eo = new DataView(new ArrayBuffer(22));
+  eo.setUint32(0, 0x06054b50, true); eo.setUint16(8, central.length, true); eo.setUint16(10, central.length, true);
+  eo.setUint32(12, cdSize, true); eo.setUint32(16, offset, true);
+  return new Blob([...parts, ...cd, new Uint8Array(eo.buffer)],
+    { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+const xesc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function xlsxColLetter(n) { let s = ""; n++; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = (n - m - 1) / 26; } return s; }
+function xlsxCellXml(rowNum, ci, cell) {
+  if (cell == null || cell.v === "" || cell.v == null) {
+    return cell && cell.s != null ? `<c r="${xlsxColLetter(ci)}${rowNum}" s="${cell.s}"/>` : "";
+  }
+  const ref = xlsxColLetter(ci) + rowNum, s = cell.s != null ? ` s="${cell.s}"` : "";
+  if (cell.n) return `<c r="${ref}"${s}><v>${cell.v}</v></c>`;
+  return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xesc(cell.v)}</t></is></c>`;
+}
+function xlsxSheetXml(rows, colWidths) {
+  let body = "";
+  rows.forEach((row, ri) => {
+    const r = ri + 1;
+    body += `<row r="${r}">${row.map((c, ci) => xlsxCellXml(r, ci, c)).join("")}</row>`;
+  });
+  const cols = colWidths ? `<cols>${colWidths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>` : "";
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"/></sheetViews>${cols}<sheetData>${body}</sheetData></worksheet>`;
+}
+const XLSX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.00;[Red]\\-#,##0.00"/></numFmts>
+<fonts count="4">
+<font><sz val="11"/><name val="Calibri"/></font>
+<font><b/><sz val="11"/><name val="Calibri"/></font>
+<font><b/><sz val="16"/><color rgb="FF15324F"/><name val="Calibri"/></font>
+<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>
+</fonts>
+<fills count="4">
+<fill><patternFill patternType="none"/></fill>
+<fill><patternFill patternType="gray125"/></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FF15324F"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFF1F5F9"/></patternFill></fill>
+</fills>
+<borders count="2">
+<border><left/><right/><top/><bottom/><diagonal/></border>
+<border><left style="thin"><color rgb="FFC9D2DC"/></left><right style="thin"><color rgb="FFC9D2DC"/></right><top style="thin"><color rgb="FFC9D2DC"/></top><bottom style="thin"><color rgb="FFC9D2DC"/></bottom><diagonal/></border>
+</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="8">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/>
+<xf numFmtId="164" fontId="1" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+</cellXfs></styleSheet>`;
+const ST = { GEN: 0, BOLD: 1, MONEY: 2, BOLDMONEY: 3, HEAD: 4, TITLE: 5, CELL: 6, SECTION: 7 };
+async function buildWorkbook(sheets) {  // sheets: [{name, rows, cols}]
+  const sheetXmls = sheets.map(s => xlsxSheetXml(s.rows, s.cols));
+  const wbSheets = sheets.map((s, i) => `<sheet name="${xesc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("");
+  const wbRels = sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("")
+    + `<Relationship Id="rIdS" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`;
+  const sheetOverrides = sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("");
+  const files = [
+    { name: "[Content_Types].xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${sheetOverrides}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
+    { name: "_rels/.rels", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+    { name: "xl/workbook.xml", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${wbSheets}</sheets></workbook>` },
+    { name: "xl/_rels/workbook.xml.rels", data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${wbRels}</Relationships>` },
+    { name: "xl/styles.xml", data: XLSX_STYLES },
+  ];
+  sheetXmls.forEach((xml, i) => files.push({ name: `xl/worksheets/sheet${i + 1}.xml`, data: xml }));
+  return makeZip(files);
+}
+
+/* ---------- sample data ---------- */
+const SAMPLE_SCH = [
+  "Company: 11   RIVENDELL TOYOTA\t\t\t\t\t",
+  "\tAccounting Schedule Report 1 - CASH CLEARING - SUMMARY\t\t\t\t",
+  "\t\tControl\tMoreInfo\tDays\tAmount $",
+  "\t\t455144\tDetail\t1\t118.92", "\t\t218011\tDetail\t2\t1,062.01",
+  "\t\t213835\tDetail\t1\t89.75", "\t\t347151\tDetail\t1\t28.97",
+  "\t\t809485\tDetail\t4\t469.25", "\t\t5426\tDetail\t1\t785.38",
+].join("\n");
+const SAMPLE_CC_HDR = [
+  "Rivendell Toyota\tOpen Transactions",
+  "Name\tDate\tRO#/Other\tCust #\tSale Amount\tOperation\tCard\tLast 4\tAuth Code\tDepartment\tSource\tUser\tTerminal",
+];
+const SAMPLE_CC_CARDS = SAMPLE_CC_HDR.concat([
+  "BAGGINS, FRODO\t06-10-26 11:02 AM\t455144\t108266\t118.92\tSale\tDiscover\t0641\t01082R\tService\tCard Present\tBaggins, Bilbo\tService - 3957",
+  "RIVENDELL PARTS MGR\t06-10-26 09:35 AM\t218011\t\t62.01\tSale\tMasterCard\t5224\t077181\tParts\tHand Key\tBaggins, Bilbo\t",
+  "RIVENDELL PARTS MGR\t06-10-26 02:10 PM\t218011\t\t1000.00\tSale\tVisa\t9052\t05496B\tParts\tCard Present\tBaggins, Bilbo\t",
+  "CROFT, LARA\t06-10-26 10:57 AM\t5426\t\t786.00\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tBaggins, Bilbo\t",
+]).join("\n");
+const SAMPLE_CC_OTHER = SAMPLE_CC_HDR.concat([
+  "CHIEF, MASTER\t06-10-26 10:43 AM\t999111\t74923\t25.50\tSale\tVisa\t3889\t010915\tParts\tCard Present\tBaggins, Bilbo\tService - 3957",
+  "RIVIA, GERALT\t06-10-26 10:30 AM\t\t\t77.77\tSale\tVisa\t2222\tABC123\tParts\tHand Key\tBaggins, Bilbo\t",
+]).join("\n");
+
+return {SAMPLE_CC_CARDS,SAMPLE_CC_OTHER,SAMPLE_SCH,ST,buildPosting,buildWorkbook,ccIndex,cents,csvRows,donationCandidate,donationFor,excelSerialToISO,fileToRows,fmtMDY,fmtUSD,isRoundUp,jeStrings,mmdd,mmddyy,money,normRef,nosAccount,noteFor,parseAmount,parseCC,parseDateToken,parseSchedule,r2,receivedFor,rowsFromXlsx,sanitizeConfig,splitRows,toRows,totals,unfoundMatch};
+})();
+/* ---------- tiny template renderer for the design DSL ----------
+   Supports: {{expr}} (text + whole-attribute), dotted scope (it.title),
+   sc-if value="{{cond}}", sc-for list="{{arr}}" as="name",
+   event attrs (onClick/onChange/onDrop/onDragOver/onBlur → listeners),
+   style="{{obj|string}}", value/checked/ref/multiple/maxLength bindings. */
+const TPL = document.getElementById("__tpl").content;
+
+function resolveExpr(expr, scope) {
+  expr = expr.trim();
+  if (expr === "true") return true;
+  if (expr === "false") return false;
+  const parts = expr.split(".");
+  let v = scope[parts[0]];
+  for (let i = 1; i < parts.length && v != null; i++) v = v[parts[i]];
+  return v;
+}
+function interp(text, scope) {
+  return text.replace(/\{\{([^}]+)\}\}/g, (_, e) => { const v = resolveExpr(e, scope); return v == null ? "" : String(v); });
+}
+const WHOLE = /^\{\{([\s\S]+)\}\}$/;
+const EVT = { onclick: "click", onchange: "change", oninput: "input", ondrop: "drop",
+  ondragover: "dragover", ondragenter: "dragenter", ondragleave: "dragleave",
+  onblur: "blur", onfocus: "focus", onmousedown: "mousedown", onkeydown: "keydown", onsubmit: "submit" };
+
+function applyAttr(el, name, value, scope, pend) {
+  const lname = name.toLowerCase();
+  const whole = value.match(WHOLE);
+  if (whole) {
+    const val = resolveExpr(whole[1], scope);
+    if (EVT[lname]) { if (typeof val === "function") el.addEventListener(EVT[lname], val); return; }
+    if (name === "ref") { if (val && typeof val === "object") val.current = el; return; }
+    if (name === "style") {
+      if (val && typeof val === "object") { for (const k in val) el.style[k] = val[k]; }
+      else if (val != null) el.style.cssText = String(val);
+      return;
+    }
+    if (name === "value") { pend.value = val; return; }
+    if (name === "checked") { el.checked = !!val; return; }
+    if (name === "multiple") { if (val) el.multiple = true; return; }
+    if (lname === "maxlength") { if (val != null) el.maxLength = val; return; }
+    if (val != null) el.setAttribute(name, String(val));
+    return;
+  }
+  // static / mixed
+  if (EVT[lname]) return;            // never static here
+  el.setAttribute(name, value.indexOf("{{") >= 0 ? interp(value, scope) : value);
+}
+
+function renderNode(node, scope, out) {
+  if (node.nodeType === 3) { out.push(document.createTextNode(interp(node.textContent, scope))); return; }
+  if (node.nodeType !== 1) return;   // skip comments etc.
+  const tag = node.tagName.toLowerCase();
+  if (tag === "sc-if") {
+    if (resolveExpr(node.getAttribute("value").replace(WHOLE, "$1"), scope)) renderChildren(node, scope, out);
+    return;
+  }
+  if (tag === "sc-for") {
+    const arr = resolveExpr(node.getAttribute("list").replace(WHOLE, "$1"), scope) || [];
+    const as = node.getAttribute("as");
+    for (const item of arr) { const cs = Object.assign({}, scope); cs[as] = item; renderChildren(node, cs, out); }
+    return;
+  }
+  const realTag = tag === "x-select" ? "select" : tag === "x-option" ? "option" : tag;
+  const el = document.createElement(realTag);
+  const pend = {};
+  for (const a of node.attributes) applyAttr(el, a.name, a.value, scope, pend);
+  const kids = [];
+  for (const c of node.childNodes) renderNode(c, scope, kids);
+  for (const k of kids) el.appendChild(k);
+  if ("value" in pend) el.value = pend.value == null ? "" : pend.value;   // after options for <select>
+  out.push(el);
+}
+function renderChildren(node, scope, out) { for (const c of node.childNodes) renderNode(c, scope, out); }
+
+function renderApp(vm) {
+  const out = [];
+  for (const c of TPL.childNodes) renderNode(c, vm, out);
+  const root = document.getElementById("app");
+  root.replaceChildren(...out);
+}
+
+class Component {
+  static DEFAULTS = {
+    stores: [
+      { co: 11, name: "Rivendell Toyota", clearing: "110100", donation: "", donationControl: "DONATION", donationControl2: "",
+        deposits: [
+          { type: "CASH", acct: "110001", prefix: "CA" }, { type: "CREDIT", acct: "110001", prefix: "CR" },
+          { type: "CHECK", acct: "110001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "117750", prefix: "SP" },
+          { type: "PARTS POLICY", acct: "117650", prefix: "PP" }, { type: "XTIME", acct: "110001", prefix: "XT" } ],
+        nosCats: [
+          { label: "EXT WARRANTY", acct: "110150" }, { label: "TOY WARRANTY", acct: "115140" },
+          { label: "PNC", acct: "110122" }, { label: "AR", acct: "110120" } ] },
+      { co: 12, name: "Mordor Chevrolet", clearing: "120100", donation: "", donationControl: "DONATION", donationControl2: "",
+        deposits: [
+          { type: "CASH", acct: "120001", prefix: "CA" }, { type: "CREDIT", acct: "120001", prefix: "CR" },
+          { type: "CHECK", acct: "120001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "127750", prefix: "SP" },
+          { type: "PARTS POLICY", acct: "127650", prefix: "PP" }, { type: "XTIME", acct: "120001", prefix: "XT" } ],
+        nosCats: [
+          { label: "EXT WARRANTY", acct: "120150" }, { label: "GM WARRANTY", acct: "120140" },
+          { label: "PNC", acct: "120122" }, { label: "AR", acct: "120120" } ] },
+      { co: 13, name: "Tatooine Honda", clearing: "130100", donation: "", donationControl: "DONATION", donationControl2: "",
+        deposits: [
+          { type: "CASH", acct: "130001", prefix: "CA" }, { type: "CREDIT", acct: "130001", prefix: "CR" },
+          { type: "CHECK", acct: "130001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "137750", prefix: "SP" },
+          { type: "PARTS POLICY", acct: "137650", prefix: "PP" } ],
+        nosCats: [] },
+      { co: 14, name: "Hyrule Hyundai", clearing: "140100", donation: "", donationControl: "DONATION", donationControl2: "",
+        deposits: [
+          { type: "CASH", acct: "140001", prefix: "CA" }, { type: "CREDIT", acct: "140001", prefix: "CR" },
+          { type: "CHECK", acct: "140001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "147750", prefix: "SP" },
+          { type: "PARTS POLICY", acct: "147650", prefix: "PP" } ],
+        nosCats: [] },
+      { co: 16, name: "Rapture CDJR", clearing: "160100", donation: "", donationControl: "DONATION", donationControl2: "",
+        deposits: [
+          { type: "CASH", acct: "160001", prefix: "CA" }, { type: "CREDIT", acct: "160001", prefix: "CR" },
+          { type: "CHECK", acct: "160001", prefix: "CK" }, { type: "SERVICE POLICY", acct: "167750", prefix: "SP" },
+          { type: "PARTS POLICY", acct: "167650", prefix: "PP" }, { type: "XTIME", acct: "160001", prefix: "XT" } ],
+        nosCats: [
+          { label: "EXT WARRANTY", acct: "160150" }, { label: "CHRY WARRANTY", acct: "160140" },
+          { label: "PNC", acct: "160122" }, { label: "AR", acct: "160120" } ] }
+    ]
+  };
+  static LOGOS = {};
+  static LS_KEY = "deposit_store_config_v1";
+
+  E = null; d = null; cfg = null; usingCustom = false;
+  ui = { tab: "needs", open: {}, setupOpen: false, copyLabel: "Copy AGJE lines", handled: {} };
+  su = null; suSel = 0;
+  lastPosting = null; generated = false;
+  schMsg = null; ccErr = null; seq = 0; skipped = [];
+
+  mount() {
+    this.E = E;
+    let cfg = Component.DEFAULTS, custom = false;
+    try { const s = localStorage.getItem(Component.LS_KEY); if (s) { cfg = JSON.parse(s); custom = true; } } catch (e) {}
+    this.cfg = E.sanitizeConfig(cfg);
+    if (!this.cfg.stores.length) { this.cfg = E.sanitizeConfig(Component.DEFAULTS); custom = false; }
+    this.usingCustom = custom;
+    this.d = {
+      co: this.cfg.stores[0].co,
+      cashDate: new Date().toISOString().slice(0, 10),
+      dateManual: false, deposits: {}, schedule: [], ccFiles: [], cc: [],
+      notOnSchedule: [], signName: "", signChecked: false,
+    };
+    this.schRef = { current: null }; this.ccRef = { current: null };
+    this.sesRef = { current: null }; this.cfgRef = { current: null };
+    wireEnterNav(document.getElementById("app"));
+    wireSelectOnFocus(document.getElementById("app"));
+    this.refresh();
+  }
+
+  refresh = () => this.render();
+  render() { renderApp(this.renderVals()); }
+  store() {
+    return this.cfg.stores.find(s => s.co === this.d.co) || this.cfg.stores[0] ||
+      { co: 0, name: "?", clearing: "", donation: "", donationControl: "", donationControl2: "", deposits: [], nosCats: [] };
+  }
+  cleanupForStore() {
+    const d = this.d, store = this.store();
+    const valid = new Set(store.deposits.map(x => x.type));
+    for (const k of Object.keys(d.deposits)) if (!valid.has(k)) delete d.deposits[k];
+    const cats = new Set(store.nosCats.map(c => c.label));
+    for (const n of d.notOnSchedule) if (n.category && !cats.has(n.category)) n.category = "";
+  }
+
+  /* ---------- imports ---------- */
+  loadSchedule(rows, name) {
+    const E = this.E, d = this.d;
+    const p = E.parseSchedule(rows);
+    d.schedule = p.rows.map(r => ({ ...r, include: false, manualAmt: "", donate: false, donNo: false }));
+    this.generated = false; this.lastPosting = null;
+    const src = name ? ` (${name})` : "";
+    if (p.company && this.cfg.stores.some(s => s.co === p.company)) {
+      d.co = p.company; this.cleanupForStore();
+      this.schMsg = { text: `${p.rows.length} schedule items loaded${src} · store auto-detected: CO${p.company}`, cls: "ok" };
+    } else {
+      this.schMsg = p.rows.length
+        ? { text: `${p.rows.length} schedule items loaded${src}.`, cls: "ok" }
+        : { text: "No schedule rows recognized (need columns A:F with Control in column C).", cls: "err" };
+    }
+    this.recomputeNos();
+  }
+  addCC(rows, name) {
+    const E = this.E, d = this.d;
+    const p = E.parseCC(rows);
+    if (p.error) { this.ccErr = `${name || "file"}: ${p.error}`; return; }
+    this.ccErr = null;
+    const nm = name || `file ${d.ccFiles.length + 1}`;
+    const i = d.ccFiles.findIndex(f => f.name === nm);
+    if (i >= 0) d.ccFiles[i] = { name: nm, rows: p.rows, date: p.date };
+    else d.ccFiles.push({ name: nm, rows: p.rows, date: p.date });
+    if (p.date && !d.dateManual && d.cashDate !== p.date) d.cashDate = p.date;
+    this.rebuildCC();
+  }
+  rebuildCC() {
+    const d = this.d;
+    d.cc = d.ccFiles.flatMap(f => f.rows);
+    this.generated = false;
+    this.recomputeNos();
+  }
+  /* Auto unfound-match: merge so user edits and manual rows survive re-runs. */
+  recomputeNos() {
+    const E = this.E, d = this.d;
+    if (!d.schedule.length || !d.cc.length) {
+      this.skipped = [];
+      d.notOnSchedule = d.notOnSchedule.filter(n => n.manual);
+      return;
+    }
+    const res = E.unfoundMatch(d.schedule, d.cc);
+    this.skipped = res.skipped;
+    const prev = d.notOnSchedule;
+    const manuals = prev.filter(n => n.manual);
+    const manualRefs = new Set(manuals.map(n => E.normRef(n.ref)).filter(k => k !== ""));
+    const next = [];
+    for (const r of res.rows) {
+      const k = "a:" + E.normRef(r.ref);
+      if (manualRefs.has(E.normRef(r.ref))) continue;
+      const old = prev.find(p => !p.manual && p.key === k);
+      next.push(old || { ...r, key: k });
+    }
+    d.notOnSchedule = [...next, ...manuals];
+  }
+  handleFiles = async (files, kind) => {
+    const list = [...(files || [])].filter(Boolean);
+    for (const f of (kind === "sch" ? list.slice(0, 1) : list)) {
+      try {
+        const rows = await this.E.fileToRows(f);
+        if (kind === "sch") this.loadSchedule(rows, f.name); else this.addCC(rows, f.name);
+      } catch (err) { alert(`${f.name}: ${err.message}`); }
+    }
+    this.refresh();
+  };
+
+  goSection(n) {
+    this.ui.open[n] = true; this.refresh();
+    setTimeout(() => {
+      const el = document.getElementById("sec" + n);
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 14, behavior: "smooth" });
+    }, 60);
+  }
+
+  download(name, data, mime) {
+    const blob = data instanceof Blob ? data : new Blob([data], { type: mime || "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  fileStem() { return `CASHDEPOSIT-${this.E.mmddyy(this.d.cashDate)}-CO${this.d.co}`; }
+
+  /* ---------- posting & records ---------- */
+  onGenerate = () => {
+    const E = this.E, d = this.d, t = E.totals(d, this.store());
+    if (Math.abs(t.variance) >= 0.005 && !confirm(`Variance is ${E.money(t.variance)} (should be 0.00). Generate the posting anyway?`)) return;
+    if (!String(d.signName || "").trim() && !confirm('No name entered under "Reconciled by". Generate anyway?')) return;
+    this.lastPosting = E.buildPosting(d, this.store());
+    this.generated = true; this.refresh();
+  };
+  onCopy = () => {
+    const E = this.E;
+    navigator.clipboard.writeText(E.jeStrings(this.lastPosting).join("\r\n")).then(() => {
+      this.ui.copyLabel = "Copied ✓"; this.refresh();
+      setTimeout(() => { this.ui.copyLabel = "Copy AGJE lines"; this.refresh(); }, 1600);
+    }).catch(() => alert("Could not access the clipboard — use Download AGJE (.txt) instead."));
+  };
+  onDlJe = () => this.download(this.fileStem() + "-AGJE.txt", this.E.jeStrings(this.lastPosting).join("\r\n"));
+
+  recordData() {
+    const E = this.E, d = this.d, store = this.store();
+    const idx = E.ccIndex(d.cc), t = E.totals(d, store);
+    const sch = d.schedule.map(row => {
+      const e = idx.get(E.normRef(row.control));
+      const onCC = e ? E.r2(e.total) : 0;
+      const rec = E.receivedFor(row, onCC);
+      const donation = E.donationFor(row, onCC);
+      let how = "";
+      if (rec === 0) how = "";
+      else if (E.parseAmount(row.manualAmt) && E.parseAmount(row.manualAmt) !== 0) how = "manual amount";
+      else if (row.include && onCC === 0) how = "received in full";
+      else if (onCC !== 0) how = donation > 0 ? `on CC (incl. ${E.money(donation)} ${E.isRoundUp(row, onCC) ? "round-up" : "customer"} donation)` : "on CC";
+      return { ...row, onCC, card: e ? [...e.cards].join(", ") : "", receivedAmt: rec, donation, how };
+    });
+    return { sch, t, store, posting: this.lastPosting || E.buildPosting(d, store) };
+  }
+  onPdf = () => {
+    const E = this.E, d = this.d, esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+    const { sch, t, store, posting } = this.recordData();
+    const balanced = Math.abs(t.variance) < 0.005;
+    const SO = "<scr" + "ipt>", SC = "</scr" + "ipt>";
+    const tr = (cells, opts = {}) => `<tr>${cells.map((c, i) =>
+      `<${opts.head ? "th" : "td"}${(opts.num && opts.num.includes(i)) ? ' class="num"' : ""}>${esc(c == null ? "" : c)}</${opts.head ? "th" : "td"}>`).join("")}</tr>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${this.fileStem()}</title><style>
+    @page{size:letter;margin:14mm}
+    *{box-sizing:border-box}
+    body{font:12px/1.4 "Segoe UI",Arial,sans-serif;color:#16191d;margin:0}
+    .head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #561f70;padding-bottom:10px;margin-bottom:14px}
+    .head h1{font-size:20px;margin:0;color:#561f70}
+    .head .sub{font-size:12px;color:#79808a;margin-top:3px}
+    .head .meta{text-align:right;font-size:12px;color:#79808a}
+    .kpis{display:flex;gap:10px;margin:0 0 16px}
+    .kpi{flex:1;border:1px solid #dcc4e8;border-radius:8px;padding:9px 12px;background:#faf6fc}
+    .kpi span{font-size:11px;color:#79808a;display:block}.kpi b{font-size:18px;font-family:Consolas,monospace}
+    .kpi.var b{color:${balanced ? "#0d7d4d" : "#b32f2f"}}
+    .flag{display:inline-block;border-radius:10px;padding:1px 10px;font-weight:700;font-size:11px;background:${balanced ? "#e7f6ed" : "#fdeaea"};color:${balanced ? "#0d7d4d" : "#b32f2f"}}
+    h2{font-size:13px;color:#561f70;margin:18px 0 6px;padding-bottom:3px;border-bottom:1px solid #dcc4e8}
+    table{border-collapse:collapse;width:100%;font-size:11px}
+    th{background:#561f70;color:#fff;text-align:left;padding:5px 8px;font-weight:600}
+    td{border:1px solid #dcc4e8;padding:4px 8px}
+    th.num,td.num{text-align:right;font-family:Consolas,monospace}
+    tbody tr:nth-child(even){background:#faf6fc}
+    pre{background:#2e0f42;color:#9fe2b5;font:11px/1.5 Consolas,monospace;padding:10px;border-radius:6px;white-space:pre-wrap;word-break:break-all}
+    .sign{display:flex;gap:30px;margin-top:14px;font-size:12px}
+    .sign .line{border-top:1px solid #16191d;min-width:220px;padding-top:4px;margin-top:26px}
+    .foot{margin-top:18px;font-size:10px;color:#79808a;border-top:1px solid #dcc4e8;padding-top:6px}
+    </style></head><body>
+    <div class="head"><div><h1>Cash Deposit Reconciliation</h1>
+      <div class="sub">CO${d.co} — ${esc(store.name)}</div></div>
+      <div class="meta">Cash date: <b>${esc(d.cashDate)}</b><br>JE# DD${E.mmddyy(d.cashDate)}<br>Reconciled by: <b>${esc(d.signName || "—")}</b>${d.signChecked ? " · deposit slip verified ✓" : ""}<br>Generated ${new Date().toLocaleString()}</div></div>
+    <div class="kpis">
+      <div class="kpi"><span>Deposit</span><b>${E.money(t.deposit)}</b></div>
+      <div class="kpi"><span>Reconciled</span><b>${E.money(t.received)}</b></div>
+      <div class="kpi var"><span>Variance</span><b>${E.money(t.variance)}</b></div>
+      <div class="kpi"><span>Status</span><b><span class="flag">${balanced ? "BALANCED" : "NOT BALANCED"}</span></b></div>
+    </div>
+    <h2>Deposit Totals</h2><table><thead>${tr(["Type", "Amount", "Account", "Control"], { head: true, num: [1] })}</thead><tbody>
+    ${store.deposits.filter(x => E.parseAmount(d.deposits[x.type])).map(x => tr([x.type, E.money(E.parseAmount(d.deposits[x.type])), x.acct, x.prefix + E.mmdd(d.cashDate)], { num: [1] })).join("")}</tbody></table>
+    <h2>Schedule Reconciliation — ${sch.length} items</h2><table><thead>${tr(["Control", "MoreInfo", "Days", "Amount", "On CC", "Received", "How", "Card"], { head: true, num: [2, 3, 4, 5] })}</thead><tbody>
+    ${sch.map(r => tr([r.control, r.moreInfo, r.days, E.money(r.amount), r.onCC ? E.money(r.onCC) : "", r.receivedAmt ? E.money(r.receivedAmt) : "", r.how, r.card], { num: [2, 3, 4, 5] })).join("")}</tbody></table>
+    <h2>Not On Schedule — ${d.notOnSchedule.length}</h2><table><thead>${tr(["RO/Invoice#", "Amount", "Category", "Account", "Note"], { head: true, num: [1] })}</thead><tbody>
+    ${d.notOnSchedule.map(n => tr([n.ref, E.money(E.parseAmount(n.amount) || 0), n.category || "(clearing)", E.nosAccount(store, n.category), n.note || ""], { num: [1] })).join("")}</tbody></table>
+    <h2>Posting — JE# DD${E.mmddyy(d.cashDate)}</h2><table><thead>${tr(["Co", "Account", "Amount", "Control", "Control2", "Description"], { head: true, num: [2] })}</thead><tbody>
+    ${posting.map(l => tr([l.co, l.acct, E.money(l.amt), l.control, l.control2, l.desc], { num: [2] })).join("")}</tbody></table>
+    <h2>AGJE Paste Lines</h2><pre>${esc(E.jeStrings(posting).join("\n"))}</pre>
+    <div class="sign"><div class="line">Reconciled by: ${esc(d.signName || "")}</div><div class="line">Reviewed by</div></div>
+    <div class="foot">Generated by the Deposit Reconciliation tool. Review all accounts and amounts before posting in CDK.</div>
+    ${SO}window.onload=function(){setTimeout(function(){window.print();},250);};${SC}
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { alert("Pop-up blocked — allow pop-ups for this page to export the PDF, or use Export Excel record."); return; }
+    w.document.write(html); w.document.close();
+  };
+  onXlsx = async () => {
+    const E = this.E, d = this.d;
+    try {
+      const { sch, t, store, posting } = this.recordData();
+      const S = E.ST;
+      const txt = (v, s) => ({ v, s });
+      const num = (v, s) => ({ v, n: true, s: s == null ? S.MONEY : s });
+      const head = v => ({ v, s: S.HEAD });
+      const summary = [];
+      summary.push([txt("Cash Deposit Reconciliation", S.TITLE)]);
+      summary.push([txt(`CO${d.co} — ${store.name}`, S.BOLD)]);
+      summary.push([txt("Cash date", S.BOLD), txt(d.cashDate)]);
+      summary.push([txt("JE #", S.BOLD), txt("DD" + E.mmddyy(d.cashDate))]);
+      summary.push([txt("Reconciled by", S.BOLD), txt(d.signName || "")]);
+      summary.push([txt("Slip verified", S.BOLD), txt(d.signChecked ? "YES" : "NO")]);
+      summary.push([txt("Generated", S.BOLD), txt(new Date().toLocaleString())]);
+      summary.push([]);
+      summary.push([txt("Deposit", S.BOLD), num(t.deposit)]);
+      summary.push([txt("Reconciled", S.BOLD), num(t.received)]);
+      summary.push([txt("Variance", S.BOLD), num(t.variance)]);
+      summary.push([txt("Status", S.BOLD), txt(Math.abs(t.variance) < 0.005 ? "BALANCED" : "NOT BALANCED")]);
+      summary.push([]);
+      summary.push([txt("DEPOSIT TOTALS", S.SECTION), txt("", S.SECTION), txt("", S.SECTION), txt("", S.SECTION)]);
+      summary.push([head("Type"), head("Amount"), head("Account"), head("Control")]);
+      for (const x of store.deposits) if (E.parseAmount(d.deposits[x.type]))
+        summary.push([txt(x.type, S.CELL), num(E.parseAmount(d.deposits[x.type])), txt(x.acct, S.CELL), txt(x.prefix + E.mmdd(d.cashDate), S.CELL)]);
+      const schRows = [[head("Control"), head("MoreInfo"), head("Days"), head("Amount"), head("On CC"), head("Received"), head("How"), head("Card")]];
+      for (const r of sch) schRows.push([
+        txt(r.control, S.CELL), txt(r.moreInfo, S.CELL), txt(r.days, S.CELL), num(r.amount),
+        r.onCC ? num(r.onCC) : txt("", S.CELL), r.receivedAmt ? num(r.receivedAmt) : txt("", S.CELL), txt(r.how, S.CELL), txt(r.card, S.CELL)]);
+      const nosRows = [[head("RO/Invoice#"), head("Amount"), head("Category"), head("Account"), head("Note")]];
+      for (const n of d.notOnSchedule) nosRows.push([
+        txt(n.ref, S.CELL), num(E.parseAmount(n.amount) || 0), txt(n.category || "(clearing)", S.CELL), txt(E.nosAccount(store, n.category), S.CELL), txt(n.note || "", S.CELL)]);
+      const jeRows = [[head("Co"), head("Account"), head("Amount"), head("Control"), head("Control2"), head("Description"), head("AGJE line")]];
+      const strs = E.jeStrings(posting);
+      posting.forEach((l, i) => jeRows.push([
+        txt(String(l.co), S.CELL), txt(l.acct, S.CELL), num(l.amt), txt(l.control, S.CELL), txt(l.control2, S.CELL), txt(l.desc, S.CELL), txt(strs[i], S.CELL)]));
+      const blob = await E.buildWorkbook([
+        { name: "Summary", rows: summary, cols: [22, 16, 14, 14] },
+        { name: "Schedule", rows: schRows, cols: [14, 16, 7, 12, 12, 12, 16, 16] },
+        { name: "Not On Schedule", rows: nosRows, cols: [16, 12, 18, 12, 28] },
+        { name: "Posting", rows: jeRows, cols: [6, 12, 12, 14, 12, 22, 34] },
+      ]);
+      this.download(this.fileStem() + "-record.xlsx", blob);
+    } catch (err) { alert("Could not build the Excel file: " + err.message); }
+  };
+
+  /* ---------- session ---------- */
+  onSaveSession = () => this.download(this.fileStem() + "-session.json", JSON.stringify(this.d, null, 1), "application/json");
+  onLoadSessionClick = () => this.sesRef.current && this.sesRef.current.click();
+  onSesFile = e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    f.text().then(t => {
+      try {
+        const E = this.E, s = JSON.parse(t);
+        delete s.balfwd;
+        if (Array.isArray(s.schedule)) s.schedule = s.schedule.map(r => {
+          if ("include" in r || "manualAmt" in r) return { donate: false, donNo: false, ...r };
+          const recv = String(r.received == null ? "" : r.received).trim();
+          return { control: r.control, moreInfo: r.moreInfo, days: r.days, amount: r.amount,
+                   include: /^y$/i.test(recv), manualAmt: /^y$/i.test(recv) ? "" : recv, donate: false, donNo: false };
+        });
+        if (Array.isArray(s.notOnSchedule)) s.notOnSchedule = s.notOnSchedule.map(n => ({ category: "", ...n, manual: true, key: "m" + (++this.seq) }));
+        if (!Array.isArray(s.ccFiles)) s.ccFiles = (Array.isArray(s.cc) && s.cc.length) ? [{ name: "restored session data", rows: s.cc }] : [];
+        Object.assign(this.d, s);
+        if (!this.cfg.stores.some(x => x.co === this.d.co)) this.d.co = this.cfg.stores[0].co;
+        this.d.cc = this.d.ccFiles.flatMap(x => x.rows);
+        this.generated = false; this.lastPosting = null;
+        this.schMsg = { text: `${this.d.schedule.length} schedule items restored from session.`, cls: this.d.schedule.length ? "ok" : "" };
+        this.recomputeNos();
+        this.refresh();
+      } catch (err) { alert("Could not read session file: " + err.message); }
+    });
+  };
+
+  /* ---------- sample ---------- */
+  onSample = () => {
+    const E = this.E, d = this.d;
+    this.loadSchedule(E.SAMPLE_SCH, "sample");
+    d.dateManual = false; d.ccFiles = [];
+    this.addCC(E.SAMPLE_CC_CARDS, "sample-cards.xlsx");
+    this.addCC(E.SAMPLE_CC_OTHER, "sample-cash-checks.xlsx");
+    for (const row of d.schedule) if (row.control === "213835" || row.control === "347151") row.include = true;
+    d.deposits = { CASH: "28.97", CREDIT: "1992.43", CHECK: "89.75" };
+    this.refresh();
+  };
+
+  /* ---------- setup ---------- */
+  openSetup = () => {
+    this.su = JSON.parse(JSON.stringify(this.cfg));
+    this.suSel = Math.max(0, this.su.stores.findIndex(s => s.co === this.d.co));
+    this.ui.setupOpen = true; this.refresh();
+  };
+  closeSetup = () => { this.ui.setupOpen = false; this.su = null; this.refresh(); };
+  validateSetup(cfg) {
+    const c = this.E.sanitizeConfig(cfg);
+    if (!c.stores.length) return "At least one store is required.";
+    const cos = c.stores.map(s => s.co);
+    if (new Set(cos).size !== cos.length) return "Duplicate Co numbers — each store needs a unique Co #.";
+    for (const s of c.stores) {
+      if (!s.clearing) return `CO${s.co}: schedule clearing account is required.`;
+      if (!s.deposits.length) return `CO${s.co}: at least one deposit type is required.`;
+      for (const x of s.deposits) if (!x.acct || !x.prefix) return `CO${s.co}: deposit type "${x.type}" needs an account and a control prefix.`;
+      for (const x of s.nosCats) if (!x.acct) return `CO${s.co}: category "${x.label}" needs an account.`;
+    }
+    return null;
+  }
+  applySetup() {
+    const err = this.validateSetup(this.su);
+    if (err) { alert(err); return false; }
+    this.cfg = this.E.sanitizeConfig(this.su);
+    this.usingCustom = true;
+    try { localStorage.setItem(Component.LS_KEY, JSON.stringify(this.cfg)); }
+    catch (e) { alert("Settings applied for this session, but could not be saved in this browser (storage unavailable). Use Export settings to keep them."); }
+    if (!this.cfg.stores.some(s => s.co === this.d.co)) this.d.co = this.cfg.stores[0].co;
+    this.cleanupForStore();
+    return true;
+  }
+  onSetupApply = () => { if (this.applySetup()) this.closeSetup(); };
+  onSetupReset = () => {
+    if (!confirm("Discard all customizations and go back to the built-in defaults?")) return;
+    try { localStorage.removeItem(Component.LS_KEY); } catch (e) {}
+    this.usingCustom = false;
+    this.cfg = this.E.sanitizeConfig(Component.DEFAULTS);
+    if (!this.cfg.stores.some(s => s.co === this.d.co)) this.d.co = this.cfg.stores[0].co;
+    this.cleanupForStore();
+    this.closeSetup();
+  };
+  onSetupExport = () => {
+    const err = this.validateSetup(this.su);
+    if (err) { alert(err); return; }
+    this.download("deposit-reconciliation-settings.json", JSON.stringify(this.E.sanitizeConfig(this.su), null, 1), "application/json");
+  };
+  onCfgFile = e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (!f) return;
+    f.text().then(t => {
+      try {
+        const c = this.E.sanitizeConfig(JSON.parse(t));
+        if (!c.stores.length) { alert("That file has no stores in it."); return; }
+        this.su = c; this.suSel = 0; this.refresh();
+      } catch (err) { alert("Could not read settings file: " + err.message); }
+    });
+  };
+
+  /* ---------- renderVals ---------- */
+  renderVals() {
+    if (!this.E || !this.d) return { ready: false, notReady: true };
+    const E = this.E, d = this.d, store = this.store(), ui = this.ui;
+    const MONO = "var(--mono)";
+    const t = E.totals(d, store);
+    const varOK = Math.abs(t.variance) < 0.005;
+    const depTot = t.deposit;
+
+    /* schedule view models */
+    const idx = E.ccIndex(d.cc);
+    let recTot = 0, autoN = 0, manN = 0, donN = 0, donSum = 0;
+    const allRows = d.schedule.map((row, i) => {
+      const e = idx.get(E.normRef(row.control));
+      const onCC = e ? E.r2(e.total) : 0;
+      const cards = e ? [...e.cards].join(", ") : "";
+      const rec = E.receivedFor(row, onCC);
+      recTot += rec;
+      const cand = onCC !== 0 ? E.donationCandidate(row, onCC) : 0;
+      const donPending = cand > 0 && !row.donate && !row.donNo;
+      const donAmt = onCC !== 0 ? E.donationFor(row, onCC) : 0;
+      const hasCC = onCC !== 0;
+      const needs = (!hasCC && rec === 0) || donPending;
+      if (rec !== 0) { if (hasCC) autoN++; else manN++; }
+      if (donAmt > 0) { donN++; donSum += donAmt; }
+      const days = Number(row.days) || 0;
+      return {
+        control: row.control, moreInfo: row.moreInfo, days: String(row.days || ""),
+        daysStyle: days > 2
+          ? { background: "#FAE9E5", border: "1px solid #F0C9C0", color: "#A63A24", borderRadius: 9, padding: "1px 8px", fontSize: 11.5, fontWeight: 700 }
+          : { color: "#79808a", fontSize: 12.5 },
+        owed: E.money(row.amount),
+        hasCC, noCC: !hasCC, found: hasCC ? "$" + E.money(onCC) : "", cards,
+        donPending, donQuestion: `+$${E.money(cand)} ${E.isRoundUp(row, onCC) ? "round-up" : "over"} — donation?`,
+        donYes: row.donate && donAmt > 0,
+        donChip: `$${E.money(donAmt)} donation ✓`,
+        onDonYes: () => { row.donate = true; row.donNo = false; this.generated = false; this.refresh(); },
+        onDonNo: () => { row.donNo = true; row.donate = false; this.generated = false; this.refresh(); },
+        onDonUndo: () => { row.donate = false; row.donNo = false; this.generated = false; this.refresh(); },
+        incLabel: row.include ? "✓ Received in full" : "Received in full",
+        incStyle: row.include
+          ? { background: "#1E7A4C", border: "1.5px solid #1E7A4C", color: "#fff", borderRadius: 7, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" }
+          : { background: "#fff", border: "1.5px solid #1E7A4C", color: "#1E7A4C", borderRadius: 7, padding: "7px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer" },
+        onInc: () => { row.include = !row.include; this.generated = false; this.refresh(); },
+        manualAmt: row.manualAmt, manPlaceholder: hasCC ? "adjust $" : "or exact $",
+        onMan: ev => { row.manualAmt = ev.target.value; this.generated = false; this.refresh(); },
+        recCell: rec ? E.money(rec) : "—",
+        needs,
+        rowStyle: {
+          display: "grid", gridTemplateColumns: "150px 64px 105px 175px 1fr 115px", gap: 14,
+          alignItems: "center", padding: "10px 18px", borderBottom: "1px solid #f3eaf8",
+          background: donPending ? "#FDF8EC" : (rec !== 0 ? "#F6FBF8" : "#fff"),
+        },
+      };
+    });
+    const needsRows = allRows.filter(r => r.needs);
+    const doneRows = allRows.filter(r => !r.needs);
+    const schedRows = ui.tab === "needs" ? needsRows : ui.tab === "done" ? doneRows : allRows;
+
+    /* skipped (blank-ref) rows, minus ones already added */
+    const handled = { ...ui.handled };
+    const skippedRows = [];
+    for (const r of (this.skipped || [])) {
+      const sig = `${r.amount}|${r.name}|${r.card}`;
+      if (handled[sig] > 0) { handled[sig]--; continue; }
+      skippedRows.push({
+        amt: "$" + E.money(r.amount),
+        desc: [r.card, r.name || "(no name)", r.dept].filter(Boolean).join(" · "),
+        onAdd: () => {
+          ui.handled[sig] = (ui.handled[sig] || 0) + 1;
+          d.notOnSchedule.push({ ref: "", amount: String(r.amount), note: E.noteFor(r), category: "", manual: true, key: "m" + (++this.seq) });
+          this.generated = false; this.refresh();
+        },
+      });
+    }
+
+    /* not-on-schedule view models */
+    const hasCats = store.nosCats.length > 0;
+    const catOpts = [{ v: "", label: `Schedule clearing (${store.clearing})` }]
+      .concat(store.nosCats.map(c => ({ v: c.label, label: `${c.label} → ${c.acct}` })));
+    const nosRows = d.notOnSchedule.map((n, i) => ({
+      ref: n.ref,
+      refStyle: {
+        border: n.ref ? "1.5px solid #dcc4e8" : "1.5px solid #E4C887", background: n.ref ? "#fff" : "#FDF8EC",
+        borderRadius: 7, padding: "7px 9px", fontFamily: MONO, fontSize: 12.5, width: "100%", boxSizing: "border-box",
+      },
+      onRef: ev => { n.ref = ev.target.value; this.generated = false; this.refresh(); },
+      onRefBlur: () => {
+        const m = E.ccIndex(d.cc).get(E.normRef(n.ref));
+        if (m) { n.amount = String(E.r2(m.total)); n.note = [...m.cards].join(", "); this.refresh(); }
+      },
+      amount: String(n.amount == null ? "" : n.amount),
+      onAmt: ev => { n.amount = ev.target.value; this.generated = false; this.refresh(); },
+      hasCats, noCats: !hasCats, catVal: n.category || "", catOpts,
+      onCat: ev => { n.category = ev.target.value; this.generated = false; this.refresh(); },
+      note: n.note || "",
+      onNote: ev => { n.note = ev.target.value; this.refresh(); },
+      acct: E.nosAccount(store, n.category),
+      onDel: () => { d.notOnSchedule.splice(i, 1); this.generated = false; this.refresh(); },
+    }));
+    const ran = d.schedule.length > 0 && d.cc.length > 0;
+    const nosAttention = skippedRows.length + d.notOnSchedule.filter(n => !String(n.ref || "").trim()).length;
+
+    /* step statuses */
+    const step1done = d.schedule.length > 0 && d.ccFiles.length > 0;
+    const step2done = depTot > 0;
+    const needsCount = needsRows.length;
+    const open1 = ui.open[1] != null ? ui.open[1] : true;
+    const open2 = ui.open[2] != null ? ui.open[2] : true;
+
+    /* rail */
+    const icoBase = { width: 24, height: 24, borderRadius: "50%", fontSize: 13, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 };
+    const rowBase = { display: "flex", alignItems: "center", gap: 11, padding: "10px 12px", borderRadius: 9, cursor: "pointer" };
+    const railItem = (n, title, sub, state, count) => {
+      let icon = String(n), iconStyle, rowStyle = { ...rowBase }, subStyle = { color: "#c79fe0", fontSize: 11.5 };
+      if (state === "done") { icon = "✓"; iconStyle = { ...icoBase, background: "#2E9E63", color: "#fff" }; }
+      else if (state === "work") { icon = count != null && count > 0 ? String(count) : "!"; iconStyle = { ...icoBase, background: "#E8B64C", color: "#561f70", fontSize: 12 }; rowStyle.background = "rgba(255,255,255,.12)"; subStyle = { color: "#F2D9A0", fontSize: 11.5, fontWeight: 600 }; }
+      else if (state === "alert") { icon = "!"; iconStyle = { ...icoBase, background: "#6B298C", color: "#fff" }; rowStyle.background = "rgba(194,69,45,.25)"; subStyle = { color: "#F4B8A8", fontSize: 11.5, fontWeight: 600 }; }
+      else if (state === "lock") { icon = "🔒"; iconStyle = { ...icoBase, border: "1.5px solid #c79fe0", color: "#c79fe0", fontSize: 11 }; rowStyle.opacity = .55; }
+      else if (state === "ready") { iconStyle = { ...icoBase, border: "1.5px solid #ffffff", color: "#ffffff" }; }
+      else { iconStyle = { ...icoBase, border: "1.5px solid #c79fe0", color: "#dcc4e8" }; rowStyle.opacity = .8; }
+      return { title, sub, icon, iconStyle, rowStyle, subStyle, onClick: () => this.goSection(n) };
+    };
+    const sub1 = step1done ? `${d.ccFiles.length} file(s) · ${d.cc.length} transactions`
+      : d.schedule.length ? "processor reports still needed"
+      : d.ccFiles.length ? "CDK schedule still needed" : "waiting for files";
+    const sub3 = !d.schedule.length ? "waiting for the schedule"
+      : needsCount > 0 ? `${needsCount} not matched · ${E.fmtUSD(recTot)} received`
+      : `all answered · ${E.fmtUSD(recTot)} received`;
+    const state4 = !ran ? "idle" : nosAttention > 0 ? "alert" : "done";
+    const sub4 = !ran ? "runs automatically after import"
+      : nosAttention > 0 ? `${nosAttention} need a reference #`
+      : `checked automatically · ${d.notOnSchedule.length} found`;
+    const locked5 = !(d.schedule.length > 0 && depTot > 0);
+    const lockMsg = !d.schedule.length ? "import the files first" : "enter the deposit totals first";
+    const state5 = locked5 ? "lock" : this.generated ? "done" : "ready";
+    const sub5 = locked5 ? "locked" : this.generated ? `posting generated · JE# DD${E.mmddyy(d.cashDate)}` : varOK ? "balanced — ready to post" : "post when variance is 0.00";
+
+    const railItems = [
+      railItem(1, "Import files", sub1, step1done ? "done" : (d.schedule.length || d.ccFiles.length ? "work" : "idle")),
+      railItem(2, "Deposit totals", step2done ? E.fmtUSD(depTot) : "enter the drawer totals", step2done ? "done" : "idle"),
+      railItem(3, "Check the schedule", sub3, !d.schedule.length ? "idle" : needsCount > 0 ? "work" : "done", needsCount),
+      railItem(4, "Anything missing?", sub4, state4, nosAttention),
+      railItem(5, "Review & post", sub5, state5),
+    ];
+
+    /* import statuses */
+    const stBase = { fontSize: 12, fontWeight: 600, minHeight: 17 };
+    const stStyle = cls => ({ ...stBase, color: cls === "ok" ? "#1E7A4C" : cls === "err" ? "#B3362A" : "#79808a" });
+    const schStatus = this.schMsg ? this.schMsg.text : "Nothing loaded yet.";
+    const schCls = this.schMsg ? this.schMsg.cls : "";
+    let ccStatus, ccCls;
+    if (this.ccErr) { ccStatus = this.ccErr; ccCls = "err"; }
+    else if (!d.ccFiles.length) { ccStatus = "Nothing loaded yet."; ccCls = ""; }
+    else {
+      const blank = d.cc.filter(r => E.normRef(r.ref) === "").length;
+      const dates = [...new Set(d.ccFiles.map(f => f.date).filter(Boolean))];
+      ccStatus = `${d.ccFiles.length} file(s) · ${d.cc.length} transactions · total ${E.money(d.cc.reduce((a, r) => a + r.amount, 0))}`
+        + (blank ? ` · ⚠ ${blank} blank RO#/Other` : "")
+        + (dates.length > 1 ? ` · ⚠ files have different dates (${dates.map(E.fmtMDY).join(", ")})` : "");
+      ccCls = "ok";
+    }
+
+    /* recap */
+    const mark = ok => ({ mark: ok ? "✓" : "⚠", markStyle: { color: ok ? "#1E7A4C" : "#A63A24", fontWeight: 700, flexShrink: 0 } });
+    const depParts = store.deposits.filter(x => E.parseAmount(d.deposits[x.type]))
+      .map(x => `${x.type} ${E.fmtUSD(E.parseAmount(d.deposits[x.type]))}`);
+    const nosAccts = [...new Set(d.notOnSchedule.filter(n => n.ref).map(n => E.nosAccount(store, n.category)))];
+    const recapLines = [
+      { t: `${d.ccFiles.length} report file(s) imported — ${d.cc.length} card, cash & check transactions against ${d.schedule.length} schedule items`, ...mark(true) },
+      { t: `Deposits entered: ${depParts.join(" · ") || "none"} — total ${E.fmtUSD(depTot)}`, ...mark(depTot > 0) },
+      { t: `Schedule: ${autoN} matched automatically · ${manN} marked received${donN ? ` · ${donN} donation(s) totalling ${E.fmtUSD(donSum)}` : ""}`, ...mark(true) },
+      { t: d.notOnSchedule.length
+          ? `Not on schedule: ${d.notOnSchedule.length} payment(s) posting to ${nosAccts.join(", ") || store.clearing}`
+          : "Not on schedule: nothing — every processor payment is on the books", ...mark(true) },
+    ];
+    if (needsCount > 0) recapLines.push({ t: `${needsCount} schedule item(s) had no card match and no answer — they stay on the schedule for tomorrow`, ...mark(true) });
+    if (nosAttention > 0) recapLines.push({ t: `${nosAttention} item(s) in step 4 still need a reference number before posting`, ...mark(false) });
+    if (!varOK) recapLines.push({ t: `Variance is ${E.fmtUSD(t.variance)} — it should be $0.00 before posting`, ...mark(false) });
+
+    /* posting view */
+    const jeBal = this.lastPosting ? E.r2(this.lastPosting.reduce((a, l) => a + l.amt, 0)) : 0;
+    const jeRows = (this.lastPosting || []).map(l => ({
+      co: String(l.co), acct: l.acct, amt: E.money(l.amt),
+      ctrl: [l.control, l.control2, l.desc].filter(Boolean).join(" · "),
+    }));
+
+    /* tabs */
+    const tabBase = { borderRadius: 16, padding: "6px 14px", fontSize: 12.5, cursor: "pointer" };
+    const tabOn = { ...tabBase, background: "#FBF1DC", border: "1.5px solid #E4C887", fontWeight: 700, color: "#7A540E" };
+    const tabOff = { ...tabBase, background: "#fff", border: "1px solid #dcc4e8", fontWeight: 600, color: "#79808a" };
+    const tabOnN = { ...tabBase, background: "#561f70", border: "1.5px solid #561f70", fontWeight: 700, color: "#fff" };
+
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    const storeInitials = (store.name || "?").split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+    /* setup vm */
+    let suVals = {};
+    if (ui.setupOpen && this.su) {
+      const sel = Math.min(this.suSel, this.su.stores.length - 1);
+      const s = this.su.stores[sel];
+      suVals = {
+        suStores: this.su.stores.map((x, i) => ({
+          label: `CO${x.co} — ${x.name || "(unnamed)"}`,
+          style: i === sel
+            ? { padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f3eaf8", fontSize: 13, background: "#561f70", color: "#fff", fontWeight: 600 }
+            : { padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #f3eaf8", fontSize: 13 },
+          onSel: () => { this.suSel = i; this.refresh(); },
+        })),
+        hasSuStore: !!s,
+        suCo: s ? String(s.co) : "", onSuCo: ev => { s.co = Number(ev.target.value) || s.co; this.refresh(); },
+        suName: s ? s.name : "", onSuName: ev => { s.name = ev.target.value; this.refresh(); },
+        suClearing: s ? s.clearing : "", onSuClearing: ev => { s.clearing = ev.target.value.trim(); this.refresh(); },
+        suDonation: s ? (s.donation || "") : "", onSuDonation: ev => { s.donation = ev.target.value.trim(); this.refresh(); },
+        suDonCtrl: s ? (s.donationControl || "") : "", onSuDonCtrl: ev => { s.donationControl = ev.target.value.trim(); this.refresh(); },
+        suDonCtrl2: s ? (s.donationControl2 || "") : "", onSuDonCtrl2: ev => { s.donationControl2 = ev.target.value.trim(); this.refresh(); },
+        suDeps: s ? s.deposits.map((x, i) => ({
+          type: x.type, acct: x.acct, prefix: x.prefix,
+          onType: ev => { x.type = ev.target.value.toUpperCase(); this.refresh(); },
+          onAcct: ev => { x.acct = ev.target.value.trim(); this.refresh(); },
+          onPrefix: ev => { x.prefix = ev.target.value.trim().toUpperCase(); this.refresh(); },
+          onDel: () => { s.deposits.splice(i, 1); this.refresh(); },
+        })) : [],
+        onAddDep: () => { s.deposits.push({ type: "", acct: "", prefix: "" }); this.refresh(); },
+        suCats: s ? s.nosCats.map((x, i) => ({
+          label: x.label, acct: x.acct,
+          onLabel: ev => { x.label = ev.target.value.toUpperCase(); this.refresh(); },
+          onAcct: ev => { x.acct = ev.target.value.trim(); this.refresh(); },
+          onDel: () => { s.nosCats.splice(i, 1); this.refresh(); },
+        })) : [],
+        onAddCat: () => { s.nosCats.push({ label: "", acct: "" }); this.refresh(); },
+        onAddStore: () => {
+          const used = new Set(this.su.stores.map(x => x.co));
+          let co = 1; while (used.has(co)) co++;
+          this.su.stores.push({ co, name: "New store", clearing: "", donation: "", donationControl: "", donationControl2: "",
+            deposits: [{ type: "CASH", acct: "", prefix: "CA" }, { type: "CREDIT", acct: "", prefix: "CR" }, { type: "CHECK", acct: "", prefix: "CK" }],
+            nosCats: [] });
+          this.suSel = this.su.stores.length - 1; this.refresh();
+        },
+        onDelStore: () => {
+          if (!s) return;
+          if (this.su.stores.length === 1) { alert("At least one store is required."); return; }
+          if (!confirm(`Remove CO${s.co} — ${s.name}?`)) return;
+          this.su.stores.splice(sel, 1); this.suSel = Math.max(0, sel - 1); this.refresh();
+        },
+      };
+    }
+
+    return {
+      ready: true, notReady: false,
+      noLogo: true, storeInitials,
+      onTheme: () => window.__toggleTheme(), themeIcon: isDark ? "☀️" : "\u{1F319}",
+      storeName: store.name, coStr: String(d.co),
+      onStoreSel: ev => { d.co = Number(ev.target.value); this.generated = false; this.cleanupForStore(); this.refresh(); },
+      storeOpts: this.cfg.stores.map(s => ({ v: String(s.co), label: `CO${s.co} — ${s.name}` })),
+      cashDate: d.cashDate,
+      onDateChange: ev => { d.cashDate = ev.target.value; d.dateManual = true; this.generated = false; this.refresh(); },
+      railItems,
+      depStr: E.fmtUSD(t.deposit), recStr: E.fmtUSD(t.received),
+      varStr: E.fmtUSD(t.variance),
+      varStyle: { fontFamily: MONO, fontSize: 20, fontWeight: 600, color: varOK && depTot > 0 ? "#7FE0A8" : "#F4A28E" },
+      varNote: varOK && depTot > 0 ? "Balanced — ready to post ✓" : "must reach $0.00 before posting",
+      onSaveSession: this.onSaveSession, onLoadSessionClick: this.onLoadSessionClick,
+      onOpenSetup: this.openSetup, setupLabel: this.usingCustom ? "⚙ Setup •" : "⚙ Setup",
+      headerSub: `CO${d.co} · ${store.name} · cash date ${E.fmtMDY(d.cashDate)}`,
+      scanChip: step1done,
+      /* section 1 */
+      open1, closed1: !open1,
+      onToggle1: () => { ui.open[1] = !open1; this.refresh(); },
+      sum1: `schedule (${d.schedule.length} items) + ${d.ccFiles.length} report file(s) · ${d.cc.length} transactions`,
+      onSchDragOver: ev => ev.preventDefault(),
+      onSchDrop: ev => { ev.preventDefault(); this.handleFiles(ev.dataTransfer.files, "sch"); },
+      onPickSch: () => this.schRef.current && this.schRef.current.click(),
+      onSchFile: ev => { const fs = ev.target.files; this.handleFiles(fs, "sch"); ev.target.value = ""; },
+      schStatus, schStatusStyle: stStyle(schCls),
+      onCCDragOver: ev => ev.preventDefault(),
+      onCCDrop: ev => { ev.preventDefault(); this.handleFiles(ev.dataTransfer.files, "cc"); },
+      onPickCC: () => this.ccRef.current && this.ccRef.current.click(),
+      onCCFile: ev => { const fs = ev.target.files; this.handleFiles(fs, "cc"); ev.target.value = ""; },
+      ccStatus, ccStatusStyle: stStyle(ccCls),
+      hasCCChips: d.ccFiles.length > 0,
+      ccChips: d.ccFiles.map((f, i) => ({
+        name: f.name,
+        meta: `${f.rows.length} txn · ${E.money(f.rows.reduce((a, r) => a + r.amount, 0))}${f.date ? " · " + E.fmtMDY(f.date) : ""}`,
+        onRemove: ev => { ev.stopPropagation(); d.ccFiles.splice(i, 1); this.rebuildCC(); this.refresh(); },
+      })),
+      onSample: this.onSample,
+      /* section 2 */
+      open2, closed2: !open2,
+      onToggle2: () => { ui.open[2] = !open2; this.refresh(); },
+      sum2: depParts.length ? `${depParts.join(" · ")} — total ${E.fmtUSD(depTot)}` : "nothing entered",
+      depHint: `${store.name} accounts.`,
+      depRows: store.deposits.map(x => ({
+        type: x.type, acct: x.acct, control: x.prefix + E.mmdd(d.cashDate),
+        val: d.deposits[x.type] || "",
+        onChange: ev => { d.deposits[x.type] = ev.target.value; this.generated = false; this.refresh(); },
+      })),
+      depTotStr: E.fmtUSD(depTot),
+      /* section 3 */
+      schedEmpty: d.schedule.length === 0, schedLoaded: d.schedule.length > 0,
+      tabNeedsStyle: ui.tab === "needs" ? tabOn : tabOff,
+      tabDoneStyle: ui.tab === "done" ? tabOnN : tabOff,
+      tabAllStyle: ui.tab === "all" ? tabOnN : tabOff,
+      onTabNeeds: () => { ui.tab = "needs"; this.refresh(); },
+      onTabDone: () => { ui.tab = "done"; this.refresh(); },
+      onTabAll: () => { ui.tab = "all"; this.refresh(); },
+      needsCount, doneCount: doneRows.length, allCount: allRows.length,
+      schedRecTot: E.fmtUSD(recTot),
+      schedRows,
+      needsEmpty: d.schedule.length > 0 && schedRows.length === 0,
+      /* section 4 */
+      nosHint: hasCats
+        ? `Card payments that aren't on the schedule, found automatically. Pick a category to route each posting (default = clearing ${store.clearing}) and fix any wrong reference number.`
+        : `Card payments that aren't on the schedule, found automatically. They post to clearing ${store.clearing} — just fix any wrong reference number.`,
+      nosRanChip: ran,
+      hasSkipped: skippedRows.length > 0,
+      skippedTitle: `${skippedRows.length} payment(s) have no RO#/Other on them — they can't be matched automatically. Add each one and type its reference:`,
+      skippedRows,
+      nosWaiting: !ran,
+      nosAllGood: ran && d.notOnSchedule.length === 0 && skippedRows.length === 0,
+      hasNos: d.notOnSchedule.length > 0,
+      nosCatHdr: hasCats ? "CATEGORY" : "POSTS TO",
+      nosRows,
+      onAddNos: () => { d.notOnSchedule.push({ ref: "", amount: "", note: "", category: "", manual: true, key: "m" + (++this.seq) }); this.refresh(); },
+      /* section 5 */
+      locked5, lockMsg, open5: !locked5,
+      kDep: E.fmtUSD(t.deposit), kRec: E.fmtUSD(t.received), kVar: E.fmtUSD(t.variance),
+      kVarBoxStyle: varOK
+        ? { background: "#E4F3EB", border: "1.5px solid #9CD4B2", borderRadius: 11, padding: "13px 15px", display: "flex", alignItems: "center", justifyContent: "space-between" }
+        : { background: "#FBEDEA", border: "1.5px solid #E5A797", borderRadius: 11, padding: "13px 15px", display: "flex", alignItems: "center", justifyContent: "space-between" },
+      kVarLabelStyle: { fontSize: 11, fontWeight: 700, letterSpacing: ".05em", color: varOK ? "#1E7A4C" : "#A63A24" },
+      kVarValStyle: { fontFamily: MONO, fontSize: 21, fontWeight: 600, marginTop: 3, color: varOK ? "#1E7A4C" : "#A63A24" },
+      kBadgeStyle: varOK
+        ? { background: "#1E7A4C", color: "#fff", borderRadius: 14, padding: "4px 12px", fontSize: 11.5, fontWeight: 800, letterSpacing: ".05em" }
+        : { background: "#6B298C", color: "#fff", borderRadius: 14, padding: "4px 12px", fontSize: 11.5, fontWeight: 800, letterSpacing: ".05em" },
+      kBadge: varOK ? "BALANCED" : "OFF BY " + E.fmtUSD(Math.abs(t.variance)),
+      recapLines,
+      signName: d.signName, onSignName: ev => { d.signName = ev.target.value; this.refresh(); },
+      signChecked: d.signChecked, onSignCheck: ev => { d.signChecked = ev.target.checked; this.refresh(); },
+      signDate: E.fmtMDY(new Date().toISOString().slice(0, 10)),
+      jeRefStr: "DD" + E.mmddyy(d.cashDate),
+      onGenerate: this.onGenerate,
+      generated: this.generated && !!this.lastPosting,
+      jeCount: this.lastPosting ? this.lastPosting.length : 0,
+      jeBalStr: E.money(jeBal),
+      jeBalStyle: { fontFamily: MONO, color: Math.abs(jeBal) < 0.005 ? "#1E7A4C" : "#B3362A" },
+      jeRows, jeText: this.lastPosting ? E.jeStrings(this.lastPosting).join("\n") : "",
+      copyLabel: ui.copyLabel, onCopy: this.onCopy, onDlJe: this.onDlJe,
+      onPdf: this.onPdf, onXlsx: this.onXlsx,
+      /* setup */
+      setupOpen: ui.setupOpen,
+      onOverlayClick: () => this.closeSetup(),
+      stop: ev => ev.stopPropagation(),
+      onSetupClose: this.closeSetup, onSetupReset: this.onSetupReset,
+      onSetupExport: this.onSetupExport,
+      onSetupImportClick: () => this.cfgRef.current && this.cfgRef.current.click(),
+      onSetupApply: this.onSetupApply,
+      ...suVals,
+      schRef: this.schRef, ccRef: this.ccRef, sesRef: this.sesRef, cfgRef: this.cfgRef,
+      onSesFile: this.onSesFile, onCfgFile: this.onCfgFile,
+    };
+  }
+}
+/* ---------- keyboard navigation (Tab native; Enter advances; Shift+Enter back) ----------
+   Bound once on the persistent #app container so it survives every re-render. */
+function wireEnterNav(root) {
+  if (!root) return;
+  root.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || e.isComposing) return;
+    var el = e.target;
+    if (!el.matches || !el.matches("input:not([type=checkbox]):not([type=radio]):not([type=file]),select")) return;
+    e.preventDefault();
+    var all = Array.prototype.slice.call(root.querySelectorAll("input:not([type=hidden]):not([disabled]),select,textarea"))
+      .filter(function (x) { return x.offsetParent !== null; });
+    var i = all.indexOf(el), next = all[i + (e.shiftKey ? -1 : 1)];
+    if (next) { next.focus(); if (next.select) try { next.select(); } catch (_) {} }
+  });
+}
+/* select-on-focus so typing replaces the value */
+function wireSelectOnFocus(root) {
+  if (!root) return;
+  root.addEventListener("focusin", function (e) {
+    var el = e.target;
+    if (el.matches && el.matches("input") && el.type !== "checkbox" && el.type !== "file" && el.select)
+      try { el.select(); } catch (_) {}
+  });
+}
+
+try {
+  window.__app = new Component();
+  window.__app.mount();
+} catch (err) { window.onerror(err && err.message || String(err)); throw err; }
+</script>
+</body>
+</html>
