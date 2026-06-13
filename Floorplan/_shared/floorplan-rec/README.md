@@ -12,12 +12,16 @@ and schedules never leave the machine.
 
 ## What it does
 
-1. **Load two files** (drag-drop or browse): the CDK floorplan schedule and the
-   bank floorplan statement. Accepts `.xlsx / .xlsm / .xls / .csv / .tsv / .txt`
-   **and `.pdf`** — a bank statement that only comes as a PDF is parsed in the
-   browser (pdf.js, inlined; the PDF never leaves the machine) by reconstructing
-   the line-item table from the text positions. Layouts vary, so the mapping
-   panel is the safety net: confirm the detected columns and re-run.
+1. **Load schedule(s) and statement(s)** (drag-drop or browse): one *or more*
+   CDK floorplan schedule exports and one *or more* bank floorplan statements.
+   Each side is **additive** — drop several files and they combine (e.g. a new-
+   and used-vehicle schedule, or several lender statements), each shown in a
+   removable list. Accepts `.xlsx / .xlsm / .xls / .csv / .tsv / .txt` **and
+   `.pdf`** — a bank statement that only comes as a PDF is parsed in the browser
+   (pdf.js, inlined; the PDF never leaves the machine) by reconstructing the
+   line-item table from the text positions. Each file is auto-mapped **on its
+   own**, so files with different layouts still combine; the per-file mapping
+   panel is the safety net — confirm the detected columns and re-run.
 2. **Auto-detects columns by header content**, not position:
    - the **VIN/serial** column on each side (a header named *VIN* or *Serial*
      wins). Handles full 17-char VINs *and* partial serials in either
@@ -25,11 +29,18 @@ and schedules never leave the machine.
      under *Serial* (e.g. `757192`), while lender statements show the full VIN —
      often with an embedded space (Truist: `5N1AZ3DS7TC 110100`). Spaces are
      stripped and units are matched by suffix overlap;
-   - the **balance** column (e.g. *Ending Balance*, *Current Principal*),
-     avoiding interest/fee/payment/due columns;
-   - on the schedule, the **floorplan account** — when the schedule holds more
-     than one GL account, the floorplan account is identified as the one filled
-     with **vehicle-sized credit balances** and reconciled in isolation.
+   - the **balance** column(s) (e.g. *Ending Balance*, *Current Principal*),
+     avoiding interest/fee/payment/due columns. A schedule may carry **several
+     floorplan balance columns side by side** (wide format, e.g. *New FP Balance*
+     + *Used FP Balance*) — each is detected as its own floorplan account, and you
+     can add or remove balance columns per file in the mapping panel;
+   - on the schedule, the **floorplan account(s)** — every GL account whose lines
+     are mostly **vehicle-sized credit balances** is treated as a floorplan
+     account, so a schedule (or combined set of schedules) carrying **multiple
+     floorplan accounts** (new, used, demo, multiple lenders…) reconciles them
+     together. Non-floorplan accounts (e.g. contracts-in-transit) are excluded
+     automatically. After reconciling, an account strip shows every account found;
+     **click any account chip to include or exclude it** and the totals re-run.
 3. **Matches units on VIN** (full, last-8, last-6, or automatic suffix overlap).
 4. **Reports**:
    - a live **Schedule / Statement / Variance** header that turns **green at

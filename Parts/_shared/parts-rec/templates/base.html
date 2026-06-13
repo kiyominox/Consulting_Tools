@@ -4,6 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Parts Rec{% endblock %} – Parts Inventory Reconciliation</title>
+  <script>
+  (function(){
+    var KEY='partsrec_theme', t;
+    try{t=localStorage.getItem(KEY);}catch(e){}
+    if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+    document.documentElement.setAttribute('data-theme',t);
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.getElementById('btnTheme'); if(!b) return;
+      function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+      icon();
+      b.addEventListener('click',function(){
+        var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+        document.documentElement.setAttribute('data-theme',cur);
+        try{localStorage.setItem(KEY,cur);}catch(e){} icon();
+      });
+    });
+  })();
+  </script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -19,6 +37,7 @@
       <a href="{{ url_for('inputs_list') }}">Monthly Inputs</a>
       <a href="{{ url_for('rad_edit') }}">RAD (App/Dep)</a>
       <a href="{{ url_for('inputs_new') }}" class="btn btn-primary btn-sm">+ Add Month</a>
+      <button id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
     </div>
   </div>
 </nav>

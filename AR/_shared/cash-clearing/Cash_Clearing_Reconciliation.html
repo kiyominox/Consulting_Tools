@@ -4,6 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cash Clearing Reconciliation</title>
+<script>
+(function(){
+  var KEY='ccr_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){}
+      icon();
+    });
+  });
+})();
+</script>
 <style>
   :root{
     --bg:#eef1f5; --panel:#ffffff; --ink:#1d2733; --muted:#67768a;
@@ -13,24 +32,35 @@
     --amber:#fdf3dc; --amberline:#f0ddae; --ambertext:#9a6a12;
     --blue:#f3eaf8; --blueline:#bcd5f2;
     --red:#fdeaea; --redline:#f2c4c4;
-    --mono:Consolas,Menlo,"Courier New",monospace;
+    --accent-soft:#f3eaf8; --accent-line:#dcc4e8; --line-2:#d3d9e0;
+    --font:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --r:12px; --r-sm:8px;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI",system-ui,Arial,sans-serif}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 var(--font);-webkit-font-smoothing:antialiased}
+  .num,.money{font-variant-numeric:tabular-nums}
 
-  /* sticky command bar */
-  header{position:sticky;top:0;z-index:30;background:var(--navy);color:#fff;padding:10px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;box-shadow:0 2px 8px rgba(0,0,0,.18)}
-  header h1{font-size:17px;margin:0 10px 0 0;font-weight:600;white-space:nowrap}
-  header label{font-size:11px;opacity:.8;display:block;margin-bottom:2px}
-  header select,header input[type=date]{padding:6px 8px;border:0;border-radius:5px;font-size:14px}
+  /* sticky command bar — family header motif (mark + title + subtitle + actions) */
+  header{position:sticky;top:0;z-index:30;background:var(--panel);color:var(--ink);border-bottom:1px solid var(--line);padding:11px 22px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;box-shadow:0 1px 2px rgba(22,25,29,.05),0 1px 1px rgba(22,25,29,.04)}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--accent);position:relative;flex:none}
+  .brand .mark::before,.brand .mark::after{content:"";position:absolute;background:#fff;border-radius:1px}
+  .brand .mark::before{left:8px;right:8px;top:11px;height:3px}
+  .brand .mark::after{left:8px;right:15px;bottom:11px;height:3px;opacity:.7}
+  header h1{font-size:17px;margin:0;font-weight:750;letter-spacing:-.2px;white-space:nowrap}
+  .brand .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+  header label{font-size:11px;color:var(--muted);display:block;margin-bottom:2px;font-weight:600}
+  header select,header input[type=date]{padding:6px 8px;border:1px solid var(--line-2);border-radius:var(--r-sm);font-size:14px;background:var(--panel);color:var(--ink)}
+  header select:focus,header input[type=date]:focus{outline:2px solid var(--accent);border-color:var(--accent)}
   header select#store{font-weight:600;min-width:230px}
   .pill{margin-left:auto;display:flex;gap:14px;text-align:right;align-items:center}
-  .pill .kpi{background:rgba(255,255,255,.08);border-radius:7px;padding:4px 12px;min-width:92px}
-  .pill .kpi span{font-size:11px;opacity:.8;display:block}
-  .pill .kpi b{display:block;font-size:16px;font-family:var(--mono)}
-  .pill .var b{color:#ffb3b3}
-  .pill .var.ok b{color:#8df0ab}
-  .pill .var.ok{background:rgba(120,240,150,.16)}
+  .pill .kpi{background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:4px 12px;min-width:92px}
+  .pill .kpi span{font-size:11px;color:var(--muted);display:block}
+  .pill .kpi b{display:block;font-size:16px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .pill .var b{color:var(--neg,#c0392b)}
+  .pill .var.ok b{color:var(--greentext)}
+  .pill .var.ok{background:var(--green);border-color:var(--greenline)}
 
   main{max-width:1180px;margin:18px auto;padding:0 18px 80px}
   section{background:var(--panel);border:1px solid var(--line);border-radius:10px;margin-bottom:16px;overflow:hidden;box-shadow:0 1px 2px rgba(20,40,70,.04)}
@@ -69,6 +99,7 @@
   input.cell.wide{width:140px;text-align:left}
   input.cell:focus{outline:2px solid var(--accent);border-color:var(--accent)}
   select.cell{padding:5px 7px;border:1px solid var(--line);border-radius:5px;font-size:13px;background:#fff;max-width:180px}
+  select.cell:focus{outline:2px solid var(--accent);border-color:var(--accent)}
 
   /* received control */
   .recv{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -80,10 +111,12 @@
   .recv .pill.a{background:var(--amber);color:var(--ambertext)}
   .recv .ovr{width:78px}
 
-  button{background:var(--accent);color:#fff;border:0;border-radius:6px;padding:8px 15px;font-size:13px;font-weight:600;cursor:pointer}
+  button{background:var(--accent);color:#fff;border:0;border-radius:var(--r-sm);padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
   button:hover{filter:brightness(1.08)}
+  button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   button:disabled{opacity:.45;cursor:not-allowed;filter:none}
-  button.alt{background:#5b6c80}
+  button.alt{background:transparent;color:var(--ink);border:1px solid var(--line-2)}
+  button.alt:hover{background:var(--accent-soft);border-color:var(--accent-line);filter:none}
   button.go{background:var(--accent2)}
   button.warn{background:#b3551d}
   button.mini{padding:4px 10px;font-size:12px;font-weight:500}
@@ -127,6 +160,57 @@
   .setupPane table input.mono{font-family:var(--mono)}
   .mfoot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:14px 20px;border-top:1px solid var(--line);background:#f7f9fb}
   .mfoot .note{flex:1;min-width:200px}
+
+  /* ============================================================ DARK MODE */
+  html[data-theme="dark"]{
+    --bg:#15121b; --panel:#211b29; --ink:#e9e6ef; --muted:#9089a0;
+    --line:#332b3d; --accent:#9b4dc0; --accent2:#3fae73; --navy:#2a1f33;
+    --green:#16261f; --greenline:#2f5b46; --greentext:#3fae73;
+    --amber:#2a2316; --amberline:#4a3d1f; --ambertext:#d2a23f;
+    --blue:#1d2334; --blueline:#3a4a6a;
+    --red:#2c1b19; --redline:#5a3431;
+  }
+  html[data-theme="dark"] body{background:var(--bg);color:var(--ink)}
+  html[data-theme="dark"] header{box-shadow:0 1px 2px rgba(0,0,0,.4);border-bottom-color:var(--line)}
+  html[data-theme="dark"] .pill .kpi{border-color:var(--line)}
+  html[data-theme="dark"] section{box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  html[data-theme="dark"] .pill .kpi{background:rgba(255,255,255,.07)}
+  html[data-theme="dark"] .pill .var.ok{background:rgba(63,174,115,.18)}
+
+  html[data-theme="dark"] .drop{background:#1c1726;border-color:var(--line)}
+  html[data-theme="dark"] .drop.over{border-color:var(--accent);background:var(--accent-soft,#2a1f33)}
+  html[data-theme="dark"] .drop.loaded{border-color:var(--greenline);background:var(--green)}
+  html[data-theme="dark"] .drop .status.err{color:#e07567}
+  html[data-theme="dark"] .filechip{background:#2a2333;border-color:var(--line)}
+
+  html[data-theme="dark"] th{background:#1c1726}
+  html[data-theme="dark"] td{border-bottom-color:#2a2333}
+  html[data-theme="dark"] tr.matched td{background:var(--green)}
+  html[data-theme="dark"] tr.partial td{background:var(--amber)}
+  html[data-theme="dark"] tr.recvd td{background:var(--blue)}
+
+  html[data-theme="dark"] input.cell{background:#2a2333;color:var(--ink);border-color:var(--line)}
+  html[data-theme="dark"] select.cell{background:#2a2333;color:var(--ink);border-color:var(--line)}
+  html[data-theme="dark"] .recv .inc{background:#2a2333;border-color:var(--line)}
+  html[data-theme="dark"] .recv .inc.on{background:var(--green);border-color:var(--greenline);color:var(--greentext)}
+
+  html[data-theme="dark"] button.alt{background:transparent;color:var(--ink);border-color:var(--line-2)}
+  html[data-theme="dark"] button.alt:hover{background:var(--accent-soft)}
+  html[data-theme="dark"] .totline{background:#1c1726;border-top-color:var(--line)}
+  html[data-theme="dark"] pre.je{background:#0c0a10;color:#7fe0a6}
+  html[data-theme="dark"] .badge.bad{color:#e07567}
+  html[data-theme="dark"] details.help{background:var(--panel);border-color:var(--line)}
+
+  html[data-theme="dark"] #setupOverlay{background:rgba(0,0,0,.62)}
+  html[data-theme="dark"] .modal{background:var(--panel);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  html[data-theme="dark"] .storeList{border-color:var(--line)}
+  html[data-theme="dark"] .storeList .it{border-bottom-color:#2a2333}
+  html[data-theme="dark"] .storeList .acts{background:#1c1726}
+  html[data-theme="dark"] .setupPane input[type=text],
+  html[data-theme="dark"] .setupPane input[type=number]{background:#2a2333;color:var(--ink);border-color:var(--line)}
+  html[data-theme="dark"] .setupPane table input:hover{border-color:var(--line);background:#2a2333}
+  html[data-theme="dark"] .setupPane table input:focus{border-color:var(--accent);background:#2a2333}
+  html[data-theme="dark"] .mfoot{background:#1c1726;border-top-color:var(--line)}
 </style>
 </head>
 <body>
@@ -144,7 +228,13 @@ window.onerror = function (msg, src, line) {
 </script>
 
 <header>
-  <h1>Cash Clearing</h1>
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>Cash Clearing</h1>
+      <div class="sub">Daily deposit posting &amp; schedule reconciliation &middot; offline</div>
+    </div>
+  </div>
   <div>
     <label for="store">Store</label>
     <select id="store"></select>
@@ -158,6 +248,7 @@ window.onerror = function (msg, src, line) {
     <div class="kpi"><span>Received</span><b id="hdrRec">0.00</b></div>
     <div class="kpi var" id="hdrVarWrap"><span>Variance</span><b id="hdrVar">0.00</b></div>
     <button id="btnSetup" class="alt mini" title="Store accounts &amp; categories setup" style="margin-left:6px">⚙ Setup</button>
+    <button id="btnTheme" class="alt mini" title="Toggle dark mode" aria-label="Toggle dark mode" style="margin-left:6px">&#x1F319;</button>
   </div>
 </header>
 
@@ -306,40 +397,42 @@ window.onerror = function (msg, src, line) {
 <script type="application/json" id="defaultConfig">
 {
  "stores": [
-  { "co": 18, "name": "Hill Valley Honda", "clearing": "180100", "donation": "", "donationControl": "DONATION",
+  { "co": 11, "name": "Rivendell Toyota", "clearing": "110100", "donation": "", "donationControl": "DONATION",
     "deposits": [
-      { "type": "CASH", "acct": "180001", "prefix": "CA" }, { "type": "CREDIT", "acct": "180001", "prefix": "CR" },
-      { "type": "CHECK", "acct": "180001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "187750", "prefix": "SP" },
-      { "type": "PARTS POLICY", "acct": "187650", "prefix": "PP" } ],
-    "nosCats": [] },
-  { "co": 19, "name": "Bedrock Hyundai", "clearing": "190100", "donation": "", "donationControl": "DONATION",
-    "deposits": [
-      { "type": "CASH", "acct": "190001", "prefix": "CA" }, { "type": "CREDIT", "acct": "190001", "prefix": "CR" },
-      { "type": "CHECK", "acct": "190001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "197750", "prefix": "SP" },
-      { "type": "PARTS POLICY", "acct": "197650", "prefix": "PP" } ],
-    "nosCats": [] },
-  { "co": 20, "name": "Springfield Subaru", "clearing": "200100", "donation": "", "donationControl": "DONATION",
-    "deposits": [
-      { "type": "CASH", "acct": "200001", "prefix": "CA" }, { "type": "CREDIT", "acct": "200001", "prefix": "CR" },
-      { "type": "CHECK", "acct": "200001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "207750", "prefix": "SP" },
-      { "type": "PARTS POLICY", "acct": "207650", "prefix": "PP" } ],
-    "nosCats": [] },
-  { "co": 21, "name": "Gotham Toyota-Chevrolet", "clearing": "210100", "donation": "", "donationControl": "DONATION",
-    "deposits": [
-      { "type": "CASH", "acct": "210001", "prefix": "CA" }, { "type": "CREDIT", "acct": "210001", "prefix": "CR" },
-      { "type": "CHECK", "acct": "210001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "217750", "prefix": "SP" },
-      { "type": "PARTS POLICY", "acct": "217650", "prefix": "PP" }, { "type": "XTIME", "acct": "210001", "prefix": "XT" } ],
+      { "type": "CASH", "acct": "110001", "prefix": "CA" }, { "type": "CREDIT", "acct": "110001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "110001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "117750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "117650", "prefix": "PP" }, { "type": "XTIME", "acct": "110001", "prefix": "XT" } ],
     "nosCats": [
-      { "label": "EXT WARRANTY", "acct": "210150" }, { "label": "GM WARRANTY", "acct": "210140" },
-      { "label": "TOY WARRANTY", "acct": "215140" }, { "label": "PNC", "acct": "210122" }, { "label": "AR", "acct": "210120" } ] },
-  { "co": 23, "name": "Duckburg CDJR", "clearing": "230100", "donation": "", "donationControl": "DONATION",
+      { "label": "EXT WARRANTY", "acct": "110150" }, { "label": "TOY WARRANTY", "acct": "115140" },
+      { "label": "PNC", "acct": "110122" }, { "label": "AR", "acct": "110120" } ] },
+  { "co": 12, "name": "Mordor Chevrolet", "clearing": "120100", "donation": "", "donationControl": "DONATION",
     "deposits": [
-      { "type": "CASH", "acct": "230001", "prefix": "CA" }, { "type": "CREDIT", "acct": "230001", "prefix": "CR" },
-      { "type": "CHECK", "acct": "230001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "237750", "prefix": "SP" },
-      { "type": "PARTS POLICY", "acct": "237650", "prefix": "PP" }, { "type": "XTIME", "acct": "230001", "prefix": "XT" } ],
+      { "type": "CASH", "acct": "120001", "prefix": "CA" }, { "type": "CREDIT", "acct": "120001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "120001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "127750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "127650", "prefix": "PP" }, { "type": "XTIME", "acct": "120001", "prefix": "XT" } ],
     "nosCats": [
-      { "label": "EXT WARRANTY", "acct": "230150" }, { "label": "CHRY WARRANTY", "acct": "230140" },
-      { "label": "PNC", "acct": "230122" }, { "label": "AR", "acct": "230120" } ] }
+      { "label": "EXT WARRANTY", "acct": "120150" }, { "label": "GM WARRANTY", "acct": "120140" },
+      { "label": "PNC", "acct": "120122" }, { "label": "AR", "acct": "120120" } ] },
+  { "co": 13, "name": "Tatooine Honda", "clearing": "130100", "donation": "", "donationControl": "DONATION",
+    "deposits": [
+      { "type": "CASH", "acct": "130001", "prefix": "CA" }, { "type": "CREDIT", "acct": "130001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "130001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "137750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "137650", "prefix": "PP" } ],
+    "nosCats": [] },
+  { "co": 14, "name": "Hyrule Hyundai", "clearing": "140100", "donation": "", "donationControl": "DONATION",
+    "deposits": [
+      { "type": "CASH", "acct": "140001", "prefix": "CA" }, { "type": "CREDIT", "acct": "140001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "140001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "147750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "147650", "prefix": "PP" } ],
+    "nosCats": [] },
+  { "co": 16, "name": "Rapture CDJR", "clearing": "160100", "donation": "", "donationControl": "DONATION",
+    "deposits": [
+      { "type": "CASH", "acct": "160001", "prefix": "CA" }, { "type": "CREDIT", "acct": "160001", "prefix": "CR" },
+      { "type": "CHECK", "acct": "160001", "prefix": "CK" }, { "type": "SERVICE POLICY", "acct": "167750", "prefix": "SP" },
+      { "type": "PARTS POLICY", "acct": "167650", "prefix": "PP" }, { "type": "XTIME", "acct": "160001", "prefix": "XT" } ],
+    "nosCats": [
+      { "label": "EXT WARRANTY", "acct": "160150" }, { "label": "CHRY WARRANTY", "acct": "160140" },
+      { "label": "PNC", "acct": "160122" }, { "label": "AR", "acct": "160120" } ] }
  ]
 }
 </script>
@@ -794,7 +887,7 @@ async function buildWorkbook(sheets) {  // sheets: [{name, rows, cols}]
 
 /* ---------- sample data ---------- */
 const SAMPLE_SCH = [
-  "Company: 21   GOTHAM TOYOTA-CHEVROLET\t\t\t\t\t",
+  "Company: 11   RIVENDELL TOYOTA\t\t\t\t\t",
   "\tAccounting Schedule Report 1 - CASH CLEARING - SUMMARY\t\t\t\t",
   "\t\tControl\tMoreInfo\tDays\tAmount $",
   "\t\t455144\tDetail\t1\t118.92", "\t\t218011\tDetail\t2\t1,062.01",
@@ -802,18 +895,18 @@ const SAMPLE_SCH = [
   "\t\t809485\tDetail\t4\t469.25", "\t\t5426\tDetail\t1\t785.38",
 ].join("\n");
 const SAMPLE_CC_HDR = [
-  "Gotham Toyota-Chevrolet\tOpen Transactions",
+  "Rivendell Toyota\tOpen Transactions",
   "Name\tDate\tRO#/Other\tCust #\tSale Amount\tOperation\tCard\tLast 4\tAuth Code\tDepartment\tSource\tUser\tTerminal",
 ];
 const SAMPLE_CC_CARDS = SAMPLE_CC_HDR.concat([
-  "SIMPSON, HOMER J\t06-10-26 11:02 AM\t455144\t108266\t118.92\tSale\tDiscover\t0641\t01082R\tService\tCard Present\tSwanson, Ron\tService - 3957",
-  "GOTHAM PARTS MGR\t06-10-26 09:35 AM\t218011\t\t62.01\tSale\tMasterCard\t5224\t077181\tParts\tHand Key\tSwanson, Ron\t",
-  "GOTHAM PARTS MGR\t06-10-26 02:10 PM\t218011\t\t1000.00\tSale\tVisa\t9052\t05496B\tParts\tCard Present\tSwanson, Ron\t",
-  "WAYNE, BRUCE\t06-10-26 10:57 AM\t5426\t\t786.00\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tSwanson, Ron\t",
+  "BAGGINS, FRODO\t06-10-26 11:02 AM\t455144\t108266\t118.92\tSale\tDiscover\t0641\t01082R\tService\tCard Present\tBaggins, Bilbo\tService - 3957",
+  "RIVENDELL PARTS MGR\t06-10-26 09:35 AM\t218011\t\t62.01\tSale\tMasterCard\t5224\t077181\tParts\tHand Key\tBaggins, Bilbo\t",
+  "RIVENDELL PARTS MGR\t06-10-26 02:10 PM\t218011\t\t1000.00\tSale\tVisa\t9052\t05496B\tParts\tCard Present\tBaggins, Bilbo\t",
+  "CROFT, LARA\t06-10-26 10:57 AM\t5426\t\t786.00\tSale\tMasterCard\t3993\t01892P\tParts\tHand Key\tBaggins, Bilbo\t",
 ]).join("\n");
 const SAMPLE_CC_OTHER = SAMPLE_CC_HDR.concat([
-  "FLINTSTONE, FRED\t06-10-26 10:43 AM\t999111\t74923\t25.50\tSale\tVisa\t3889\t010915\tParts\tCard Present\tSwanson, Ron\tService - 3957",
-  "WALK-IN CUSTOMER\t06-10-26 10:30 AM\t\t\t77.77\tSale\tVisa\t2222\tABC123\tParts\tHand Key\tSwanson, Ron\t",
+  "CHIEF, MASTER\t06-10-26 10:43 AM\t999111\t74923\t25.50\tSale\tVisa\t3889\t010915\tParts\tCard Present\tBaggins, Bilbo\tService - 3957",
+  "RIVIA, GERALT\t06-10-26 10:30 AM\t\t\t77.77\tSale\tVisa\t2222\tABC123\tParts\tHand Key\tBaggins, Bilbo\t",
 ]).join("\n");
 
 /* ---------- pristine source + config bootstrap ---------- */
@@ -1449,11 +1542,53 @@ $("setupShare").addEventListener("click", () => {
   alert("Shareable copy downloaded.\n\nYour current settings are baked into it as the defaults — replace the old file with it, or send it to whoever needs the same setup.");
 });
 
+/* ---------- keyboard navigation (Tab native; Enter advances) ----------
+   Columnar: in these data-entry grids Enter moves to the same column in the
+   next row (typing amounts down a column); Shift+Enter goes back; falls back
+   to DOM order at the edges. Bound once on the persistent <tbody> so it keeps
+   working after every innerHTML re-render. */
+function wireEnterNav(root, opts) {
+  opts = opts || {};
+  root.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" || e.isComposing) return;
+    var el = e.target;
+    if (!el.matches("input:not([type=checkbox]):not([type=radio]):not([type=file]),select")) return;
+    e.preventDefault();
+    var next, cell = el.closest("td");
+    if (opts.columnar && cell) {
+      var tr = el.closest("tr"), idx = Array.prototype.indexOf.call(tr.children, cell);
+      var rows = Array.prototype.slice.call(tr.parentNode.children);
+      var ri = rows.indexOf(tr) + (e.shiftKey ? -1 : 1);
+      while (rows[ri]) {
+        var c = rows[ri].children[idx], f = c && c.querySelector("input,select,textarea");
+        if (f) { next = f; break; }
+        ri += (e.shiftKey ? -1 : 1);
+      }
+    }
+    if (!next) {
+      var all = Array.prototype.slice.call(root.querySelectorAll("input:not([type=hidden]):not([disabled]),select,textarea"))
+        .filter(function (x) { return x.offsetParent !== null; });
+      var i = all.indexOf(el); next = all[i + (e.shiftKey ? -1 : 1)];
+    }
+    if (next) { next.focus(); if (next.select) try { next.select(); } catch (_) {} }
+  });
+}
+/* select-on-focus so typing replaces the value */
+function wireSelectOnFocus(root) {
+  root.addEventListener("focusin", function (e) {
+    var el = e.target;
+    if (el.matches && el.matches("input.cell") && el.select) try { el.select(); } catch (_) {}
+  });
+}
+
 /* ---------- boot ---------- */
 try {
   initHeader();
   wireImport("dropSch", "btnSchFile", "fileSch", "stSch", loadSchedule);
   wireImport("dropCC", "btnCCFile", "fileCC", "stCC", addCCFile, true);
+  ["depBody", "schBody", "nosBody"].forEach(function (id) {
+    var tb = $(id); if (tb) { wireEnterNav(tb, { columnar: true }); wireSelectOnFocus(tb); }
+  });
   refresh();
   const st = $("bootStamp"); st.style.color = ""; st.textContent = "✓ ready (v1.7)";
 } catch (err) { window.onerror(err.message || String(err)); throw err; }

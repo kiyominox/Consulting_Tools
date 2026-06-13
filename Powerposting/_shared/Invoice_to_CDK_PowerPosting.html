@@ -4,6 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Invoice → CDK PowerPosting</title>
+<script>
+(function(){
+  var KEY='pp_invoice_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){} icon();
+    });
+  });
+})();
+</script>
 <style>
   :root{
     /* MASTER (_shared) theme — purple #6B298C marks this as the source copy;
@@ -12,13 +30,19 @@
     --line:#e2e8f0; --accent:#6B298C; --accent-d:#561f70;
     --honda:#cc0000; --hyundai:#002c5f; --ok:#16a34a; --warn:#b45309; --warnbg:#fffbeb;
     --sel:#6B298C; --selbg:#f3eaf8;
+    --font:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  body{margin:0;font-family:var(--font);
        background:#f1f5f9;color:var(--ink);font-size:14px;}
   header{background:var(--bg);color:#fff;padding:18px 24px;}
-  header h1{margin:0;font-size:19px;font-weight:650;letter-spacing:.2px}
-  header p{margin:4px 0 0;color:#94a3b8;font-size:13px}
+  header h1{margin:0;font-size:19px;font-weight:750;letter-spacing:-.2px}
+  header p{margin:4px 0 0;color:#cbb9d6;font-size:13px}
+  header .brandmark{width:34px;height:34px;border-radius:9px;background:var(--accent);position:relative;flex:none}
+  header .brandmark::before,header .brandmark::after{content:"";position:absolute;background:#fff;border-radius:1px}
+  header .brandmark::before{left:8px;right:8px;top:11px;height:3px}
+  header .brandmark::after{left:8px;right:15px;bottom:11px;height:3px;opacity:.7}
   .wrap{max-width:1280px;margin:0 auto;padding:20px 24px 60px}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:18px;
         box-shadow:0 1px 2px rgba(15,23,42,.04)}
@@ -38,7 +62,8 @@
          letter-spacing:.3px;text-transform:uppercase}
   .badge.honda{background:var(--honda)} .badge.hyundai{background:var(--hyundai)}
   .badge.unknown{background:var(--warn)}
-  .frow select{font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:#fff}
+  .frow select{font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;font-family:inherit}
+  .frow select:focus{outline:2px solid var(--accent);border-color:var(--accent)}
   .frow .cnt{color:var(--muted);font-size:12.5px}
   .frow .x{cursor:pointer;color:var(--muted);font-weight:700;border:none;background:none;font-size:16px;line-height:1}
   .frow .x:hover{color:#dc2626}
@@ -70,9 +95,9 @@
      text-transform:uppercase;letter-spacing:.4px}
   td{padding:0;border-bottom:1px solid #f1f5f9;white-space:nowrap}
   td.ro{padding:6px 10px;color:var(--ink)}
-  td.idx{padding:6px 10px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+  td.idx{padding:6px 10px;color:var(--muted);text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
   td.src{padding:6px 10px}
-  td.vin{padding:6px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569}
+  td.vin{padding:6px 10px;font-family:var(--mono);font-size:12px;color:#475569;font-variant-numeric:tabular-nums}
   .pill{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#e2e8f0;color:#334155}
   .pill.dma{background:#dbeafe;color:#1e40af}
   .pill.flrpln{background:#dcfce7;color:#166534}
@@ -83,8 +108,9 @@
   td input{width:100%;border:1px solid transparent;background:transparent;padding:6px 10px;font:inherit;
            color:var(--ink);outline:none;font-variant-numeric:tabular-nums}
   td input:hover{background:#f8fafc}
-  td input:focus{border-color:var(--sel);background:var(--selbg);box-shadow:inset 0 0 0 1px var(--sel)}
-  td.expert{padding:6px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f766e;
+  td input:focus{border-color:var(--sel);background:var(--selbg);box-shadow:inset 0 0 0 1px var(--sel);outline:2px solid var(--accent);outline-offset:-2px}
+  td.amt input,td.vin input{font-family:var(--mono)}
+  td.expert{padding:6px 10px;font-family:var(--mono);font-size:12px;color:#0f766e;
             background:#f8fafc;border-left:1px solid var(--line)}
   td.amt input{text-align:right}
   tr.del td{background:#fff5f5}
@@ -139,15 +165,49 @@
     .howto-body .tip{background:#fff;border:1px solid #999;color:#000;page-break-inside:avoid}
     .howto-body b.do{color:#000;text-decoration:underline}
   }
+  /* dark-mode toggle button on the dark header */
+  header #btnTheme{margin-left:8px;background:transparent;color:#e2e8f0;border:1px solid rgba(255,255,255,.35);
+        border-radius:8px;padding:7px 11px;font-size:15px;line-height:1;cursor:pointer}
+  header #btnTheme:hover{background:rgba(255,255,255,.12)}
+  /* ===== DARK THEME ===== */
+  html[data-theme="dark"]{
+    --bg:#211b29; --panel:#211b29; --ink:#e9e6ef; --muted:#9089a0;
+    --line:#332b3d; --accent:#9b4dc0; --accent-d:#7d3a9c;
+    --selbg:#2a1f33; --warnbg:#2a2316;
+  }
+  html[data-theme="dark"] body{background:#15121b}
+  html[data-theme="dark"] #drop{background:#1c1726;border-color:#473d50}
+  html[data-theme="dark"] .frow{background:#1c1726}
+  html[data-theme="dark"] .frow select{background:#2a2333;color:var(--ink);border-color:#473d50}
+  html[data-theme="dark"] .acctbreak code{background:#1c1726}
+  html[data-theme="dark"] button.btn{background:#2a2333;color:var(--ink);border-color:#473d50}
+  html[data-theme="dark"] button.btn:hover{background:#332b3d}
+  html[data-theme="dark"] button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  html[data-theme="dark"] button.primary:hover{background:var(--accent-d)}
+  html[data-theme="dark"] th{background:#1c1726}
+  html[data-theme="dark"] td{border-bottom-color:#251f30}
+  html[data-theme="dark"] td input:hover{background:#1c1726}
+  html[data-theme="dark"] td.expert{background:#1c1726;color:#5eead4;border-left-color:var(--line)}
+  html[data-theme="dark"] td.vin{color:#9089a0}
+  html[data-theme="dark"] tr.del td{background:#2a1620}
+  html[data-theme="dark"] .pill{background:#2a2333;color:#cbb9d6}
+  html[data-theme="dark"] .hint kbd,html[data-theme="dark"] .howto-body kbd{background:#1c1726;color:var(--ink);border-color:#473d50}
+  html[data-theme="dark"] .warn{border-color:#5a4a1a}
+  html[data-theme="dark"] .guide-card h2{color:#c084e0}
+  html[data-theme="dark"] .howto-body h3{color:#c084e0}
+  html[data-theme="dark"] .howto-body b.do{color:#93b4ff}
+  html[data-theme="dark"] .howto-body .tip{background:#16261f;border-color:#1f4a36;color:#86efac}
 </style>
 </head>
 <body>
 <header>
+  <div class="brandmark"></div>
   <div class="htitle">
     <h1>Invoice → CDK PowerPosting</h1>
     <p>Drop a Honda or Hyundai PDF credit memo. Review the posting table, then copy it straight into AGJE Expert Mode.</p>
   </div>
   <button class="navbtn" id="navBtn">📖 How-To Guide</button>
+  <button id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
 </header>
 
 <div class="wrap hidden" id="guidePage">
@@ -208,6 +268,9 @@
       <div class="sub">Honda &amp; Hyundai credit memos are detected automatically. Dropping a new invoice replaces the one already loaded.</div>
     </div>
     <input type="file" id="file" accept="application/pdf,.pdf" multiple>
+    <div class="toolbar" style="margin-top:14px;margin-bottom:0">
+      <button class="btn" id="sampleBtn" title="Load a couple of fictional Honda &amp; Hyundai lines">✨ Generate sample data</button>
+    </div>
     <div class="files" id="files"></div>
   </div>
 
@@ -441,6 +504,7 @@
   }
 
   function parseFile(f, warnings){
+    if(f.sampleRows){ f.detectedBrand=f.sampleBrand||'honda'; return f.sampleRows.map(function(r){return Object.assign({},r);}); }
     var brand = (f.brandOverride && f.brandOverride!=='auto') ? f.brandOverride : detectBrand(f.lines);
     f.detectedBrand = brand;
     if(brand==='honda')   return parseHonda(f.lines, f.name, warnings);
@@ -653,6 +717,57 @@
   });
 
   var copyBtn=document.getElementById('copyBtn'), clearBtn=document.getElementById('clearBtn'), addBtn=document.getElementById('addBtn');
+
+  // ---------- sample data (fictional cast; realistic VINs) ----------
+  function sampleRow(file,source,vin,co,account,amount){
+    return { file:file, source:source, vin:vin, co:String(co), account:account,
+             amount:String(-Math.abs(amount)), control:vin.slice(-6), control2:'', description:'', count:'' };
+  }
+  function loadSample(){
+    var hVin1='1HGCV1F34LA006128', hVin2='5FNRL6H78NB033271';   // Tatooine Honda demo VINs
+    var yVin1='5NMS3CAD7NH446912', yVin2='KM8K2CAB4PU512387';   // Hyrule Hyundai demo VINs
+    var honda={ name:'Tatooine_Honda_credit_memo.pdf', detectedBrand:'honda', brandOverride:'auto', typeOverride:'auto',
+      sampleBrand:'honda', sampleRows:[
+        sampleRow('Tatooine_Honda_credit_memo.pdf','DMA',    hVin1, HONDA_CO, HONDA_ACCT.DMA,    412.50),
+        sampleRow('Tatooine_Honda_credit_memo.pdf','FLRPLN', hVin1, HONDA_CO, HONDA_ACCT.FLRPLN, 188.00),
+        sampleRow('Tatooine_Honda_credit_memo.pdf','TRFR',   hVin2, HONDA_CO, HONDA_ACCT.TRFR,   95.25)
+      ]};
+    var hyundai={ name:'Hyrule_Hyundai_holdback.pdf', detectedBrand:'hyundai', brandOverride:'auto', typeOverride:'auto',
+      sampleBrand:'hyundai', sampleRows:[
+        sampleRow('Hyrule_Hyundai_holdback.pdf','HOLDBACK',    yVin1, HYUNDAI_CO, HYUNDAI_ACCT.HOLDBACK,    640.00),
+        sampleRow('Hyrule_Hyundai_holdback.pdf','ADVERTISING', yVin2, HYUNDAI_CO, HYUNDAI_ACCT.ADVERTISING, 215.75)
+      ]};
+    loadedFiles=[honda,hyundai];
+    rebuild();
+    toast('Loaded sample Honda & Hyundai invoice lines');
+  }
+  document.getElementById('sampleBtn').addEventListener('click', loadSample);
+
+  // ---------- keyboard nav (Enter advances; see tool-design-system.md) ----------
+  wireEnterNav(document.getElementById('body'), {columnar:true});
+  function wireEnterNav(root, opts){
+    opts=opts||{};
+    root.addEventListener('keydown',function(e){
+      if(e.key!=='Enter'||e.isComposing) return;
+      var el=e.target;
+      if(!el.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]),select')) return;
+      e.preventDefault();
+      var next, cell=el.closest('td');
+      if(opts.columnar && cell){
+        var tr=el.closest('tr'), idx=Array.prototype.indexOf.call(tr.children,cell);
+        var rows=Array.prototype.slice.call(tr.parentNode.children);
+        var ri=rows.indexOf(tr)+(e.shiftKey?-1:1);
+        while(rows[ri]){ var c=rows[ri].children[idx], f=c&&c.querySelector('input,select,textarea');
+          if(f){ next=f; break; } ri+=(e.shiftKey?-1:1); }
+      }
+      if(!next){
+        var all=Array.prototype.slice.call(root.querySelectorAll('input:not([type=hidden]):not([disabled]),select,textarea'))
+          .filter(function(x){return x.offsetParent!==null;});
+        var i=all.indexOf(el); next=all[i+(e.shiftKey?-1:1)];
+      }
+      if(next){ next.focus(); if(next.select) try{next.select();}catch(_){} }
+    });
+  }
 
   // ---------- guide page navigation ----------
   var toolPage=document.getElementById('toolPage'), guidePage=document.getElementById('guidePage'),

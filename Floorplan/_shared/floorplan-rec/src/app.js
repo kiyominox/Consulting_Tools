@@ -11,18 +11,21 @@
   var LS_KEY = "floorplan-rec-v1";
   var VEH_MIN = 3000, VEH_MAX = 300000;        // plausible per-unit floorplan balance
   var EPS = 0.005;                              // "balanced" tolerance
-  var MAP_FIELDS = ["sch.vin", "sch.account", "sch.amount", "sch.stock", "sch.desc",
-                    "stmt.vin", "stmt.amount", "stmt.stock", "stmt.desc", "opt.match"];
 
   // ------------------------------------------------------------------- state
+  // Both sides are ADDITIVE lists of files. Each file is normalized to unit
+  // records via its own column map, so files with different layouts still
+  // combine. The schedule may carry several floorplan accounts; each is a
+  // toggle the user can include/exclude.
   var state = {
-    schedule: null,   // {headers:[], rows:[[]], name}
-    statement: null,  // {headers:[], rows:[[]], name}
-    map: {},          // field -> column index (or value for opt.match)
-    autoMap: { schedule: false, statement: false },
+    schedule: [],     // [{id,name,headers,rows,map:{vin,account,amount,stock,desc}}]
+    statement: [],    // [{id,name,headers,rows,map:{vin,amount,stock,desc}}]
+    acctOverride: {}, // schedule account -> true/false include override (else auto)
+    matchMode: "auto",
     result: null,     // computed reconciliation
     activeTab: "off"
   };
+  var _uid = 0;
 
   // ============================================================ DOM helpers
   function $(id) { return document.getElementById(id); }
@@ -284,68 +287,126 @@
     return -1;
   }
 
-  // ============================================================ auto-mapping
-  function autoMap(side) {
-    var d = state[side];
-    if (!d) return;
-    var H = d.headers, R = d.rows;
-    if (side === "schedule") {
-      setMap("sch.vin", scoreVinColumn(H, R));
-      setMap("sch.account", scoreAccountColumn(H, R));
-      setMap("sch.amount", scoreAmountColumn(H, R, /balance|amount|net|principal|outstanding/i, /interest|fee|payment|due|rate|days/i));
-      setMap("sch.stock", scoreLabelColumn(H, R, /stock|^vehicle$/i));
-      setMap("sch.desc", scoreLabelColumn(H, R, /desc|model|^mdl$|make/i));
-      state.autoMap.schedule = true;
-    } else {
-      setMap("stmt.vin", scoreVinColumn(H, R));
-      setMap("stmt.amount", scoreAmountColumn(H, R, /ending\s*balance|current\s*principal|principal|balance|outstanding/i, /interest|fee|payment|due|original|beginning|advance|rate|daily|maturit/i));
-      setMap("stmt.stock", scoreLabelColumn(H, R, /stock/i));
-      setMap("stmt.desc", scoreLabelColumn(H, R, /desc|model|make/i));
-      state.autoMap.statement = true;
+  // fraction of NON-BLANK non-zero values that are vehicle-sized (no density
+  // guard) — wide-format floorplan columns are sparse (each unit sits in one).
+  function vehicleFracNonBlank(rows, idx) {
+    var vals = colValues(rows, idx), nz = 0, inR = 0;
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i] === "" || vals[i] == null) continue;
+      var n = toNum(vals[i]); if (n === 0) continue;
+      nz++; if (Math.abs(n) >= VEH_MIN && Math.abs(n) <= VEH_MAX) inR++;
     }
+    return nz ? inR / nz : 0;
   }
-  function setMap(field, idx) { state.map[field] = idx; }
-
-  // ============================================================ reconcile
-  function aggregate(d, vinCol, amtCol, stockCol, descCol, acctFilter, acctCol) {
-    var byVin = {};
-    for (var i = 0; i < d.rows.length; i++) {
-      var row = d.rows[i];
-      if (!serialLike(row[vinCol])) continue;        // skips Total:/Dealer Total: and other non-unit rows
-      var vin = normVin(row[vinCol]);
-      if (acctFilter != null && acctCol >= 0 && String(row[acctCol]).trim() !== acctFilter) continue;
-      var amt = toNum(row[amtCol]);
-      if (!byVin[vin]) byVin[vin] = { vin: vin, amt: 0, stock: "", desc: "", lines: 0, raw: String(row[vinCol]) };
-      byVin[vin].amt += amt;
-      byVin[vin].lines++;
-      if (stockCol >= 0 && row[stockCol] && !byVin[vin].stock) byVin[vin].stock = String(row[stockCol]).trim();
-      if (descCol >= 0 && row[descCol] && !byVin[vin].desc) byVin[vin].desc = String(row[descCol]).trim();
+  // A schedule may hold several floorplan balance columns side by side (wide
+  // format: e.g. "New FP Balance" + "Used FP Balance"). Returns the primary
+  // balance column plus any extra columns whose header clearly names a
+  // balance/floorplan and that carry vehicle-sized values (even if sparse).
+  function scoreAmountColumns(headers, rows, preferRe, avoidRe) {
+    var set = {};
+    var primary = scoreAmountColumn(headers, rows, preferRe, avoidRe);
+    if (primary >= 0) set[primary] = 1;
+    var strong = /floor|floorplan|\bfp\b|balance|\bbal\b|principal|outstanding/i;
+    for (var c = 0; c < headers.length; c++) {
+      if (set[c]) continue;
+      var h = headers[c] || "";
+      if (avoidRe && avoidRe.test(h)) continue;
+      if (strong.test(h) && vehicleFracNonBlank(rows, c) >= 0.5) set[c] = 1;
     }
+    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+  }
+
+  // ============================================================ auto-mapping
+  function autoMapFor(H, R, side) {
+    if (side === "schedule") return {
+      vin: scoreVinColumn(H, R),
+      account: scoreAccountColumn(H, R),
+      amounts: scoreAmountColumns(H, R, /balance|amount|net|principal|outstanding/i, /interest|fee|payment|due|rate|days/i),
+      stock: scoreLabelColumn(H, R, /stock|^vehicle$/i),
+      desc: scoreLabelColumn(H, R, /desc|model|^mdl$|make/i)
+    };
+    return {
+      vin: scoreVinColumn(H, R),
+      account: -1,
+      amount: scoreAmountColumn(H, R, /ending\s*balance|current\s*principal|principal|balance|outstanding/i, /interest|fee|payment|due|original|beginning|advance|rate|daily|maturit/i),
+      stock: scoreLabelColumn(H, R, /stock/i),
+      desc: scoreLabelColumn(H, R, /desc|model|make/i)
+    };
+  }
+
+  // flatten every loaded file on a side into normalized unit records, using each
+  // file's own column map (so files with different layouts still combine).
+  function balanceCols(f, side) {
+    var m = f.map;
+    var cols = side === "schedule"
+      ? (Array.isArray(m.amounts) ? m.amounts : (m.amount >= 0 ? [m.amount] : []))
+      : (m.amount >= 0 ? [m.amount] : []);
+    return cols.filter(function (x) { return x != null && x >= 0; });
+  }
+  function recordsFor(side) {
+    var out = [];
+    state[side].forEach(function (f) {
+      var m = f.map, R = f.rows, H = f.headers || [];
+      var cols = balanceCols(f, side), wide = cols.length > 1;   // wide = several balance columns side by side
+      for (var i = 0; i < R.length; i++) {
+        var row = R[i];
+        if (m.vin < 0 || !serialLike(row[m.vin])) continue;      // skip totals / non-unit rows
+        for (var a = 0; a < cols.length; a++) {
+          var ac = cols[a], cell = row[ac];
+          if (wide && (cell === "" || cell == null)) continue;   // wide: only the populated balance column for this unit
+          out.push({
+            vin: normVin(row[m.vin]), raw: String(row[m.vin]),
+            // wide → each balance column is its own floorplan account (named by header);
+            // otherwise use the account column if mapped.
+            account: wide ? (String(H[ac] || "").trim() || ("Balance " + colLetter(ac)))
+                          : ((m.account >= 0 && row[m.account] != null) ? String(row[m.account]).trim() : ""),
+            amount: toNum(cell),
+            stock: (m.stock >= 0 && row[m.stock] != null) ? String(row[m.stock]).trim() : "",
+            desc: (m.desc >= 0 && row[m.desc] != null) ? String(row[m.desc]).trim() : ""
+          });
+        }
+      }
+    });
+    return out;
+  }
+  function aggregateRecords(records) {
+    var byVin = {};
+    records.forEach(function (r) {
+      if (!byVin[r.vin]) byVin[r.vin] = { vin: r.vin, raw: r.raw, amt: 0, stock: "", desc: "", lines: 0 };
+      byVin[r.vin].amt += r.amount;
+      byVin[r.vin].lines++;
+      if (r.stock && !byVin[r.vin].stock) byVin[r.vin].stock = r.stock;
+      if (r.desc && !byVin[r.vin].desc) byVin[r.vin].desc = r.desc;
+    });
     return byVin;
   }
 
-  // build per-account summary on the schedule, flag the floorplan account
-  function accountSummary(d, amtCol, acctCol) {
-    if (acctCol < 0) return null;
+  // ============================================================ reconcile
+  // Per-account summary over the combined schedule. An account is "floorplan"
+  // when most of its lines are vehicle-sized; records from a file with no
+  // account column ("(blank)") are always included. User overrides win.
+  function accountSummary(records) {
+    var hasAcct = records.some(function (r) { return r.account !== ""; });
+    if (!hasAcct) return { list: [], hasAcct: false, fpSet: null };
     var acc = {};
-    for (var i = 0; i < d.rows.length; i++) {
-      var a = String(d.rows[i][acctCol]).trim();
-      if (!a) continue;
-      var amt = toNum(d.rows[i][amtCol]);
+    records.forEach(function (r) {
+      var a = r.account || "(blank)";
       if (!acc[a]) acc[a] = { acct: a, total: 0, lines: 0, veh: 0 };
-      acc[a].total += amt;
-      acc[a].lines++;
-      if (Math.abs(amt) >= VEH_MIN && Math.abs(amt) <= VEH_MAX) acc[a].veh++;
-    }
-    var list = Object.keys(acc).map(function (k) { return acc[k]; });
-    // floorplan account: the one with the most vehicle-sized lines (tie → largest |total|)
-    var fp = null;
-    list.forEach(function (a) {
-      if (a.veh === 0) return;
-      if (!fp || a.veh > fp.veh || (a.veh === fp.veh && Math.abs(a.total) > Math.abs(fp.total))) fp = a;
+      acc[a].total += r.amount; acc[a].lines++;
+      if (Math.abs(r.amount) >= VEH_MIN && Math.abs(r.amount) <= VEH_MAX) acc[a].veh++;
     });
-    list.forEach(function (a) { a.isFp = (fp && a.acct === fp.acct); });
-    return { list: list, fp: fp ? fp.acct : null };
+    var list = Object.keys(acc).map(function (k) { return acc[k]; });
+    list.forEach(function (a) { a.fpDefault = (a.acct === "(blank)") || (a.veh > 0 && a.veh / a.lines >= 0.5); });
+    if (!list.some(function (a) { return a.fpDefault; })) {       // nothing obvious → the most vehicle-sized account
+      var top = null; list.forEach(function (a) { if (a.veh > 0 && (!top || a.veh > top.veh)) top = a; });
+      if (top) top.fpDefault = true;
+    }
+    var fpSet = {};
+    list.forEach(function (a) {
+      a.included = (a.acct in state.acctOverride) ? !!state.acctOverride[a.acct] : a.fpDefault;
+      if (a.included) fpSet[a.acct] = true;
+    });
+    return { list: list, hasAcct: true, fpSet: fpSet };
   }
 
   function findMatch(key, otherKeys, mode) {
@@ -377,21 +438,17 @@
   }
 
   function reconcile() {
-    if (!state.schedule || !state.statement) { toast("Load both files first"); return; }
-    var m = state.map;
-    if (m["sch.vin"] == null || m["sch.vin"] < 0) { toast("Pick the schedule VIN column"); return; }
-    if (m["stmt.vin"] == null || m["stmt.vin"] < 0) { toast("Pick the statement VIN column"); return; }
-    if (m["sch.amount"] == null || m["sch.amount"] < 0) { toast("Pick the schedule floorplan balance column"); return; }
-    if (m["stmt.amount"] == null || m["stmt.amount"] < 0) { toast("Pick the statement balance column"); return; }
+    if (!state.schedule.length || !state.statement.length) { toast("Load at least one schedule and one statement file"); return; }
+    var schRec = recordsFor("schedule"), stmtRec = recordsFor("statement");
+    if (!schRec.length) { toast("No schedule units found — check the VIN column mapping"); return; }
+    if (!stmtRec.length) { toast("No statement units found — check the VIN column mapping"); return; }
 
-    var acctCol = (m["sch.account"] == null) ? -1 : m["sch.account"];
-    var summary = accountSummary(state.schedule, m["sch.amount"], acctCol);
-    var fpAcct = summary ? summary.fp : null;
+    var summary = accountSummary(schRec);
+    var schUse = summary.hasAcct ? schRec.filter(function (r) { return summary.fpSet[r.account || "(blank)"]; }) : schRec;
 
-    var sch = aggregate(state.schedule, m["sch.vin"], m["sch.amount"], num(m["sch.stock"]), num(m["sch.desc"]), fpAcct, acctCol);
-    var stmt = aggregate(state.statement, m["stmt.vin"], m["stmt.amount"], num(m["stmt.stock"]), num(m["stmt.desc"]), null, -1);
+    var sch = aggregateRecords(schUse), stmt = aggregateRecords(stmtRec);
 
-    var mode = m["opt.match"] || "auto";
+    var mode = state.matchMode || "auto";
     var schKeys = Object.keys(sch), stmtKeySet = new Set(Object.keys(stmt));
     var used = new Set();
     var matched = [], schOnly = [], stmtOnly = [];
@@ -422,16 +479,16 @@
     var schTotal = matched.reduce(function (a, r) { return a + r.sch; }, 0) + schOnly.reduce(function (a, r) { return a + r.sch; }, 0);
     var stmtTotal = matched.reduce(function (a, r) { return a + r.stmt; }, 0) + stmtOnly.reduce(function (a, r) { return a + r.stmt; }, 0);
     var off = matched.filter(function (r) { return !r.balanced; });
+    var fpAccts = summary.hasAcct ? Object.keys(summary.fpSet) : [];
 
     state.result = {
       matched: matched, off: off, schOnly: schOnly, stmtOnly: stmtOnly,
       schTotal: round2(schTotal), stmtTotal: round2(stmtTotal), variance: round2(schTotal - stmtTotal),
-      summary: summary, fpAcct: fpAcct
+      summary: summary, fpAccts: fpAccts
     };
     renderResults();
     save();
   }
-  function num(v) { return (v == null) ? -1 : v; }
   function round2(n) { return Math.round(n * 100) / 100; }
 
   // ============================================================ rendering
@@ -440,7 +497,9 @@
     $("vSchedule").textContent = r ? fmt(r.schTotal) : "$0.00";
     $("vStatement").textContent = r ? fmt(r.stmtTotal) : "$0.00";
     $("vVariance").textContent = r ? fmt(r.variance) : "$0.00";
-    $("vScheduleSub").textContent = r && r.fpAcct ? "floorplan acct " + r.fpAcct : "floorplan account";
+    $("vScheduleSub").textContent = r && r.fpAccts && r.fpAccts.length
+      ? (r.fpAccts.length === 1 ? "floorplan acct " + r.fpAccts[0] : r.fpAccts.length + " floorplan accounts")
+      : "floorplan units";
     var unitCount = r ? (r.off.length + r.schOnly.length + r.stmtOnly.length) : 0;
     $("vUnits").textContent = unitCount;
     $("vUnitsSub").textContent = r ? (r.off.length + " off + " + r.schOnly.length + " sched-only + " + r.stmtOnly.length + " stmt-only") : "units needing attention";
@@ -452,12 +511,16 @@
   function renderAccts() {
     var strip = $("acctStrip"); strip.innerHTML = "";
     var r = state.result;
-    if (!r || !r.summary || !r.summary.list.length) return;
-    r.summary.list.sort(function (a, b) { return Math.abs(b.total) - Math.abs(a.total); }).forEach(function (a) {
-      var c = el("div", "acct-chip" + (a.isFp ? " fp" : ""));
+    if (!r || !r.summary || !r.summary.hasAcct || !r.summary.list.length) return;
+    var note = el("div", "muted", "Click an account to include or exclude it from the floorplan reconciliation.");
+    note.style.cssText = "flex-basis:100%;font-size:11.5px;margin:0 0 2px";
+    strip.appendChild(note);
+    r.summary.list.slice().sort(function (a, b) { return Math.abs(b.total) - Math.abs(a.total); }).forEach(function (a) {
+      var c = el("button", "acct-chip" + (a.included ? " fp" : " ex")); c.type = "button";
       c.innerHTML = "<div class='muted' style='font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;font-weight:700'>" +
-        (a.isFp ? "Floorplan account" : "Account " + a.acct) + "</div><b>" + a.acct + "</b> &middot; " +
-        fmt(a.total) + " <span class='muted'>(" + a.lines + " lines)</span>";
+        (a.included ? "Floorplan account" : "Excluded") + "</div><b>" + a.acct + "</b> &middot; " +
+        fmt(a.total) + " <span class='muted'>(" + a.lines + " lines &middot; " + a.veh + " vehicle-sized)</span>";
+      c.onclick = function () { state.acctOverride[a.acct] = !a.included; reconcile(); };
       strip.appendChild(c);
     });
   }
@@ -515,38 +578,105 @@
     if (!state.result) return;
     $("results").classList.remove("hidden");
     renderBand(); renderAccts(); renderTabs(); renderTable();
-    $("schAcctHint").textContent = state.result.fpAcct ? "Floorplan account detected: " + state.result.fpAcct : "";
+    var fa = state.result.fpAccts || [];
+    $("schAcctHint").textContent = fa.length ? "Floorplan accounts included: " + fa.join(", ") : "";
   }
 
   // ============================================================ mapping UI
   function buildMapUI() {
-    document.querySelectorAll("select[data-map]").forEach(function (sel) {
-      var field = sel.getAttribute("data-map");
-      if (field === "opt.match") { sel.value = state.map["opt.match"] || "auto"; sel.onchange = function () { state.map["opt.match"] = sel.value; }; return; }
-      var side = field.indexOf("sch.") === 0 ? "schedule" : "statement";
-      var d = state[side];
-      sel.innerHTML = "";
-      var none = el("option", null, "— none —"); none.value = "-1"; sel.appendChild(none);
-      if (d) d.headers.forEach(function (h, i) { var o = el("option", null, (h || "(col " + (i + 1) + ")") + "  [" + colLetter(i) + "]"); o.value = String(i); sel.appendChild(o); });
-      var v = state.map[field];
-      sel.value = (v == null || v < 0) ? "-1" : String(v);
-      sel.onchange = function () { state.map[field] = parseInt(sel.value, 10); };
+    ["schedule", "statement"].forEach(function (side) {
+      var host = $("mapGrid" + cap(side));
+      host.innerHTML = "";
+      if (!state[side].length) { host.innerHTML = "<div class='hint'>No files loaded yet.</div>"; return; }
+      state[side].forEach(function (f) { host.appendChild(fileMapCard(side, f)); });
     });
-    $("mapping").classList.toggle("hidden", !(state.schedule && state.statement));
+    var ms = $("matchMode"); ms.value = state.matchMode || "auto"; ms.onchange = function () { state.matchMode = ms.value; };
+    $("mapping").classList.toggle("hidden", !(state.schedule.length && state.statement.length));
+  }
+  function colSelectEl(f, getIdx, setIdx) {
+    var sel = el("select");
+    var none = el("option", null, "— none —"); none.value = "-1"; sel.appendChild(none);
+    f.headers.forEach(function (h, i) { var o = el("option", null, (h || "(col " + (i + 1) + ")") + "  [" + colLetter(i) + "]"); o.value = String(i); sel.appendChild(o); });
+    var v = getIdx(); sel.value = (v == null || v < 0) ? "-1" : String(v);
+    sel.onchange = function () { setIdx(parseInt(sel.value, 10)); };
+    return sel;
+  }
+  function fileMapCard(side, f) {
+    var card = el("div", "mapcard");
+    card.appendChild(el("div", "mapcard-name", f.name));
+    function simpleRow(label, key) {
+      var row = el("div", "maprow");
+      row.appendChild(el("label", null, label));
+      row.appendChild(colSelectEl(f, function () { return f.map[key]; }, function (v) { f.map[key] = v; }));
+      card.appendChild(row);
+    }
+    simpleRow("VIN / serial", "vin");
+    if (side === "schedule") {
+      simpleRow("Account # (optional)", "account");
+      if (!Array.isArray(f.map.amounts)) f.map.amounts = (f.map.amount >= 0 ? [f.map.amount] : []);
+      if (!f.map.amounts.length) f.map.amounts = [-1];
+      var balWrap = el("div", "balcols");
+      (function renderBal() {
+        balWrap.innerHTML = "";
+        f.map.amounts.forEach(function (idx, k) {
+          var row = el("div", "maprow");
+          row.appendChild(el("label", null, k === 0 ? "Floorplan balance" : "+ balance col"));
+          row.appendChild(colSelectEl(f, function () { return f.map.amounts[k]; }, function (v) {
+            if (v < 0 && f.map.amounts.length > 1) { f.map.amounts.splice(k, 1); renderBal(); }
+            else f.map.amounts[k] = v;
+          }));
+          balWrap.appendChild(row);
+        });
+        var addRow = el("div", "maprow");
+        var add = el("button", "ghost tiny", "+ add balance column"); add.type = "button";
+        add.onclick = function () { f.map.amounts.push(-1); renderBal(); };
+        addRow.appendChild(add); balWrap.appendChild(addRow);
+      })();
+      card.appendChild(balWrap);
+      simpleRow("Stock #", "stock");
+      simpleRow("Description", "desc");
+    } else {
+      simpleRow("Principal balance", "amount");
+      simpleRow("Stock #", "stock");
+      simpleRow("Description", "desc");
+    }
+    return card;
   }
   function colLetter(i) { var s = ""; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
 
   // ============================================================ file flow
-  function onFile(side, file) {
-    readFile(file, function (parsed, err) {
-      if (err || !parsed) { toast("Could not read that file"); return; }
-      state[side] = { headers: parsed.headers, rows: parsed.rows, name: file.name };
-      autoMap(side);
-      var fn = $("fname" + cap(side)); fn.textContent = file.name + "  (" + parsed.rows.length + " rows)"; fn.classList.remove("hidden");
-      $("drop" + cap(side)).classList.add("loaded");
-      buildMapUI();
-      save();
-      toast(cap(side) + " loaded — " + parsed.rows.length + " rows");
+  function renderFileList(side) {
+    var host = $("fileList" + cap(side)); host.innerHTML = "";
+    state[side].forEach(function (f) {
+      var item = el("div", "fileitem");
+      item.appendChild(el("span", "fi-name", f.name));
+      item.appendChild(el("span", "fi-rows muted", f.rows.length + " rows"));
+      var x = el("button", "fi-x", "✕"); x.type = "button"; x.title = "Remove file"; x.setAttribute("aria-label", "Remove " + f.name);
+      x.onclick = function () { removeFile(side, f.id); };
+      item.appendChild(x);
+      host.appendChild(item);
+    });
+    $("drop" + cap(side)).classList.toggle("loaded", state[side].length > 0);
+  }
+  function removeFile(side, id) {
+    state[side] = state[side].filter(function (f) { return f.id !== id; });
+    renderFileList(side); buildMapUI(); save();
+  }
+  function onFiles(side, files) {
+    var arr = Array.prototype.slice.call(files); if (!arr.length) return;
+    var remaining = arr.length, added = 0;
+    arr.forEach(function (file) {
+      readFile(file, function (parsed, err) {
+        remaining--;
+        if (!err && parsed) {
+          state[side].push({ id: ++_uid, name: file.name, headers: parsed.headers, rows: parsed.rows, map: autoMapFor(parsed.headers, parsed.rows, side) });
+          added++;
+        } else { toast("Could not read " + file.name); }
+        if (remaining === 0) {
+          renderFileList(side); buildMapUI(); save();
+          if (added) toast(added + " " + side + " file" + (added > 1 ? "s" : "") + " loaded");
+        }
+      });
     });
   }
   function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -554,17 +684,19 @@
   function wireDrop(which) {
     var drop = $("drop" + cap(which));
     var input = $("file" + cap(which));
-    input.addEventListener("change", function () { if (input.files[0]) onFile(which, input.files[0]); });
+    input.addEventListener("change", function () { if (input.files.length) { onFiles(which, input.files); input.value = ""; } });
     ["dragenter", "dragover"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); }); });
     ["dragleave", "drop"].forEach(function (ev) { drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); }); });
-    drop.addEventListener("drop", function (e) { e.preventDefault(); if (e.dataTransfer.files[0]) onFile(which, e.dataTransfer.files[0]); });
+    drop.addEventListener("drop", function (e) { e.preventDefault(); if (e.dataTransfer.files.length) onFiles(which, e.dataTransfer.files); });
   }
 
   // ============================================================ persistence
+  function syncUid() { state.schedule.concat(state.statement).forEach(function (f) { if (f && f.id > _uid) _uid = f.id; }); }
   function save() {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify({
-        schedule: state.schedule, statement: state.statement, map: state.map, result: state.result, activeTab: state.activeTab
+        schedule: state.schedule, statement: state.statement, acctOverride: state.acctOverride,
+        matchMode: state.matchMode, result: state.result, activeTab: state.activeTab
       }));
     } catch (e) { /* quota — ignore */ }
   }
@@ -572,9 +704,14 @@
     try {
       var raw = localStorage.getItem(LS_KEY); if (!raw) return;
       var s = JSON.parse(raw);
-      state.schedule = s.schedule; state.statement = s.statement; state.map = s.map || {}; state.result = s.result; state.activeTab = s.activeTab || "off";
-      if (state.schedule) { $("fnameSchedule").textContent = state.schedule.name; $("fnameSchedule").classList.remove("hidden"); $("dropSchedule").classList.add("loaded"); }
-      if (state.statement) { $("fnameStatement").textContent = state.statement.name; $("fnameStatement").classList.remove("hidden"); $("dropStatement").classList.add("loaded"); }
+      state.schedule = Array.isArray(s.schedule) ? s.schedule : [];
+      state.statement = Array.isArray(s.statement) ? s.statement : [];
+      state.acctOverride = s.acctOverride || {};
+      state.matchMode = s.matchMode || "auto";
+      state.result = s.result || null;
+      state.activeTab = s.activeTab || "off";
+      syncUid();
+      renderFileList("schedule"); renderFileList("statement");
       buildMapUI();
       if (state.result) renderResults();
     } catch (e) { /* corrupt — ignore */ }
@@ -582,15 +719,16 @@
   function resetAll() {
     if (!confirm("Clear all loaded files and results?")) return;
     localStorage.removeItem(LS_KEY);
-    state = { schedule: null, statement: null, map: {}, autoMap: { schedule: false, statement: false }, result: null, activeTab: "off" };
-    ["Schedule", "Statement"].forEach(function (s) { $("fname" + s).classList.add("hidden"); $("drop" + s).classList.remove("loaded"); });
-    $("mapping").classList.add("hidden"); $("results").classList.add("hidden");
+    state = { schedule: [], statement: [], acctOverride: {}, matchMode: "auto", result: null, activeTab: "off" };
+    renderFileList("schedule"); renderFileList("statement");
+    buildMapUI();
+    $("results").classList.add("hidden");
     renderBand();
     toast("Reset");
   }
 
   function exportJson() {
-    var blob = new Blob([JSON.stringify({ schedule: state.schedule, statement: state.statement, map: state.map }, null, 2)], { type: "application/json" });
+    var blob = new Blob([JSON.stringify({ schedule: state.schedule, statement: state.statement, acctOverride: state.acctOverride, matchMode: state.matchMode }, null, 2)], { type: "application/json" });
     downloadBlob(blob, "floorplan-rec-backup.json");
   }
   function importJson(file) {
@@ -598,9 +736,12 @@
     r.onload = function (e) {
       try {
         var s = JSON.parse(e.target.result);
-        state.schedule = s.schedule; state.statement = s.statement; state.map = s.map || {};
-        if (state.schedule) { $("fnameSchedule").textContent = state.schedule.name || "restored"; $("fnameSchedule").classList.remove("hidden"); $("dropSchedule").classList.add("loaded"); }
-        if (state.statement) { $("fnameStatement").textContent = state.statement.name || "restored"; $("fnameStatement").classList.remove("hidden"); $("dropStatement").classList.add("loaded"); }
+        state.schedule = Array.isArray(s.schedule) ? s.schedule : [];
+        state.statement = Array.isArray(s.statement) ? s.statement : [];
+        state.acctOverride = s.acctOverride || {};
+        state.matchMode = s.matchMode || "auto";
+        syncUid();
+        renderFileList("schedule"); renderFileList("statement");
         buildMapUI(); save(); toast("Restored");
       } catch (err) { toast("Bad backup file"); }
     };
@@ -644,7 +785,9 @@
     ws.mergeCells("A1:B1"); ws.getCell("A1").value = "Floorplan Reconciliation"; ws.getCell("A1").font = title;
     var rows = [
       ["Date", new Date().toLocaleDateString()],
-      ["Floorplan account", r.fpAcct || "(single account)"],
+      ["Floorplan accounts", (r.fpAccts && r.fpAccts.length) ? r.fpAccts.join(", ") : "(all units)"],
+      ["Schedule files", state.schedule.map(function (f) { return f.name; }).join(" | ") || "—"],
+      ["Statement files", state.statement.map(function (f) { return f.name; }).join(" | ") || "—"],
       ["Schedule total", r.schTotal],
       ["Statement total", r.stmtTotal],
       ["Variance", r.variance],
@@ -667,36 +810,60 @@
 
   // ============================================================ sample data
   function loadSample() {
-    // a compact Honda-style statement and a matching CDK-style schedule with
-    // one off-balance unit, one sold (schedule-only) and one newly floored (statement-only).
+    // Two schedule files (a NEW-vehicle floorplan account and a USED-vehicle one,
+    // plus a non-floorplan contracts-in-transit account that auto-excludes) and one
+    // pooled bank statement — with one off-balance unit, one sold (schedule-only)
+    // and one newly floored (statement-only). CDK schedules print the last 6 of
+    // the VIN under "Serial"; the bank shows the full VIN.
+    // File 1 — long format: one balance column + an account column (new floorplan
+    // account 511171, plus a non-floorplan contracts-in-transit account that auto-excludes).
+    var schHeaders = ["Account", "Stock", "Year", "Model", "Serial", "Sold Date", "Amount $"];
+    var schNew = [
+      ["511171", "T30289", "26", "RAV4", "000947", "", -43000],
+      ["511171", "T30290", "26", "CAMRY", "001605", "", -38277.70],
+      ["511171", "T30295", "26", "CAMRY", "003665", "", -33832.98],
+      ["230100", "T44021", "", "Contract in transit", "880123", "", -250]    // not floorplan → auto-excluded
+    ];
+    // File 2 — WIDE format: two floorplan balance columns side by side (used + demo).
+    var wideHeaders = ["Stock", "Year", "Model", "Serial", "Used FP Balance", "Demo FP Balance"];
+    var schWide = [
+      ["T30714", "26", "TACOMA", "005961", -37500, ""],
+      ["T30794", "26", "TACOMA", "006200", -37500, ""],            // schedule 37,500; bank 35,000
+      ["T30501", "26", "4RUNNER", "099999", -41000, ""],          // sold → on schedule, not statement
+      ["T30888", "26", "SUPRA", "007777", "", -52000]             // a demo-floorplan unit
+    ];
     var stmtHeaders = ["Invoice Date", "Invoice Number", "Description", "Serial No/VIN", "Stock/Lease No", "Original Amount", "Beginning Balance", "Interest Amount", "Ending Balance"];
     var stmtRows = [
-      ["2026-02-24", "947", "2026 Honda RIDGELINE", "5FPYK3F57TB000947", "H30289", 43000, 43000, 23.26, 43000],
-      ["2026-02-25", "1605", "2026 Honda ACCORD", "1HGCY2F86TA001605", "H30290", 38277.70, 38277.70, 160.45, 38277.70],
-      ["2026-03-25", "3665", "2026 Honda ACCORD", "1HGCY2F54TA003665", "H30295", 33832.98, 0, 32.02, 33832.98],
-      ["2026-02-24", "5961", "2026 Honda CR-V", "5J6RS4H73TL005961", "H30714", 37500, 37500, 157.19, 37500],
-      ["2026-02-10", "6200", "2026 Honda CR-V", "7FARS4H78TE006200", "H30794", 37500, 37500, 121.69, 35000]   // off by 2,500
+      ["2026-02-24", "947", "2026 Toyota RAV4", "5FPYK3F57TB000947", "T30289", 43000, 43000, 23.26, 43000],
+      ["2026-02-25", "1605", "2026 Toyota CAMRY", "1HGCY2F86TA001605", "T30290", 38277.70, 38277.70, 160.45, 38277.70],
+      ["2026-03-25", "3665", "2026 Toyota CAMRY", "1HGCY2F54TA003665", "T30295", 33832.98, 0, 32.02, 33832.98],
+      ["2026-02-24", "5961", "2026 Toyota TACOMA", "5J6RS4H73TL005961", "T30714", 37500, 37500, 157.19, 37500],
+      ["2026-02-10", "6200", "2026 Toyota TACOMA", "7FARS4H78TE006200", "T30794", 37500, 37500, 121.69, 35000],
+      ["2026-03-01", "7777", "2026 Toyota SUPRA", "JTDKARFU7T3007777", "T30888", 52000, 52000, 40.10, 52000],
+      ["2026-03-30", "9001", "2026 Toyota HIGHLANDER", "3CZRZ2H50TM008888", "T30999", 31000, 0, 5, 31000]   // newly floored → statement only
     ];
-    // CDK floorplan schedule prints only the last 6 of the VIN under "Serial".
-    var schHeaders = ["Vehicle", "Yr", "Mdl", "Serial", "Sold Date", "Amount $"];
-    var schRows = [
-      ["H30289", "26", "RIDGELINE", "000947", "", -43000],
-      ["H30290", "26", "ACCORD", "001605", "", -38277.70],
-      ["H30295", "26", "ACCORD", "003665", "", -33832.98],
-      ["H30714", "26", "CR-V", "005961", "", -37500],
-      ["H30794", "26", "CR-V", "006200", "", -37500],                         // schedule says 37,500; bank 35,000
-      ["H30501", "26", "PILOT", "099999", "2026-03-12", -41000]              // on schedule, not on statement (sold)
-    ];
-    state.schedule = { headers: schHeaders, rows: schRows, name: "SAMPLE — Hill Valley Honda schedule.csv" };
-    state.statement = { headers: stmtHeaders, rows: stmtRows.concat([["2026-03-30", "9001", "2026 Honda HRV", "3CZRZ2H50TM008888", "H30999", 31000, 0, 5, 31000]]), name: "SAMPLE — Gringotts Floorplan Bank statement.csv" };
-    autoMap("schedule"); autoMap("statement");
-    ["Schedule", "Statement"].forEach(function (s) {
-      var d = state[s.toLowerCase()];
-      $("fname" + s).textContent = d.name + "  (" + d.rows.length + " rows)"; $("fname" + s).classList.remove("hidden"); $("drop" + s).classList.add("loaded");
-    });
+    state = { schedule: [], statement: [], acctOverride: {}, matchMode: "auto", result: null, activeTab: "off" };
+    state.schedule.push({ id: ++_uid, name: "SAMPLE — Rivendell Toyota new floorplan (long).csv", headers: schHeaders, rows: schNew, map: autoMapFor(schHeaders, schNew, "schedule") });
+    state.schedule.push({ id: ++_uid, name: "SAMPLE — Rivendell Toyota used+demo floorplan (wide).csv", headers: wideHeaders, rows: schWide, map: autoMapFor(wideHeaders, schWide, "schedule") });
+    state.statement.push({ id: ++_uid, name: "SAMPLE — Bank of Braavos Floorplan statement.csv", headers: stmtHeaders, rows: stmtRows, map: autoMapFor(stmtHeaders, stmtRows, "statement") });
+    renderFileList("schedule"); renderFileList("statement");
     buildMapUI();
     reconcile();
     toast("Sample loaded & reconciled");
+  }
+
+  // ============================================================ keyboard nav
+  function wireEnterNav(root) {
+    root.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" || e.isComposing) return;
+      var el = e.target;
+      if (!el.matches("input:not([type=checkbox]):not([type=radio]):not([type=file]),select")) return;
+      e.preventDefault();
+      var all = Array.prototype.slice.call(root.querySelectorAll("input:not([type=hidden]):not([disabled]),select,textarea"))
+        .filter(function (x) { return x.offsetParent !== null; });
+      var i = all.indexOf(el), next = all[i + (e.shiftKey ? -1 : 1)];
+      if (next) { next.focus(); if (next.select) try { next.select(); } catch (_) { } }
+    });
   }
 
   // ============================================================ wire up
@@ -710,6 +877,8 @@
     $("jsonFile").addEventListener("change", function () { if (this.files[0]) importJson(this.files[0]); });
     $("btnPrint").onclick = function () { window.print(); };
     $("btnXlsx").onclick = exportXlsx;
+    wireEnterNav($("mapping"));
+    wireEnterNav(document.querySelector(".uploads"));
     load();
     renderBand();
   }
