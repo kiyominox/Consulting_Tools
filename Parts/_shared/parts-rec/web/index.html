@@ -4,6 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Parts Inventory Reconciliation</title>
+<script>
+(function(){
+  var KEY='partsrec_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){} icon();
+    });
+  });
+})();
+</script>
 <script src="xlsx.full.min.js"></script>
 <style>
 /* ────────────────────────────────────────────────────────────
@@ -273,6 +291,84 @@ h3.grp:first-child{margin-top:0;}
 /* Loading spinner */
 .spinner{display:inline-block; width:14px; height:14px; border:2px solid rgba(46,116,181,.3); border-top-color:var(--primary-2); border-radius:50%; animation:spin .8s linear infinite; vertical-align:middle; margin-right:6px;}
 @keyframes spin{to{transform:rotate(360deg);}}
+
+/* Theme toggle button in top nav */
+.topnav #btnTheme{background:transparent; border:1px solid rgba(255,255,255,.35); color:#fff; font-size:14px; line-height:1; padding:5px 9px; border-radius:var(--radius); cursor:pointer; font-family:inherit;}
+.topnav #btnTheme:hover{background:rgba(255,255,255,.15);}
+
+/* ────────────────────────────────────────────────────────────
+   Dark mode
+   ──────────────────────────────────────────────────────────── */
+html[data-theme="dark"]{
+  --bg:#15121b; --surface:#211b29; --border:#332b3d; --border-soft:#2a2333;
+  --text:#e9e6ef; --text-soft:#c2bcd0; --muted:#9089a0;
+  --primary:#9b4dc0; --primary-2:#b06fce; --accent:#7bae57;
+  --warn:#d2a23f; --danger:#e07567; --ok:#46b985;
+  --auto:#4a3d1f; --auto-bd:#6b5a2a; --row-hi:#241d2e;
+  --var-zero-bg:#16261f; --var-small-bg:#2a2316;
+  --var-med-bg:#2c1f17; --var-large-bg:#2c1b19;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 0 0 1px var(--border);
+}
+html[data-theme="dark"] .toast.success{background:#16261f; color:var(--ok); border-color:#2c4a39;}
+html[data-theme="dark"] .toast.error{background:#2c1b19; color:var(--danger); border-color:#4a2c29;}
+html[data-theme="dark"] .toast.info{background:#241d2e; color:var(--text); border-color:#3a3148;}
+html[data-theme="dark"] .card-header{background:#1c1726; border-bottom-color:var(--border-soft);}
+html[data-theme="dark"] .gl-info{background:#1c1726;}
+html[data-theme="dark"] .data-table thead th{background:#1c1726;}
+html[data-theme="dark"] .data-table tfoot th{background:#1c1726;}
+html[data-theme="dark"] .btn-link:hover{background:#2a2333;}
+html[data-theme="dark"] .btn-warn:hover{background:#b88631;}
+html[data-theme="dark"] .btn-danger:hover{background:#c45b4d;}
+html[data-theme="dark"] .badge-ok{background:#16261f; color:var(--ok); border-color:#2c4a39;}
+html[data-theme="dark"] .badge-warn,
+html[data-theme="dark"] .badge-review{background:#2a2316; color:var(--warn); border-color:#4a4127;}
+html[data-theme="dark"] .badge-review:hover{background:#352c1a;}
+html[data-theme="dark"] .badge-ok-small{background:#2a2333; color:var(--muted);}
+html[data-theme="dark"] .auto-tag{color:#e9d9a0;}
+html[data-theme="dark"] .ytd-tag{background:#241d2e; color:var(--primary-2); border-color:#3a3148;}
+html[data-theme="dark"] .side.parts-side .card-header{background:#1f2333;}
+html[data-theme="dark"] .side.gl-side .card-header{background:#1f2a1f;}
+html[data-theme="dark"] .rec-table tr.sub td{background:#1c1726;}
+html[data-theme="dark"] .rec-table tr.total td{background:#241d2e;}
+html[data-theme="dark"] .side.gl-side .rec-table tr.total td{background:#1f2a1f;}
+html[data-theme="dark"] .rec-table .auto-row td{background:#2a2316;}
+html[data-theme="dark"] .vb-item{background:var(--surface);}
+html[data-theme="dark"] .lg-step11{background:#16261f; color:var(--ok);}
+html[data-theme="dark"] .lg-step13{background:#2c1f17; color:#e09a6a;}
+html[data-theme="dark"] .lg-ignore{background:#2a2333; color:var(--muted);}
+html[data-theme="dark"] .lg-review{background:#2a2316; color:var(--warn);}
+html[data-theme="dark"] .review-wrap{background:var(--surface);}
+html[data-theme="dark"] .rev-table thead th{background:#1c1726;}
+html[data-theme="dark"] .rev-table thead .mcol{background:#1c1726;}
+html[data-theme="dark"] .rev-table thead .hdr-row th:hover{background:#241d2e;}
+html[data-theme="dark"] .st-11{background:#16261f; color:var(--ok);}
+html[data-theme="dark"] .st-13{background:#2c1f17; color:#e09a6a;}
+html[data-theme="dark"] .st-rev{background:#2a2316; color:var(--warn);}
+html[data-theme="dark"] .st-none{background:#2a2333; color:var(--muted);}
+html[data-theme="dark"] .dec-btn{background:#2a2333; color:var(--text-soft);}
+html[data-theme="dark"] .dec-btn.active-13{background:#b04200; color:#fff; border-color:#b04200;}
+html[data-theme="dark"] .rev-toggle button{background:#2a2333; color:var(--text-soft);}
+html[data-theme="dark"] .rev-toggle button.active{background:var(--primary); color:#fff;}
+html[data-theme="dark"] .bulk-controls input{background:#2a2333; color:var(--text);}
+html[data-theme="dark"] .bulk-table thead .grp-row th{background:#1f2333; color:var(--primary-2);}
+html[data-theme="dark"] .bulk-table thead .fld-row th{background:#1c1726;}
+html[data-theme="dark"] .bulk-table .mcol{background:var(--surface);}
+html[data-theme="dark"] .bulk-table thead .mcol{background:#1c1726;}
+html[data-theme="dark"] .bulk-table td input:focus{background:#2a2333;}
+html[data-theme="dark"] .auto-note{background:#2a2316; color:#e9d9a0;}
+html[data-theme="dark"] .form-grid input,
+html[data-theme="dark"] .form-grid select,
+html[data-theme="dark"] .form-select,
+html[data-theme="dark"] .bulk-controls input{background:#2a2333; color:var(--text); border-color:var(--border);}
+html[data-theme="dark"] .form-grid input:focus,
+html[data-theme="dark"] .form-grid select:focus,
+html[data-theme="dark"] .bulk-table td input:focus,
+html[data-theme="dark"] .store-card .store-name-input:focus{box-shadow:0 0 0 2px rgba(176,111,206,.25);}
+html[data-theme="dark"] .store-card.active-store{background:#241d2e; border-color:var(--primary-2);}
+html[data-theme="dark"] .store-card .store-name-input{color:var(--text);}
+html[data-theme="dark"] .store-card .store-name-input:focus{background:#2a2333;}
+html[data-theme="dark"] .store-card .active-badge{background:#2c2238; color:var(--primary-2);}
+html[data-theme="dark"] .store-select option{background:#211b29; color:#fff;}
 </style>
 </head>
 <body>
@@ -290,6 +386,7 @@ h3.grp:first-child{margin-top:0;}
       <a href="#/inputs" data-nav="inputs">Monthly Inputs</a>
       <a href="#/rad" data-nav="rad">RAD (App/Dep)</a>
       <a href="#/inputs/new" class="btn btn-primary btn-sm">+ Add Month</a>
+      <button id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
     </div>
   </div>
 </nav>
