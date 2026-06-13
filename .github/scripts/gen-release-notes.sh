@@ -77,7 +77,9 @@ changes_of() {
   fi
   n=$(printf '%s\n' "$logs" | grep -c .)
   printf '%s\n' "$logs" | head -8 | sed -E 's/^/- /'
-  [ "$n" -gt 8 ] && echo "- …plus general fixes and improvements ($((n - 8)) more)"
+  if [ "$n" -gt 8 ]; then
+    echo "- …plus general fixes and improvements ($((n - 8)) more)"
+  fi
 }
 
 # ── Body ─────────────────────────────────────────────────────────────────────
