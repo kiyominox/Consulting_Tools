@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Consulting Toolbox</title>
+<script>
+/* dark mode: apply saved/OS theme before paint (no flash), then wire the toggle */
+(function(){
+  var KEY='toolbox_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){}
+      icon();
+    });
+  });
+})();
+</script>
+<style>
+  /* ===== shared design tokens (see docs/reference/tool-design-system.md) ===== */
+  :root{
+    --font:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --ink:#16191d; --ink-2:#434a52; --muted:#79808a;
+    --paper:#ffffff; --bg:#eceff3; --line:#e3e7ec; --line-2:#d3d9e0;
+    --accent:#6B298C; --accent-strong:#561f70; --accent-ink:#45195a;
+    --accent-soft:#f3eaf8; --accent-line:#dcc4e8;
+    --pos:#15784c; --neg:#c0392b; --warn:#9a6207;
+    --shadow:0 1px 2px rgba(22,25,29,.05),0 1px 1px rgba(22,25,29,.04);
+    --shadow-lg:0 12px 32px rgba(22,25,29,.14);
+    --r:12px; --r-sm:8px;
+  }
+  html[data-theme="dark"]{
+    --ink:#e9e6ef; --ink-2:#c2bcd0; --muted:#9089a0;
+    --paper:#211b29; --bg:#15121b; --line:#332b3d; --line-2:#473d50;
+    --accent:#9b4dc0; --accent-strong:#8a3cb0; --accent-ink:#c79fe0;
+    --accent-soft:#2a1f33; --accent-line:#4a3357;
+    --pos:#46b985; --neg:#e07567; --warn:#d2a23f;
+    --shadow:0 1px 2px rgba(0,0,0,.4); --shadow-lg:0 14px 34px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--ink);background:var(--bg);
+       font-size:14px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums}
+
+  header.app{position:sticky;top:0;z-index:40;background:var(--paper);border-bottom:1px solid var(--line);
+       display:flex;align-items:center;gap:14px;padding:13px 24px;box-shadow:var(--shadow)}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0}
+  .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--accent);position:relative;flex:none}
+  .brand .mark::before,.brand .mark::after{content:"";position:absolute;background:#fff;border-radius:1px}
+  .brand .mark::before{left:8px;right:8px;top:11px;height:3px}
+  .brand .mark::after{left:8px;right:15px;bottom:11px;height:3px;opacity:.7}
+  .brand h1{font-size:17px;margin:0;font-weight:750;letter-spacing:-.2px}
+  .brand .sub{font-size:11.5px;color:var(--muted);margin-top:1px}
+  .grow{flex:1}
+  .actions{display:flex;align-items:center;gap:8px;margin-left:auto}
+  button.ghost{cursor:pointer;background:transparent;border:1px solid var(--line-2);color:var(--ink);
+       border-radius:var(--r-sm);padding:7px 11px;font-size:13px;font-weight:600;font-family:inherit}
+  button.ghost:hover{background:var(--accent-soft);border-color:var(--accent-line)}
+  #search{font-family:inherit;font-size:14px;color:var(--ink);background:var(--paper);
+       border:1px solid var(--line-2);border-radius:var(--r-sm);padding:8px 12px;min-width:230px}
+  #search:focus{outline:2px solid var(--accent);border-color:var(--accent)}
+
+  main{max-width:1200px;margin:0 auto;padding:24px 22px 80px}
+  .lead{color:var(--muted);font-size:13.5px;margin:2px 0 22px;max-width:70ch}
+  .cat{margin:0 0 10px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--accent-ink);font-weight:800}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:30px}
+  a.card{display:block;text-decoration:none;color:inherit;background:var(--paper);border:1px solid var(--line);
+       border-radius:var(--r);padding:16px 17px;box-shadow:var(--shadow);transition:.13s}
+  a.card:hover{border-color:var(--accent-line);box-shadow:var(--shadow-lg);transform:translateY(-1px)}
+  .card .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .card h3{margin:0;font-size:15px;font-weight:700;letter-spacing:-.1px}
+  .card p{margin:0;font-size:12.5px;color:var(--muted);line-height:1.5}
+  .badge{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;padding:2px 7px;border-radius:20px;white-space:nowrap}
+  .badge.master{background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--accent-line)}
+  .badge.store{background:var(--bg);color:var(--muted);border:1px solid var(--line-2)}
+  .open{margin-top:10px;font-size:12px;font-weight:700;color:var(--accent-ink)}
+  .open::after{content:" \2192"}
+  .empty{color:var(--muted);font-size:13px;padding:20px 0}
+  footer{max-width:1200px;margin:0 auto;padding:0 22px 40px;color:var(--muted);font-size:11.5px}
+</style>
+</head>
+<body>
+<header class="app">
+  <div class="brand">
+    <div class="mark"></div>
+    <div>
+      <h1>Consulting Toolbox</h1>
+      <div class="sub">CDK dealership accounting tools &middot; offline &middot; double-click any tool</div>
+    </div>
+  </div>
+  <div class="actions">
+    <input type="text" id="search" placeholder="Filter tools&hellip;" autocomplete="off" />
+    <button class="ghost" id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
+  </div>
+</header>
+
+<main id="main">
+  <p class="lead">Your personal launcher. Master (<span style="color:var(--accent-ink);font-weight:700">purple</span>)
+  copies are the store-agnostic sources; store builds sit beside them. Links are relative file paths, so keep this
+  page at the repo root. Type in the filter to narrow the list.</p>
+  <div id="catalog"></div>
+  <p class="empty" id="noresults" style="display:none">No tools match that filter.</p>
+</main>
+<footer>All tools run fully offline — nothing leaves this machine.</footer>
+
+<script>
+/* Catalog. kind: "master" or store name. Paths are relative to the repo root. */
+var TOOLS = [
+  { cat:"AR — Cash &amp; Deposits", name:"Cash Clearing Reconciliation", kind:"master",
+    desc:"Daily cash-deposit posting & schedule reconciliation → AGJE.",
+    path:"AR/_shared/cash-clearing/Cash_Clearing_Reconciliation.html" },
+  { cat:"AR — Cash &amp; Deposits", name:"Cash Clearing Reconciliation", kind:"CMA",
+    desc:"CMA store build (CO18–23, real accounts).",
+    path:"AR/CMA/cash-clearing/Cash_Clearing_Reconciliation.html" },
+  { cat:"AR — Cash &amp; Deposits", name:"Deposit Reconciliation (redesign)", kind:"CMA",
+    desc:"CMA — alternate daily-deposit layout.",
+    path:"AR/CMA/cash-clearing/Deposit_Reconciliation_Standalone.html" },
+
+  { cat:"Floorplan", name:"Floorplan Reconciliation", kind:"master",
+    desc:"Bank floorplan statement ↔ CDK floorplan schedule, any layout (incl. PDF).",
+    path:"Floorplan/_shared/floorplan-rec/Floorplan Reconciliation.html" },
+  { cat:"Floorplan", name:"Floorplan Reconciliation", kind:"CMA",
+    desc:"CMA-branded skin (navy/orange).",
+    path:"Floorplan/CMA/floorplan-rec/Floorplan Reconciliation - CMA.html" },
+
+  { cat:"GL Reconciliation", name:"GL Posting Month Validator", kind:"master",
+    desc:"GL postings vs. RRH receipt history — correct posting month & amounts.",
+    path:"GL-Reconciliation/_shared/gl-posting-validator/gl-posting-validator.html" },
+  { cat:"GL Reconciliation", name:"GL Posting Month Validator", kind:"Hickman's",
+    desc:"Hickman's build.",
+    path:"GL-Reconciliation/Hickman's/gl-posting-validator.html" },
+  { cat:"GL Reconciliation", name:"Factory Statement Reconciliation", kind:"master",
+    desc:"Factory statement (PDF) vs. GL: GL = Statement − Incentives.",
+    path:"GL-Reconciliation/_shared/statement-reconciliation/Statement_Reconciliation.html" },
+  { cat:"GL Reconciliation", name:"Toyota Statement Reconciliation", kind:"CMA",
+    desc:"CMA Toyota/TFS build.",
+    path:"GL-Reconciliation/CMA/Toyota_Statement_Reconciliation.html" },
+
+  { cat:"Parts", name:"Parts Inventory Reconciliation", kind:"master",
+    desc:"Parts inventory (MGR / Fast Lane / recap) ↔ GL, with YTD RAD.",
+    path:"Parts/_shared/parts-rec/parts_rec_standalone.html" },
+
+  { cat:"Powerposting (PDF → AGJE)", name:"Invoice → CDK Powerposting", kind:"master",
+    desc:"Honda/Hyundai factory invoices → AGJE posting strings.",
+    path:"Powerposting/_shared/Invoice_to_CDK_PowerPosting.html" },
+  { cat:"Powerposting (PDF → AGJE)", name:"Warranty Claims → CDK Powerposting", kind:"master",
+    desc:"Toyota/GM warranty claim statements → AGJE with auto-balance.",
+    path:"Powerposting/_shared/Warranty_Claims_to_CDK_PowerPosting.html" },
+  { cat:"Powerposting (PDF → AGJE)", name:"Invoice → CDK Powerposting", kind:"CMA",
+    desc:"CMA build.", path:"Powerposting/CMA/Invoice_to_CDK_PowerPosting.html" },
+  { cat:"Powerposting (PDF → AGJE)", name:"Warranty Claims → CDK Powerposting", kind:"CMA",
+    desc:"CMA build.", path:"Powerposting/CMA/Warranty_Claims_to_CDK_PowerPosting.html" },
+
+  { cat:"Vehicle Sales", name:"Vehicle Sales Report", kind:"master",
+    desc:"CDK GL journal × Deskit deals → per-deal gross report.",
+    path:"Vehicle-Sales/_shared/vehicle-sales-report/Vehicle Sales Report.html" },
+  { cat:"Vehicle Sales", name:"Vehicle Sales Report", kind:"MacDonald",
+    desc:"MacDonald build.",
+    path:"Vehicle-Sales/MacDonald/vehicle-sales-report/Vehicle Sales Report.html" }
+];
+
+function enc(p){ return p.split('/').map(encodeURIComponent).join('/'); }
+function render(filter){
+  filter=(filter||'').trim().toLowerCase();
+  var cats={}, order=[];
+  TOOLS.forEach(function(t){
+    var hay=(t.name+' '+t.desc+' '+t.cat+' '+t.kind).toLowerCase();
+    if(filter && hay.indexOf(filter)<0) return;
+    if(!cats[t.cat]){ cats[t.cat]=[]; order.push(t.cat); }
+    cats[t.cat].push(t);
+  });
+  var html='';
+  order.forEach(function(c){
+    html+='<div class="cat">'+c+'</div><div class="grid">';
+    cats[c].forEach(function(t){
+      var bcls=t.kind==='master'?'master':'store';
+      var blab=t.kind==='master'?'Master':t.kind;
+      html+='<a class="card" href="'+enc(t.path)+'">'
+          +'<div class="top"><span class="badge '+bcls+'">'+blab+'</span></div>'
+          +'<h3>'+t.name+'</h3><p>'+t.desc+'</p><div class="open">Open</div></a>';
+    });
+    html+='</div>';
+  });
+  document.getElementById('catalog').innerHTML=html;
+  document.getElementById('noresults').style.display=order.length?'none':'block';
+}
+render('');
+document.getElementById('search').addEventListener('input',function(){ render(this.value); });
+document.getElementById('search').addEventListener('keydown',function(e){
+  if(e.key==='Enter'){ var a=document.querySelector('#catalog a.card'); if(a) window.location.href=a.getAttribute('href'); }
+});
+</script>
+</body>
+</html>
+</content>
