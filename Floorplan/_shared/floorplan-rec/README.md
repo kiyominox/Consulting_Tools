@@ -29,8 +29,11 @@ and schedules never leave the machine.
      under *Serial* (e.g. `757192`), while lender statements show the full VIN —
      often with an embedded space (Truist: `5N1AZ3DS7TC 110100`). Spaces are
      stripped and units are matched by suffix overlap;
-   - the **balance** column (e.g. *Ending Balance*, *Current Principal*),
-     avoiding interest/fee/payment/due columns;
+   - the **balance** column(s) (e.g. *Ending Balance*, *Current Principal*),
+     avoiding interest/fee/payment/due columns. A schedule may carry **several
+     floorplan balance columns side by side** (wide format, e.g. *New FP Balance*
+     + *Used FP Balance*) — each is detected as its own floorplan account, and you
+     can add or remove balance columns per file in the mapping panel;
    - on the schedule, the **floorplan account(s)** — every GL account whose lines
      are mostly **vehicle-sized credit balances** is treated as a floorplan
      account, so a schedule (or combined set of schedules) carrying **multiple

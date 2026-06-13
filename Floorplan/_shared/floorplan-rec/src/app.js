@@ -287,12 +287,41 @@
     return -1;
   }
 
+  // fraction of NON-BLANK non-zero values that are vehicle-sized (no density
+  // guard) — wide-format floorplan columns are sparse (each unit sits in one).
+  function vehicleFracNonBlank(rows, idx) {
+    var vals = colValues(rows, idx), nz = 0, inR = 0;
+    for (var i = 0; i < vals.length; i++) {
+      if (vals[i] === "" || vals[i] == null) continue;
+      var n = toNum(vals[i]); if (n === 0) continue;
+      nz++; if (Math.abs(n) >= VEH_MIN && Math.abs(n) <= VEH_MAX) inR++;
+    }
+    return nz ? inR / nz : 0;
+  }
+  // A schedule may hold several floorplan balance columns side by side (wide
+  // format: e.g. "New FP Balance" + "Used FP Balance"). Returns the primary
+  // balance column plus any extra columns whose header clearly names a
+  // balance/floorplan and that carry vehicle-sized values (even if sparse).
+  function scoreAmountColumns(headers, rows, preferRe, avoidRe) {
+    var set = {};
+    var primary = scoreAmountColumn(headers, rows, preferRe, avoidRe);
+    if (primary >= 0) set[primary] = 1;
+    var strong = /floor|floorplan|\bfp\b|balance|\bbal\b|principal|outstanding/i;
+    for (var c = 0; c < headers.length; c++) {
+      if (set[c]) continue;
+      var h = headers[c] || "";
+      if (avoidRe && avoidRe.test(h)) continue;
+      if (strong.test(h) && vehicleFracNonBlank(rows, c) >= 0.5) set[c] = 1;
+    }
+    return Object.keys(set).map(Number).sort(function (a, b) { return a - b; });
+  }
+
   // ============================================================ auto-mapping
   function autoMapFor(H, R, side) {
     if (side === "schedule") return {
       vin: scoreVinColumn(H, R),
       account: scoreAccountColumn(H, R),
-      amount: scoreAmountColumn(H, R, /balance|amount|net|principal|outstanding/i, /interest|fee|payment|due|rate|days/i),
+      amounts: scoreAmountColumns(H, R, /balance|amount|net|principal|outstanding/i, /interest|fee|payment|due|rate|days/i),
       stock: scoreLabelColumn(H, R, /stock|^vehicle$/i),
       desc: scoreLabelColumn(H, R, /desc|model|^mdl$|make/i)
     };
@@ -307,20 +336,35 @@
 
   // flatten every loaded file on a side into normalized unit records, using each
   // file's own column map (so files with different layouts still combine).
+  function balanceCols(f, side) {
+    var m = f.map;
+    var cols = side === "schedule"
+      ? (Array.isArray(m.amounts) ? m.amounts : (m.amount >= 0 ? [m.amount] : []))
+      : (m.amount >= 0 ? [m.amount] : []);
+    return cols.filter(function (x) { return x != null && x >= 0; });
+  }
   function recordsFor(side) {
     var out = [];
     state[side].forEach(function (f) {
-      var m = f.map, R = f.rows;
+      var m = f.map, R = f.rows, H = f.headers || [];
+      var cols = balanceCols(f, side), wide = cols.length > 1;   // wide = several balance columns side by side
       for (var i = 0; i < R.length; i++) {
         var row = R[i];
-        if (m.vin < 0 || !serialLike(row[m.vin])) continue;   // skip totals / non-unit rows
-        out.push({
-          vin: normVin(row[m.vin]), raw: String(row[m.vin]),
-          account: (m.account >= 0 && row[m.account] != null) ? String(row[m.account]).trim() : "",
-          amount: toNum(row[m.amount]),
-          stock: (m.stock >= 0 && row[m.stock] != null) ? String(row[m.stock]).trim() : "",
-          desc: (m.desc >= 0 && row[m.desc] != null) ? String(row[m.desc]).trim() : ""
-        });
+        if (m.vin < 0 || !serialLike(row[m.vin])) continue;      // skip totals / non-unit rows
+        for (var a = 0; a < cols.length; a++) {
+          var ac = cols[a], cell = row[ac];
+          if (wide && (cell === "" || cell == null)) continue;   // wide: only the populated balance column for this unit
+          out.push({
+            vin: normVin(row[m.vin]), raw: String(row[m.vin]),
+            // wide → each balance column is its own floorplan account (named by header);
+            // otherwise use the account column if mapped.
+            account: wide ? (String(H[ac] || "").trim() || ("Balance " + colLetter(ac)))
+                          : ((m.account >= 0 && row[m.account] != null) ? String(row[m.account]).trim() : ""),
+            amount: toNum(cell),
+            stock: (m.stock >= 0 && row[m.stock] != null) ? String(row[m.stock]).trim() : "",
+            desc: (m.desc >= 0 && row[m.desc] != null) ? String(row[m.desc]).trim() : ""
+          });
+        }
       }
     });
     return out;
@@ -549,22 +593,53 @@
     var ms = $("matchMode"); ms.value = state.matchMode || "auto"; ms.onchange = function () { state.matchMode = ms.value; };
     $("mapping").classList.toggle("hidden", !(state.schedule.length && state.statement.length));
   }
+  function colSelectEl(f, getIdx, setIdx) {
+    var sel = el("select");
+    var none = el("option", null, "— none —"); none.value = "-1"; sel.appendChild(none);
+    f.headers.forEach(function (h, i) { var o = el("option", null, (h || "(col " + (i + 1) + ")") + "  [" + colLetter(i) + "]"); o.value = String(i); sel.appendChild(o); });
+    var v = getIdx(); sel.value = (v == null || v < 0) ? "-1" : String(v);
+    sel.onchange = function () { setIdx(parseInt(sel.value, 10)); };
+    return sel;
+  }
   function fileMapCard(side, f) {
-    var fields = side === "schedule"
-      ? [["vin", "VIN / serial"], ["account", "Account #"], ["amount", "Floorplan balance"], ["stock", "Stock #"], ["desc", "Description"]]
-      : [["vin", "VIN / serial"], ["amount", "Principal balance"], ["stock", "Stock #"], ["desc", "Description"]];
     var card = el("div", "mapcard");
     card.appendChild(el("div", "mapcard-name", f.name));
-    fields.forEach(function (fd) {
+    function simpleRow(label, key) {
       var row = el("div", "maprow");
-      row.appendChild(el("label", null, fd[1]));
-      var sel = el("select");
-      var none = el("option", null, "— none —"); none.value = "-1"; sel.appendChild(none);
-      f.headers.forEach(function (h, i) { var o = el("option", null, (h || "(col " + (i + 1) + ")") + "  [" + colLetter(i) + "]"); o.value = String(i); sel.appendChild(o); });
-      var v = f.map[fd[0]]; sel.value = (v == null || v < 0) ? "-1" : String(v);
-      sel.onchange = function () { f.map[fd[0]] = parseInt(sel.value, 10); };
-      row.appendChild(sel); card.appendChild(row);
-    });
+      row.appendChild(el("label", null, label));
+      row.appendChild(colSelectEl(f, function () { return f.map[key]; }, function (v) { f.map[key] = v; }));
+      card.appendChild(row);
+    }
+    simpleRow("VIN / serial", "vin");
+    if (side === "schedule") {
+      simpleRow("Account # (optional)", "account");
+      if (!Array.isArray(f.map.amounts)) f.map.amounts = (f.map.amount >= 0 ? [f.map.amount] : []);
+      if (!f.map.amounts.length) f.map.amounts = [-1];
+      var balWrap = el("div", "balcols");
+      (function renderBal() {
+        balWrap.innerHTML = "";
+        f.map.amounts.forEach(function (idx, k) {
+          var row = el("div", "maprow");
+          row.appendChild(el("label", null, k === 0 ? "Floorplan balance" : "+ balance col"));
+          row.appendChild(colSelectEl(f, function () { return f.map.amounts[k]; }, function (v) {
+            if (v < 0 && f.map.amounts.length > 1) { f.map.amounts.splice(k, 1); renderBal(); }
+            else f.map.amounts[k] = v;
+          }));
+          balWrap.appendChild(row);
+        });
+        var addRow = el("div", "maprow");
+        var add = el("button", "ghost tiny", "+ add balance column"); add.type = "button";
+        add.onclick = function () { f.map.amounts.push(-1); renderBal(); };
+        addRow.appendChild(add); balWrap.appendChild(addRow);
+      })();
+      card.appendChild(balWrap);
+      simpleRow("Stock #", "stock");
+      simpleRow("Description", "desc");
+    } else {
+      simpleRow("Principal balance", "amount");
+      simpleRow("Stock #", "stock");
+      simpleRow("Description", "desc");
+    }
     return card;
   }
   function colLetter(i) { var s = ""; i++; while (i > 0) { var m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
@@ -740,17 +815,22 @@
     // pooled bank statement — with one off-balance unit, one sold (schedule-only)
     // and one newly floored (statement-only). CDK schedules print the last 6 of
     // the VIN under "Serial"; the bank shows the full VIN.
+    // File 1 — long format: one balance column + an account column (new floorplan
+    // account 511171, plus a non-floorplan contracts-in-transit account that auto-excludes).
     var schHeaders = ["Account", "Stock", "Year", "Model", "Serial", "Sold Date", "Amount $"];
     var schNew = [
       ["511171", "T30289", "26", "RAV4", "000947", "", -43000],
       ["511171", "T30290", "26", "CAMRY", "001605", "", -38277.70],
-      ["511171", "T30295", "26", "CAMRY", "003665", "", -33832.98]
-    ];
-    var schUsed = [
-      ["511172", "T30714", "26", "TACOMA", "005961", "", -37500],
-      ["511172", "T30794", "26", "TACOMA", "006200", "", -37500],            // schedule 37,500; bank 35,000
-      ["511172", "T30501", "26", "4RUNNER", "099999", "2026-03-12", -41000], // sold → on schedule, not statement
+      ["511171", "T30295", "26", "CAMRY", "003665", "", -33832.98],
       ["230100", "T44021", "", "Contract in transit", "880123", "", -250]    // not floorplan → auto-excluded
+    ];
+    // File 2 — WIDE format: two floorplan balance columns side by side (used + demo).
+    var wideHeaders = ["Stock", "Year", "Model", "Serial", "Used FP Balance", "Demo FP Balance"];
+    var schWide = [
+      ["T30714", "26", "TACOMA", "005961", -37500, ""],
+      ["T30794", "26", "TACOMA", "006200", -37500, ""],            // schedule 37,500; bank 35,000
+      ["T30501", "26", "4RUNNER", "099999", -41000, ""],          // sold → on schedule, not statement
+      ["T30888", "26", "SUPRA", "007777", "", -52000]             // a demo-floorplan unit
     ];
     var stmtHeaders = ["Invoice Date", "Invoice Number", "Description", "Serial No/VIN", "Stock/Lease No", "Original Amount", "Beginning Balance", "Interest Amount", "Ending Balance"];
     var stmtRows = [
@@ -759,11 +839,12 @@
       ["2026-03-25", "3665", "2026 Toyota CAMRY", "1HGCY2F54TA003665", "T30295", 33832.98, 0, 32.02, 33832.98],
       ["2026-02-24", "5961", "2026 Toyota TACOMA", "5J6RS4H73TL005961", "T30714", 37500, 37500, 157.19, 37500],
       ["2026-02-10", "6200", "2026 Toyota TACOMA", "7FARS4H78TE006200", "T30794", 37500, 37500, 121.69, 35000],
+      ["2026-03-01", "7777", "2026 Toyota SUPRA", "JTDKARFU7T3007777", "T30888", 52000, 52000, 40.10, 52000],
       ["2026-03-30", "9001", "2026 Toyota HIGHLANDER", "3CZRZ2H50TM008888", "T30999", 31000, 0, 5, 31000]   // newly floored → statement only
     ];
     state = { schedule: [], statement: [], acctOverride: {}, matchMode: "auto", result: null, activeTab: "off" };
-    state.schedule.push({ id: ++_uid, name: "SAMPLE — Rivendell Toyota new floorplan.csv", headers: schHeaders, rows: schNew, map: autoMapFor(schHeaders, schNew, "schedule") });
-    state.schedule.push({ id: ++_uid, name: "SAMPLE — Rivendell Toyota used floorplan.csv", headers: schHeaders, rows: schUsed, map: autoMapFor(schHeaders, schUsed, "schedule") });
+    state.schedule.push({ id: ++_uid, name: "SAMPLE — Rivendell Toyota new floorplan (long).csv", headers: schHeaders, rows: schNew, map: autoMapFor(schHeaders, schNew, "schedule") });
+    state.schedule.push({ id: ++_uid, name: "SAMPLE — Rivendell Toyota used+demo floorplan (wide).csv", headers: wideHeaders, rows: schWide, map: autoMapFor(wideHeaders, schWide, "schedule") });
     state.statement.push({ id: ++_uid, name: "SAMPLE — Bank of Braavos Floorplan statement.csv", headers: stmtHeaders, rows: stmtRows, map: autoMapFor(stmtHeaders, stmtRows, "statement") });
     renderFileList("schedule"); renderFileList("statement");
     buildMapUI();
