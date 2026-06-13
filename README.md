@@ -10,6 +10,14 @@ A collection of CDK consulting tools organized by tool type.
   <store-or-group>/ ← store- or group-specific variants
 ```
 
+> **Master / `_shared` convention.** Every tool under a `_shared/` folder is the
+> store-agnostic **master** you iterate from. Masters are themed in purple
+> (`#6B298C`) — if a tool opens purple, it's the master, not a live store build —
+> carry no dealer branding, and ship with **fictional** demo data (Hill Valley
+> Honda, Bedrock Hyundai, Gotham Toyota-Chevrolet, Homer Simpson, Gringotts
+> Floorplan Bank, …). Clone a master per store with `/new-store-tool` and swap in
+> the real accounts/branding.
+
 Current tool types:
 
 | Folder | Contents |
@@ -37,8 +45,25 @@ A **CMA-branded** build (logo, navy/orange palette) lives at
 
 See `Floorplan/_shared/floorplan-rec/README.md` for details.
 
-### GL-Reconciliation/_shared/GL-Posting-Validator
-Standalone HTML tool for validating GL postings.
+### AR/_shared/cash-clearing
+Store-agnostic master of the daily Cash Clearing Reconciliation (ported from the
+CMA workbook). Per-store accounts/deposit types/Not-On-Schedule categories live
+in an editable config (⚙ Setup + **Download shareable copy**); ships with five
+fictional demo stores. See `AR/_shared/cash-clearing/README.md`.
+
+### GL-Reconciliation/_shared/gl-posting-validator
+Already-agnostic GL Posting Month Validator (GL postings vs. RRH receipt history),
+purple-themed master. See its README.
+
+### GL-Reconciliation/_shared/statement-reconciliation
+De-branded master of the factory-statement reconciliation tool (`GL = Statement −
+Incentives`). Parses the Toyota/TFS statement layout; adapt the parser per maker.
+See its README (note: still loads pdf.js/xlsx from a CDN — flagged for inlining).
+
+### Powerposting/_shared
+Masters of the two PDF→AGJE Powerposting tools (Honda/Hyundai invoices;
+Toyota/GM warranty). Per-dealer Co numbers and GL accounts are in an editable
+`MASTER CONFIG` block. See `Powerposting/_shared/README.md`.
 
 ### Parts/_shared/parts-rec
 Parts inventory reconciliation tool. Available as:

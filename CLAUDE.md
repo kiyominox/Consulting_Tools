@@ -25,16 +25,24 @@ managers. Tools must be trustworthy with real money and real GL accounts.
 
 | Tool type | Source | Live variants |
 |---|---|---|
-| `AR/` Cash Clearing | `AR/CMA/cash-clearing/` (HTML + 5 `.xlsm` templates) | Stores **CO18, CO19, CO20, CO21, CO23** |
-| `Powerposting/` PDF→AGJE | `Powerposting/CMA/*.html` | Honda/Hyundai invoices; Toyota/GM warranty |
+| `AR/` Cash Clearing | `AR/_shared/cash-clearing/` (HTML master) | **CMA** build at `AR/CMA/cash-clearing/` + 5 `.xlsm` (CO18–23) |
+| `Powerposting/` PDF→AGJE | `Powerposting/_shared/*.html` (masters) | **CMA** build at `Powerposting/CMA/`; Honda/Hyundai invoices, Toyota/GM warranty |
 | `Vehicle-Sales/` report | `Vehicle-Sales/_shared/vehicle-sales-report/` (built from `src/`) | **MacDonald, Hillside** |
 | `Parts/` reconciliation | `Parts/_shared/parts-rec/` (Python CLI + Flask + standalone HTML) | `_shared` only so far |
 | `Floorplan/` reconciliation | `Floorplan/_shared/floorplan-rec/` (built from `src/`) | `_shared` (store/group agnostic) + **CMA** branded skin |
-| `GL-Reconciliation/` validator | `GL-Reconciliation/Hickman's/gl-posting-validator.html` | Hickman's |
+| `GL-Reconciliation/` | `GL-Reconciliation/_shared/{gl-posting-validator,statement-reconciliation}/` (masters) | **Hickman's** validator + **CMA** Toyota statement skins |
 | `AP/` | placeholder — coming soon | — |
 
 When adding a tool: all-stores → `<ToolType>/_shared/<tool-name>/`; store-specific
 → `<ToolType>/<store>/<tool-name>/`. Use hyphenated folder names, no spaces.
+
+**Master (`_shared`) house style.** Tools under `_shared/` are the agnostic
+masters: themed in the master purple **`#6B298C`** (the `--accent` family; keep
+semantic green/red/amber and per-brand badge colors), no dealer branding, and
+seeded with **fictional** demo data (Hill Valley Honda, Bedrock Hyundai, Gotham
+Toyota-Chevrolet, Homer Simpson, Gringotts Floorplan Bank, …) — never a real
+store/customer/account. A store build is a clone (`/new-store-tool`) that re-skins
+and swaps in real accounts. For tools built from `src/`, edit `src/` and rebuild.
 
 ## House conventions for tools (follow these for anything new)
 
