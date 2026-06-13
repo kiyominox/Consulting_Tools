@@ -5,8 +5,8 @@
    Joins a CDK GL / Journal export (the "bible" for which deals appear) to a
    Deskit cross-reference export. GL "Reference" == Deskit "STOCK#".
    Money columns are computed from configurable GL account lists per category,
-   per dealership. F&I Commission can be computed as a tiered % of F&I gross
-   based on each business manager's monthly average. Config persists locally.
+   per dealership. F&I Commission is summed straight from its mapped GL
+   commission accounts, exactly like Sales Commission. Config persists locally.
 ---------------------------------------------------------------------------- */
 
 const CATEGORIES = [
@@ -15,18 +15,15 @@ const CATEGORIES = [
   { key:"fiSale",    name:"F&I Sale",        sign:-1, desc:"F&I income accounts (warranty, gap, etc.) → revenue side of F&I Gross." },
   { key:"fiCost",    name:"F&I Cost",        sign:+1, desc:"F&I cost accounts → cost side of F&I Gross." },
   { key:"salesComm", name:"Sales Commission",sign:+1, desc:"Salesperson commission accounts → Sales Commission column." },
-  { key:"fiComm",    name:"F&I Commission",  sign:+1, desc:"Business-manager commission → F&I Commission column (tiered % of F&I gross, or from GL accounts)." },
+  { key:"fiComm",    name:"F&I Commission",  sign:+1, desc:"Business-manager / F&I commission GL accounts → F&I Commission column." },
 ];
 const DEALERSHIPS = ["Rivendell Toyota","Mordor Chevrolet"];
 const LS_KEY = "vsr_config_v5";
-const DEFAULT_TIERS = { t1:2000, r1:16, t2:2250, r2:18, r3:20 };
 
 /* ---------- config model: accounts = [{n:"acct", d:"description"}] ---------- */
 function blankDealerCfg(){
   const c = {};
   CATEGORIES.forEach(cat => c[cat.key] = { accounts:[], sign:cat.sign });
-  c.fiComm.method = "tiered";                 // "tiered" | "accounts"
-  c.fiComm.tiers  = Object.assign({}, DEFAULT_TIERS);
   return c;
 }
 function macDealerCfg(){
@@ -61,10 +58,6 @@ function loadConfig(){
         if(pc){
           base[d][cat.key].accounts = coerceAccounts(pc.accounts);
           if(typeof pc.sign === "number") base[d][cat.key].sign = pc.sign;
-          if(cat.key==="fiComm"){
-            if(pc.method==="tiered"||pc.method==="accounts") base[d].fiComm.method = pc.method;
-            if(pc.tiers) base[d].fiComm.tiers = Object.assign({}, DEFAULT_TIERS, pc.tiers);
-          }
         }
       });
     });
@@ -90,44 +83,11 @@ function buildCatTabs(){
     const dc = CONFIG[CURRENT_DEALER][cat.key];
     let badge = nonEmptyAccts(dc).length;
     let label = cat.name + (badge? "  ("+badge+")":"");
-    if(cat.key==="fiComm" && dc.method==="tiered") label = cat.name + "  (tiered)";
     b.textContent = label;
     b.className = cat.key===ACTIVE_CAT ? "active":"";
     b.onclick = ()=>{ ACTIVE_CAT = cat.key; buildCatTabs(); buildCatPanels(); };
     catTabsEl.appendChild(b);
   });
-}
-
-function buildTierEditor(dcfg){
-  const box = document.createElement("div"); box.className="tier-box";
-  box.innerHTML = "<h4>Rate by each business manager's average F&I gross per deal (this month)</h4>";
-  const grid = document.createElement("div"); grid.className="tier-grid";
-  const t = dcfg.tiers;
-  function num(val,on,suffix){
-    const wrap=document.createElement("span");
-    const i=document.createElement("input"); i.type="number"; i.value=val; i.step="any";
-    i.oninput=()=>on(parseFloat(i.value)); wrap.appendChild(i);
-    if(suffix){ const s=document.createElement("span"); s.textContent=suffix; s.style.marginLeft="4px"; wrap.appendChild(s); }
-    return wrap;
-  }
-  const s1=document.createElement("span"); s1.className="seg";
-  s1.appendChild(document.createTextNode("avg < $")); s1.appendChild(num(t.t1,v=>t.t1=v));
-  s1.appendChild(document.createTextNode("→")); s1.appendChild(num(t.r1,v=>t.r1=v,"%"));
-  const s2=document.createElement("span"); s2.className="seg";
-  s2.appendChild(document.createTextNode("$")); s2.appendChild(num(t.t1,v=>t.t1=v));
-  s2.appendChild(document.createTextNode("–$")); s2.appendChild(num(t.t2,v=>t.t2=v));
-  s2.appendChild(document.createTextNode("→"));
-  s2.appendChild(num(t.r2,v=>t.r2=v,"%"));
-  const s3=document.createElement("span"); s3.className="seg";
-  s3.appendChild(document.createTextNode("avg > $")); s3.appendChild(num(t.t2,v=>t.t2=v));
-  s3.appendChild(document.createTextNode("→")); s3.appendChild(num(t.r3,v=>t.r3=v,"%"));
-  grid.appendChild(s1); grid.appendChild(s2); grid.appendChild(s3);
-  box.appendChild(grid);
-  const note=document.createElement("div"); note.className="muted"; note.style.cssText="font-size:12px;margin-top:8px";
-  note.innerHTML="Each manager's rate is set by their month-average F&I gross, then applied to every one of their deals: "+
-                 "F&I Commission = rate × that deal's F&I Gross. Business manager comes from Deskit's <b>FI MANAGER</b> field.";
-  box.appendChild(note);
-  return box;
 }
 
 function buildCatPanels(){
@@ -151,30 +111,13 @@ function buildCatPanels(){
     meta.appendChild(desc); meta.appendChild(signWrap);
     panel.appendChild(meta);
 
-    // ----- F&I Commission method switch -----
-    let accountsEnabled = true;
-    if(cat.key==="fiComm"){
-      const mWrap=document.createElement("div"); mWrap.className="cat-meta"; mWrap.style.marginTop="-4px";
-      mWrap.innerHTML='<div class="desc"><b>Calculation method</b></div>';
-      const mSel=document.createElement("select"); mSel.className="filter-input"; mSel.style.minWidth="240px";
-      mSel.innerHTML='<option value="tiered">Tiered % of F&I gross (by business manager)</option>'+
-                     '<option value="accounts">Sum of GL commission accounts</option>';
-      mSel.value=dcfg.method||"tiered";
-      mSel.onchange=()=>{ dcfg.method=mSel.value; buildCatTabs(); buildCatPanels(); };
-      mWrap.appendChild(mSel); panel.appendChild(mWrap);
-      if((dcfg.method||"tiered")==="tiered"){ panel.appendChild(buildTierEditor(dcfg)); accountsEnabled=false; }
-    }
-
     // ----- account list -----
     const listHdr=document.createElement("div");
     listHdr.className="muted"; listHdr.style.cssText="font-size:12px;margin-bottom:6px";
-    listHdr.textContent = (cat.key==="fiComm" && !accountsEnabled)
-      ? "GL accounts below are used only if you switch the method to “Sum of GL commission accounts”."
-      : "GL account numbers in this category:";
+    listHdr.textContent = "GL account numbers in this category:";
     panel.appendChild(listHdr);
 
     const scroll = document.createElement("div"); scroll.className="acct-scroll";
-    if(cat.key==="fiComm" && !accountsEnabled) scroll.style.opacity=".6";
     const list = document.createElement("div"); list.className="acct-list";
     function renderList(){
       list.innerHTML = "";
@@ -227,7 +170,7 @@ function refreshSettingsUI(){
   document.getElementById("settingsDealerName").textContent = CURRENT_DEALER;
   buildCatTabs(); buildCatPanels();
 }
-/* Settings drawer: Enter advances through the account-number / description / tier
+/* Settings drawer: Enter advances through the account-number / description
    inputs (delegated once on the panel container, which is re-rendered per tab). */
 wireEnterNav(catPanelsEl,{});
 
@@ -263,10 +206,6 @@ document.getElementById("importCfgFile").onchange = (e)=>{
         if(pc){
           base[d][cat.key].accounts=coerceAccounts(pc.accounts);
           if(typeof pc.sign==="number") base[d][cat.key].sign=pc.sign;
-          if(cat.key==="fiComm"){
-            if(pc.method==="tiered"||pc.method==="accounts") base[d].fiComm.method=pc.method;
-            if(pc.tiers) base[d].fiComm.tiers=Object.assign({},DEFAULT_TIERS,pc.tiers);
-          }
         }
       });});
       CONFIG=base; saveConfig(); refreshSettingsUI(); alert("Settings imported.");
@@ -465,9 +404,6 @@ const REPORT_COLS = [
   {key:"salesFiComm",label:"Sales F&I Commission", type:"money"},
 ];
 let REPORT_DATA = [];
-let FI_BASIS = [];
-let FI_RATE_OVERRIDE = {};   // normalized manager name -> manually entered %
-let FI_DIRTY = false;        // true when rates edited but not yet recalculated
 let SORT = { key:null, dir:1 };
 
 function toNum(v){
@@ -504,42 +440,11 @@ function parseYearModel(vehicle){
   return {year,model};
 }
 function customerName(rec){ if(!rec) return ""; const f=String(rec.first||"").trim(), l=String(rec.last||"").trim(); return (f&&l)?f+" "+l:(f||l||""); }
-function tierRate(avg, tiers){
-  const t = tiers || DEFAULT_TIERS;
-  if(avg < t.t1) return t.r1;
-  if(avg <= t.t2) return t.r2;
-  return t.r3;
-}
 
-/* Compute F&I commission for every deal and (re)build FI_BASIS.
-   Each business manager gets an auto rate from the tiers based on their monthly
-   average F&I gross; a manual override in FI_RATE_OVERRIDE takes precedence. */
+/* F&I commission is summed straight from the mapped GL commission accounts
+   (the per-deal fiCommAcct value), exactly like Sales Commission. */
 function applyFiCommissions(rows){
-  const dc=CONFIG[CURRENT_DEALER];
-  FI_BASIS=[];
-  if((dc.fiComm.method||"tiered")==="tiered"){
-    const tiers=dc.fiComm.tiers;
-    const groups={};
-    rows.forEach(r=>{ const k=normName(r.bizMgr); if(!k) return; (groups[k]=groups[k]||{name:r.bizMgr,key:k,deals:[]}).deals.push(r); });
-    Object.keys(groups).forEach(k=>{
-      const g=groups[k];
-      const total=g.deals.reduce((s,r)=>s+r.fiGross,0);
-      const avg=g.deals.length?total/g.deals.length:0;
-      const autoRate=tierRate(avg,tiers);
-      const ov=FI_RATE_OVERRIDE[k];
-      const overridden=(ov!=null && isFinite(ov));
-      const rate=overridden?ov:autoRate;
-      let comm=0;
-      g.deals.forEach(r=>{ r.fiComm=round2(rate/100*r.fiGross); comm+=r.fiComm; });
-      FI_BASIS.push({ name:g.name, key:k, count:g.deals.length, totalFiGross:total, avg,
-                      autoRate, rate, override:overridden?ov:null, commission:round2(comm) });
-    });
-    FI_BASIS.sort((a,b)=>b.count-a.count);
-    rows.forEach(r=>{ if(!normName(r.bizMgr)) r.fiComm=0; });
-  } else {
-    rows.forEach(r=>{ r.fiComm = r.fiCommAcct; });
-  }
-  rows.forEach(r=>{ r.salesFiComm = round2(r.salesComm + r.fiComm); });
+  rows.forEach(r=>{ r.fiComm = r.fiCommAcct; r.salesFiComm = round2(r.salesComm + r.fiComm); });
 }
 
 function generateReport(){
@@ -598,8 +503,7 @@ function generateReport(){
     });
   });
 
-  // ----- F&I Commission -----
-  FI_RATE_OVERRIDE = {}; FI_DIRTY = false;   // fresh data → drop any manual rate overrides
+  // ----- F&I Commission (summed from GL accounts) -----
   applyFiCommissions(rows);
 
   REPORT_DATA=rows;
@@ -674,7 +578,7 @@ const REPORT_GROUPS = [
     {key:"salesperson",label:"Salesperson", type:"text", core:true},
     {key:"salesComm",  label:"Sales Comm",  type:"money"},
     {key:"bizMgr",     label:"Business Mgr",type:"text", core:true, hint:"F&I / business manager (Deskit FI MANAGER)"},
-    {key:"fiComm",     label:"F&I Comm",    type:"money", hint:"Tiered % of this manager's F&I gross"},
+    {key:"fiComm",     label:"F&I Comm",    type:"money", hint:"From mapped GL commission accounts"},
     {key:"salesFiComm",label:"Total Comp",  type:"money", emph:true, core:true, hint:"Total Comp = Sales Comm + F&I Comm"},
   ]},
 ];
@@ -769,13 +673,12 @@ function renderReport(){
 
   // ---------- legend ----------
   const dc=CONFIG[CURRENT_DEALER];
-  const counts=CATEGORIES.map(cat=>`${cat.name}: ${cat.key==="fiComm"&&dc.fiComm.method==="tiered"?"tiered":nonEmptyAccts(dc[cat.key]).length}`).join(" · ");
+  const counts=CATEGORIES.map(cat=>`${cat.name}: ${nonEmptyAccts(dc[cat.key]).length}`).join(" · ");
   document.getElementById("reportLegend").innerHTML=
     `<b>How to read this:</b> amber rows tagged <span class="pill">not in deskit</span> are in the GL with no Deskit match &mdash; reconcile these first. `+
     `Figures in <span class="neg">red</span> are negative. The bold <b>Gross</b> and <b>Total Comp</b> columns are the calculated bottom lines.`+
     `<br>Money columns come from the <b>${CURRENT_DEALER}</b> account setup (${counts}). F&amp;I Gross = F&amp;I Sales − F&amp;I Cost · Total Comp = Sales Comm + F&amp;I Comm.`;
 
-  renderFiBasis();
   renderDashboard(vis);
   const cnt=document.getElementById("reportTabCount"); if(cnt) cnt.textContent=shown;
   document.getElementById("dashDealerName").textContent=CURRENT_DEALER;
@@ -925,64 +828,6 @@ function wireEnterNav(root,opts){
     }
     if(next){ next.focus(); if(next.select) try{next.select();}catch(_){} }
   });
-}
-
-function setFiDirty(v){
-  FI_DIRTY=v;
-  const n=document.getElementById("fiDirtyNote"); if(n) n.textContent = v ? "Rates changed — click Recalculate to apply." : "";
-  const b=document.getElementById("fiRecalcBtn"); if(b) b.classList.toggle("attn", v);
-}
-function fiAutoRate(key){ const b=FI_BASIS.find(x=>x.key===key); return b?b.autoRate:null; }
-function setFiOverride(mgr,raw){
-  const v=parseFloat(raw), a=fiAutoRate(mgr);
-  if(raw===""||isNaN(v)) delete FI_RATE_OVERRIDE[mgr];           // blank → back to auto
-  else if(a!=null && Math.abs(v-a)<1e-9) delete FI_RATE_OVERRIDE[mgr]; // equals auto → not an override
-  else FI_RATE_OVERRIDE[mgr]=v;
-}
-function readFiRateInputs(el){
-  el.querySelectorAll("input.firate").forEach(inp=>setFiOverride(inp.dataset.mgr, inp.value));
-}
-function renderFiBasis(){
-  const el=document.getElementById("fiBasis");
-  const dc=CONFIG[CURRENT_DEALER];
-  if((dc.fiComm.method||"tiered")!=="tiered" || !FI_BASIS.length){ el.innerHTML=""; return; }
-  const t=dc.fiComm.tiers;
-  const body=FI_BASIS.map(b=>{
-    const pending=FI_RATE_OVERRIDE[b.key];
-    const ov=(pending!=null && isFinite(pending));
-    const displayRate=ov?pending:b.rate;
-    return `<tr${ov?' class="ov"':''}><td>${escapeHtml(b.name)}</td><td class="num">${b.count}</td>`+
-      `<td class="num">${fmtMoney(b.totalFiGross)}</td><td class="num">${fmtMoney(b.avg)}</td>`+
-      `<td class="num"><span class="rate-cell"><input type="number" class="firate" step="0.1" min="0" `+
-        `data-mgr="${escapeHtml(b.key)}" value="${displayRate}" aria-label="F&I rate % for ${escapeHtml(b.name)}">%</span>`+
-      `<span class="auto-hint">auto ${b.autoRate}%</span></td>`+
-      `<td class="num">${fmtMoney(b.commission)}</td></tr>`;
-  }).join("");
-  const totComm=FI_BASIS.reduce((s,b)=>s+b.commission,0);
-  el.innerHTML=`<details class="fibasis" open><summary>F&I Commission basis — per business manager `+
-    `(auto rates: &lt;$${t.t1}=${t.r1}%, $${t.t1}–$${t.t2}=${t.r2}%, &gt;$${t.t2}=${t.r3}%)</summary>`+
-    `<div class="fibasis-bar"><span class="muted">Edit any rate, then recalculate.</span>`+
-    `<span class="muted" id="fiDirtyNote" style="color:var(--warn);font-weight:700"></span>`+
-    `<div class="grow"></div>`+
-    `<button class="tiny" id="fiResetBtn">Reset to auto</button>`+
-    `<button class="tiny primary" id="fiRecalcBtn">Recalculate F&I commissions</button></div>`+
-    `<table class="basis"><thead><tr><th>Business Manager</th><th class="num">Deals</th>`+
-    `<th class="num">Total F&I Gross</th><th class="num">Avg / Deal</th><th class="num">Rate %</th><th class="num">F&I Commission</th></tr></thead>`+
-    `<tbody>${body}</tbody><tfoot><tr><th>Total</th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num">${fmtMoney(totComm)}</th></tr></tfoot></table></details>`;
-  el.querySelectorAll("input.firate").forEach(inp=>{
-    inp.addEventListener("input",()=>{ setFiOverride(inp.dataset.mgr, inp.value); setFiDirty(true); });
-    inp.addEventListener("focus",()=>{ try{inp.select();}catch(_){} });
-  });
-  // Enter advances down the rate column (Shift+Enter goes up); Tab uses native order.
-  const basisTable=el.querySelector("table.basis");
-  if(basisTable) wireEnterNav(basisTable,{columnar:true});
-  document.getElementById("fiRecalcBtn").onclick=()=>{
-    readFiRateInputs(el); applyFiCommissions(REPORT_DATA); setFiDirty(false); renderReport();
-  };
-  document.getElementById("fiResetBtn").onclick=()=>{
-    FI_RATE_OVERRIDE={}; applyFiCommissions(REPORT_DATA); setFiDirty(false); renderReport();
-  };
-  setFiDirty(FI_DIRTY);
 }
 
 document.getElementById("genBtn").onclick=generateReport;
@@ -1287,12 +1132,15 @@ function loadDemoData(){
       price, cost, frontGross,
       salesperson:matched?pick(SP):"", salesComm:Math.round(Math.max(150, frontGross*rnd(0.18,0.28))),
       bizMgr:matched?pick(BM):"",
-      fiSale, fiCost, fiGross:round2(fiSale-fiCost), fiCommAcct:0, fiComm:0, salesFiComm:0,
+      fiSale, fiCost, fiGross:round2(fiSale-fiCost),
+      // Stand-in for a GL commission-account amount in the sample (NOT a live
+      // calculation): a modest round portion of this deal's F&I gross.
+      fiCommAcct: Math.round(Math.max(0, round2(fiSale-fiCost))*rnd(0.10,0.20)/5)*5,
+      fiComm:0, salesFiComm:0,
       _matched:matched,
     });
   }
-  // tiered F&I commission (shared engine)
-  FI_RATE_OVERRIDE = {}; FI_DIRTY = false;
+  // F&I commission summed straight from the (sample) GL commission accounts.
   applyFiCommissions(rows);
 
   REPORT_DATA=rows;
