@@ -9,8 +9,9 @@
   :root{
     --ink:#16191d; --ink-2:#434a52; --muted:#79808a;
     --paper:#ffffff; --bg:#eceff3; --line:#e3e7ec; --line-2:#d3d9e0;
-    --accent:#1f74cf; --accent-strong:#175ca8; --accent-ink:#0f4d8f;
-    --accent-soft:#e8f1fb; --accent-line:#c4ddf5;
+    /* MASTER (_shared) theme — purple #6B298C so this is recognizably the source copy */
+    --accent:#6B298C; --accent-strong:#561f70; --accent-ink:#45195a;
+    --accent-soft:#f3eaf8; --accent-line:#dcc4e8;
     --pos:#15784c; --pos-soft:#f1f8f4; --neg:#c0392b; --neg-soft:#fbeceb;
     --warn:#9a6207; --warn-soft:#fbf2dd; --warn-line:#eed8a6;
     --shadow:0 1px 2px rgba(22,25,29,.05),0 1px 1px rgba(22,25,29,.04);
@@ -1061,8 +1062,8 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       ["H30794", "26", "CR-V", "006200", "", -37500],                         // schedule says 37,500; bank 35,000
       ["H30501", "26", "PILOT", "099999", "2026-03-12", -41000]              // on schedule, not on statement (sold)
     ];
-    state.schedule = { headers: schHeaders, rows: schRows, name: "SAMPLE — schedule.csv" };
-    state.statement = { headers: stmtHeaders, rows: stmtRows.concat([["2026-03-30", "9001", "2026 Honda HRV", "3CZRZ2H50TM008888", "H30999", 31000, 0, 5, 31000]]), name: "SAMPLE — statement.csv" };
+    state.schedule = { headers: schHeaders, rows: schRows, name: "SAMPLE — Hill Valley Honda schedule.csv" };
+    state.statement = { headers: stmtHeaders, rows: stmtRows.concat([["2026-03-30", "9001", "2026 Honda HRV", "3CZRZ2H50TM008888", "H30999", 31000, 0, 5, 31000]]), name: "SAMPLE — Gringotts Floorplan Bank statement.csv" };
     autoMap("schedule"); autoMap("statement");
     ["Schedule", "Statement"].forEach(function (s) {
       var d = state[s.toLowerCase()];

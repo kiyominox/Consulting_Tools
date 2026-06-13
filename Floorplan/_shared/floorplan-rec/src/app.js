@@ -687,8 +687,8 @@
       ["H30794", "26", "CR-V", "006200", "", -37500],                         // schedule says 37,500; bank 35,000
       ["H30501", "26", "PILOT", "099999", "2026-03-12", -41000]              // on schedule, not on statement (sold)
     ];
-    state.schedule = { headers: schHeaders, rows: schRows, name: "SAMPLE — schedule.csv" };
-    state.statement = { headers: stmtHeaders, rows: stmtRows.concat([["2026-03-30", "9001", "2026 Honda HRV", "3CZRZ2H50TM008888", "H30999", 31000, 0, 5, 31000]]), name: "SAMPLE — statement.csv" };
+    state.schedule = { headers: schHeaders, rows: schRows, name: "SAMPLE — Hill Valley Honda schedule.csv" };
+    state.statement = { headers: stmtHeaders, rows: stmtRows.concat([["2026-03-30", "9001", "2026 Honda HRV", "3CZRZ2H50TM008888", "H30999", 31000, 0, 5, 31000]]), name: "SAMPLE — Gringotts Floorplan Bank statement.csv" };
     autoMap("schedule"); autoMap("statement");
     ["Schedule", "Statement"].forEach(function (s) {
       var d = state[s.toLowerCase()];

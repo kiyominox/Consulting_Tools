@@ -7,7 +7,7 @@
 <style>
   /* ============================================================ DESIGN TOKENS */
   :root{
-    /* CDK-flavored: black & white + light-blue accent (MacDonald/Hillside) */
+    /* MASTER (_shared) theme — purple #6B298C marks this as the source copy */
     --ink:#16191d;          /* near-black primary text */
     --ink-2:#434a52;        /* secondary text */
     --muted:#79808a;        /* tertiary / labels */
@@ -16,12 +16,12 @@
     --line:#e3e7ec;         /* hairline */
     --line-2:#d3d9e0;       /* stronger divider */
 
-    /* accent — light blue, tunable via Tweaks */
-    --accent:#1f74cf;
-    --accent-strong:#175ca8;
-    --accent-ink:#0f4d8f;
-    --accent-soft:#e8f1fb;
-    --accent-line:#c4ddf5;
+    /* accent — master purple #6B298C, tunable via Tweaks */
+    --accent:#6B298C;
+    --accent-strong:#561f70;
+    --accent-ink:#45195a;
+    --accent-soft:#f3eaf8;
+    --accent-line:#dcc4e8;
 
     --pos:#15784c;
     --neg:#c0392b;
@@ -358,8 +358,8 @@
   <div class="dealer-switch">
     <span class="dl">Store</span>
     <select id="dealerSel" class="dealer" title="Switch dealership. Each store keeps its own GL account setup.">
-      <option value="MacDonald">MacDonald</option>
-      <option value="Hillside">Hillside</option>
+      <option value="Hill Valley Motors">Hill Valley Motors</option>
+      <option value="Bedrock Auto">Bedrock Auto</option>
     </select>
   </div>
   <div class="topbar-actions">
@@ -499,7 +499,7 @@
 <div class="overlay hide" id="settingsOverlay"></div>
 <aside class="drawer hide" id="settingsDrawer" aria-label="GL account setup">
   <div class="drawer-head">
-    <h2>GL Account Setup &mdash; <span id="settingsDealerName">MacDonald</span></h2>
+    <h2>GL Account Setup &mdash; <span id="settingsDealerName">Hill Valley Motors</span></h2>
     <button class="ghost x" id="closeSettingsBtn">&#10005; Close</button>
   </div>
   <div class="drawer-body">
@@ -526,7 +526,7 @@
 <script>/*__SHEETJS_LIB__*/</script>
 <!-- ExcelJS (embedded — styled .xlsx export) -->
 <script>/*__EXCELJS_LIB__*/</script>
-<!-- MacDonald default chart-of-accounts -->
+<!-- default chart-of-accounts (generic starter; edit per store in Account Setup) -->
 <script>/*__MAC_DEFAULTS__*/</script>
 <!-- Application -->
 <script>/*__APP_JS__*/</script>
