@@ -4,6 +4,24 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>GL Posting Month Validator</title>
+  <script>
+  (function(){
+    var KEY='glval_theme', t;
+    try{t=localStorage.getItem(KEY);}catch(e){}
+    if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+    function set(t){var h=document.documentElement;h.setAttribute('data-theme',t);h.setAttribute('data-bs-theme',t);}
+    set(t);
+    document.addEventListener('DOMContentLoaded',function(){
+      var b=document.getElementById('btnTheme'); if(!b) return;
+      function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+      icon();
+      b.addEventListener('click',function(){
+        var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+        set(cur); try{localStorage.setItem(KEY,cur);}catch(e){} icon();
+      });
+    });
+  })();
+  </script>
   <style id="bootstrap-css">
 @charset "UTF-8";/*!
  * Bootstrap  v5.3.2 (https://getbootstrap.com/)
@@ -43,12 +61,26 @@
     .tab-pane-inner { padding: 1rem 0; }
     .legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 5px; }
     .log-area { font-size: .75rem; color: #555; background: #f8f9fa; border-radius: 6px; padding: .8rem; max-height: 120px; overflow-y: auto; font-family: monospace; }
+
+    /* ===== Dark theme overrides for custom classes (Bootstrap components handled by data-bs-theme) ===== */
+    html[data-theme="dark"] body { background: #15121b; color: #e9e6ef; }
+    html[data-theme="dark"] .hero { background: linear-gradient(135deg, #2c0f3c 0%, #4a1c63 100%); }
+    html[data-theme="dark"] .month-header { background: linear-gradient(90deg, #2c0f3c, #4a1c63); }
+    html[data-theme="dark"] .upload-card { background: #211b29; border-color: #473d50; }
+    html[data-theme="dark"] .upload-card:hover, html[data-theme="dark"] .upload-card.has-file { border-color: #9b4dc0; }
+    html[data-theme="dark"] .upload-card.has-file { background: #2a1f33; }
+    html[data-theme="dark"] .text-primary { color: #9b4dc0 !important; }
+    html[data-theme="dark"] .table th { background: #1c1726; }
+    html[data-theme="dark"] .note-cell { color: #9089a0; }
+    html[data-theme="dark"] .orders-cell { color: #e9e6ef; }
+    html[data-theme="dark"] .log-area { background: #1c1726; color: #9089a0; }
   </style>
 </head>
 <body>
 
 <div class="hero mb-4">
-  <div class="container">
+  <div class="container" style="position:relative">
+    <button id="btnTheme" class="btn btn-sm btn-outline-light" title="Toggle dark mode" aria-label="Toggle dark mode" style="position:absolute;top:0;right:12px">&#x1F319;</button>
     <h1>📋 GL Posting Month Validator</h1>
     <p>Compare GL entries against receipt history to verify correct posting months (April &amp; May)</p>
   </div>

@@ -4,6 +4,25 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cash Clearing Reconciliation</title>
+<script>
+(function(){
+  var KEY='ccr_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){}
+      icon();
+    });
+  });
+})();
+</script>
 <style>
   :root{
     --bg:#eef1f5; --panel:#ffffff; --ink:#1d2733; --muted:#67768a;
@@ -127,6 +146,55 @@
   .setupPane table input.mono{font-family:var(--mono)}
   .mfoot{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:14px 20px;border-top:1px solid var(--line);background:#f7f9fb}
   .mfoot .note{flex:1;min-width:200px}
+
+  /* ============================================================ DARK MODE */
+  html[data-theme="dark"]{
+    --bg:#15121b; --panel:#211b29; --ink:#e9e6ef; --muted:#9089a0;
+    --line:#332b3d; --accent:#9b4dc0; --accent2:#3fae73; --navy:#2a1f33;
+    --green:#16261f; --greenline:#2f5b46; --greentext:#3fae73;
+    --amber:#2a2316; --amberline:#4a3d1f; --ambertext:#d2a23f;
+    --blue:#1d2334; --blueline:#3a4a6a;
+    --red:#2c1b19; --redline:#5a3431;
+  }
+  html[data-theme="dark"] body{background:var(--bg);color:var(--ink)}
+  html[data-theme="dark"] header{box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  html[data-theme="dark"] section{box-shadow:0 1px 2px rgba(0,0,0,.4)}
+  html[data-theme="dark"] .pill .kpi{background:rgba(255,255,255,.07)}
+  html[data-theme="dark"] .pill .var.ok{background:rgba(63,174,115,.18)}
+
+  html[data-theme="dark"] .drop{background:#1c1726;border-color:var(--line)}
+  html[data-theme="dark"] .drop.over{border-color:var(--accent);background:var(--accent-soft,#2a1f33)}
+  html[data-theme="dark"] .drop.loaded{border-color:var(--greenline);background:var(--green)}
+  html[data-theme="dark"] .drop .status.err{color:#e07567}
+  html[data-theme="dark"] .filechip{background:#2a2333;border-color:var(--line)}
+
+  html[data-theme="dark"] th{background:#1c1726}
+  html[data-theme="dark"] td{border-bottom-color:#2a2333}
+  html[data-theme="dark"] tr.matched td{background:var(--green)}
+  html[data-theme="dark"] tr.partial td{background:var(--amber)}
+  html[data-theme="dark"] tr.recvd td{background:var(--blue)}
+
+  html[data-theme="dark"] input.cell{background:#2a2333;color:var(--ink);border-color:var(--line)}
+  html[data-theme="dark"] select.cell{background:#2a2333;color:var(--ink);border-color:var(--line)}
+  html[data-theme="dark"] .recv .inc{background:#2a2333;border-color:var(--line)}
+  html[data-theme="dark"] .recv .inc.on{background:var(--green);border-color:var(--greenline);color:var(--greentext)}
+
+  html[data-theme="dark"] button.alt{background:#473d50}
+  html[data-theme="dark"] .totline{background:#1c1726;border-top-color:var(--line)}
+  html[data-theme="dark"] pre.je{background:#0c0a10;color:#7fe0a6}
+  html[data-theme="dark"] .badge.bad{color:#e07567}
+  html[data-theme="dark"] details.help{background:var(--panel);border-color:var(--line)}
+
+  html[data-theme="dark"] #setupOverlay{background:rgba(0,0,0,.62)}
+  html[data-theme="dark"] .modal{background:var(--panel);box-shadow:0 12px 40px rgba(0,0,0,.6)}
+  html[data-theme="dark"] .storeList{border-color:var(--line)}
+  html[data-theme="dark"] .storeList .it{border-bottom-color:#2a2333}
+  html[data-theme="dark"] .storeList .acts{background:#1c1726}
+  html[data-theme="dark"] .setupPane input[type=text],
+  html[data-theme="dark"] .setupPane input[type=number]{background:#2a2333;color:var(--ink);border-color:var(--line)}
+  html[data-theme="dark"] .setupPane table input:hover{border-color:var(--line);background:#2a2333}
+  html[data-theme="dark"] .setupPane table input:focus{border-color:var(--accent);background:#2a2333}
+  html[data-theme="dark"] .mfoot{background:#1c1726;border-top-color:var(--line)}
 </style>
 </head>
 <body>
@@ -158,6 +226,7 @@ window.onerror = function (msg, src, line) {
     <div class="kpi"><span>Received</span><b id="hdrRec">0.00</b></div>
     <div class="kpi var" id="hdrVarWrap"><span>Variance</span><b id="hdrVar">0.00</b></div>
     <button id="btnSetup" class="alt mini" title="Store accounts &amp; categories setup" style="margin-left:6px">⚙ Setup</button>
+    <button id="btnTheme" class="alt mini" title="Toggle dark mode" aria-label="Toggle dark mode" style="margin-left:6px">&#x1F319;</button>
   </div>
 </header>
 

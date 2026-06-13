@@ -4,6 +4,24 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Warranty Claims → CDK PowerPosting</title>
+<script>
+(function(){
+  var KEY='pp_warranty_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){} icon();
+    });
+  });
+})();
+</script>
 <style>
   :root{
     /* MASTER (_shared) theme — purple #6B298C marks this as the source copy;
@@ -146,6 +164,39 @@
     .howto-body .tip{background:#fff;border:1px solid #999;color:#000;page-break-inside:avoid}
     .howto-body b.do{color:#000;text-decoration:underline}
   }
+  /* dark-mode toggle button on the dark header */
+  header #btnTheme{margin-left:8px;background:transparent;color:#e2e8f0;border:1px solid rgba(255,255,255,.35);
+        border-radius:8px;padding:7px 11px;font-size:15px;line-height:1;cursor:pointer}
+  header #btnTheme:hover{background:rgba(255,255,255,.12)}
+  /* ===== DARK THEME ===== */
+  html[data-theme="dark"]{
+    --bg:#211b29; --panel:#211b29; --ink:#e9e6ef; --muted:#9089a0;
+    --line:#332b3d; --accent:#9b4dc0; --accent-d:#7d3a9c;
+    --selbg:#2a1f33; --warnbg:#2a2316; --okbg:#16261f;
+  }
+  html[data-theme="dark"] body{background:#15121b}
+  html[data-theme="dark"] #drop{background:#1c1726;border-color:#473d50}
+  html[data-theme="dark"] .pbarwrap{background:#2a2333}
+  html[data-theme="dark"] .frow{background:#1c1726}
+  html[data-theme="dark"] .frow select{background:#2a2333;color:var(--ink);border-color:#473d50}
+  html[data-theme="dark"] .check.good{border-color:#1f4a36;color:#86efac}
+  html[data-theme="dark"] .check.bad{border-color:#5a4a1a}
+  html[data-theme="dark"] button.btn{background:#2a2333;color:var(--ink);border-color:#473d50}
+  html[data-theme="dark"] button.btn:hover{background:#332b3d}
+  html[data-theme="dark"] button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  html[data-theme="dark"] button.primary:hover{background:var(--accent-d)}
+  html[data-theme="dark"] th{background:#1c1726}
+  html[data-theme="dark"] td{border-bottom-color:#251f30}
+  html[data-theme="dark"] td input:hover{background:#1c1726}
+  html[data-theme="dark"] td.expert{background:#1c1726;color:#5eead4;border-left-color:var(--line)}
+  html[data-theme="dark"] td.vin{color:#9089a0}
+  html[data-theme="dark"] .pill{background:#2a2333;color:#cbb9d6}
+  html[data-theme="dark"] .hint kbd,html[data-theme="dark"] .howto-body kbd{background:#1c1726;color:var(--ink);border-color:#473d50}
+  html[data-theme="dark"] .warn{border-color:#5a4a1a}
+  html[data-theme="dark"] .guide-card h2{color:#c084e0}
+  html[data-theme="dark"] .howto-body h3{color:#c084e0}
+  html[data-theme="dark"] .howto-body b.do{color:#93b4ff}
+  html[data-theme="dark"] .howto-body .tip{background:#16261f;border-color:#1f4a36;color:#86efac}
 </style>
 </head>
 <body>
@@ -155,6 +206,7 @@
     <p>Drop a Toyota Settled Claims Report or a GM Transaction Summary Report PDF. The tool reads it instantly, builds the posting, and copies it straight into AGJE Expert Mode.</p>
   </div>
   <button class="navbtn" id="navBtn">📖 How-To Guide</button>
+  <button id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
 </header>
 
 <div class="wrap hidden" id="guidePage">

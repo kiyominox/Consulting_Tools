@@ -4,6 +4,26 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Vehicle Sales Report</title>
+<script>
+/* dark mode: apply saved/OS theme before paint (no flash), then wire the toggle */
+(function(){
+  var KEY='vsr_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){}
+      icon();
+    });
+  });
+})();
+</script>
 <style>
   /* ============================================================ DESIGN TOKENS */
   :root{
@@ -343,6 +363,85 @@
     .dash-grid{display:block}
     .dash-table{margin-bottom:14px}
   }
+
+  /* ============================================================ DARK MODE */
+  html[data-theme="dark"]{
+    --ink:#e9e6ef; --ink-2:#c2bcd0; --muted:#9089a0;
+    --paper:#211b29; --bg:#15121b; --line:#332b3d; --line-2:#473d50;
+    --accent:#9b4dc0; --accent-strong:#8a3cb0; --accent-ink:#c79fe0;
+    --accent-soft:#2a1f33; --accent-line:#4a3357;
+    --pos:#46b985; --neg:#e07567;
+    --warn:#d2a23f; --warn-soft:#2a2316; --warn-line:#4a3d1f;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 1px 1px rgba(0,0,0,.3);
+    --shadow-lg:0 12px 32px rgba(0,0,0,.55);
+  }
+  /* buttons */
+  html[data-theme="dark"] button{background:#2a2333;border-color:var(--line-2)}
+  html[data-theme="dark"] button:hover{background:#332b3d;border-color:var(--line-2)}
+  html[data-theme="dark"] button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  html[data-theme="dark"] button.primary:hover{background:var(--accent-strong);border-color:var(--accent-strong)}
+  html[data-theme="dark"] button.ghost{background:transparent;border-color:transparent}
+  html[data-theme="dark"] button.ghost:hover{background:var(--accent-soft)}
+  html[data-theme="dark"] button.danger{background:transparent}
+  html[data-theme="dark"] button.danger:hover{background:#2c1b19}
+  /* inputs / selects */
+  html[data-theme="dark"] select,html[data-theme="dark"] input,html[data-theme="dark"] textarea{background:#2a2333;color:var(--ink);border-color:var(--line-2)}
+  html[data-theme="dark"] select.dealer{background:#2a2333}
+  html[data-theme="dark"] .filter-input{background:#2a2333}
+  html[data-theme="dark"] input.firate{background:#2a2333}
+  html[data-theme="dark"] .tier-grid input,html[data-theme="dark"] .acct-row input{background:#2a2333}
+  /* drop zones */
+  html[data-theme="dark"] .drop{background:#1c1726}
+  html[data-theme="dark"] .drop.loaded{background:var(--pos-soft,#16261f)}
+  html[data-theme="dark"] .drop .ico{background:#2a2333;border-color:var(--line-2)}
+  html[data-theme="dark"] .drop.loaded .ico{background:var(--pos);border-color:var(--pos);color:#fff}
+  /* tabs */
+  html[data-theme="dark"] .tab:hover{color:var(--ink)}
+  /* report table */
+  html[data-theme="dark"] .report-wrap{background:var(--paper)}
+  html[data-theme="dark"] table.report thead tr.gband th{background:#1c1726;color:var(--muted)}
+  html[data-theme="dark"] table.report thead tr.gband th.spacer{background:#1c1726}
+  html[data-theme="dark"] table.report thead tr.gband th.g-front{background:var(--accent-soft);color:var(--accent-ink)}
+  html[data-theme="dark"] table.report thead tr.gband th.g-fi{background:#16261f;color:#7fcfa0}
+  html[data-theme="dark"] table.report thead tr.gband th.g-comp{background:#241d2e;color:#c79fe0}
+  html[data-theme="dark"] table.report thead tr.cols th{background:#1c1726;color:var(--ink-2)}
+  html[data-theme="dark"] table.report thead tr.cols th:hover{background:#241d2e;color:var(--ink)}
+  html[data-theme="dark"] table.report td.emph{background:rgba(155,77,192,.10)}
+  html[data-theme="dark"] table.report th.emph{background:#241d2e}
+  html[data-theme="dark"] table.report tbody tr:hover td{background:#241d2e}
+  html[data-theme="dark"] table.report tbody tr:hover td.emph{background:#2d2438}
+  html[data-theme="dark"] table.report tr.missing td{background:var(--warn-soft)}
+  html[data-theme="dark"] table.report tr.missing:hover td{background:#332a18}
+  html[data-theme="dark"] table.report tr.missing:hover td.emph{background:#3a3019}
+  html[data-theme="dark"] table.report tfoot td{background:#1c1726}
+  html[data-theme="dark"] table.report tfoot td.emph{background:#241d2e}
+  /* dashboard */
+  html[data-theme="dark"] .dash-table{background:var(--paper)}
+  html[data-theme="dark"] .dash-table h3{background:var(--paper)}
+  html[data-theme="dark"] .lb-row:hover{background:#241d2e}
+  html[data-theme="dark"] .dash-table .tfoot{background:#1c1726}
+  html[data-theme="dark"] table.grp th:first-child,html[data-theme="dark"] table.grp td:first-child{background:var(--paper)}
+  html[data-theme="dark"] table.grp thead th{background:#1c1726;color:var(--ink-2)}
+  html[data-theme="dark"] table.grp tbody tr:hover td{background:#241d2e}
+  html[data-theme="dark"] table.grp tfoot td{background:#1c1726}
+  html[data-theme="dark"] details.fibasis{background:var(--paper)}
+  html[data-theme="dark"] table.basis tr.ov td{background:var(--warn-soft)}
+  /* settings drawer */
+  html[data-theme="dark"] .overlay{background:rgba(0,0,0,.6)}
+  html[data-theme="dark"] .cat-meta{background:#1c1726}
+  html[data-theme="dark"] #glMapWrap{background:#1c1726 !important}
+  html[data-theme="dark"] .tier-grid .seg{background:#2a2333;border-color:var(--line-2)}
+  html[data-theme="dark"] .acct-scroll{background:#1c1726}
+  html[data-theme="dark"] .cat-tabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  /* status / banners */
+  html[data-theme="dark"] .status.ok{background:#16261f;color:var(--pos);border-color:#2a4a38}
+  html[data-theme="dark"] .status.err{background:#2c1b19;color:var(--neg);border-color:#4a2a26}
+  /* menus / filters */
+  html[data-theme="dark"] .export-menu{background:var(--paper);border-color:var(--line-2)}
+  html[data-theme="dark"] .export-menu .menu-item:hover,html[data-theme="dark"] .export-menu .menu-check:hover{background:var(--accent-soft)}
+  html[data-theme="dark"] .export-menu .dt-controls{background:var(--paper);border-color:var(--line)}
+  /* source strip already uses tokens */
+  html[data-theme="dark"] .pill{background:var(--warn-soft);color:var(--warn);border-color:var(--warn-line)}
 </style>
 </head>
 <body>
@@ -363,6 +462,7 @@
     </select>
   </div>
   <div class="topbar-actions">
+    <button class="ghost" id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
     <button class="ghost" id="openSettingsBtn" title="Map GL account numbers to report categories for this store">&#9881;&#65039; Account setup</button>
   </div>
 </header>

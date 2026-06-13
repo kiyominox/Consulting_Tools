@@ -4,6 +4,26 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Factory Statement Reconciliation</title>
+<script>
+/* dark mode: apply saved/OS theme before paint (no flash), then wire the toggle */
+(function(){
+  var KEY='stmtrec_theme', t;
+  try{t=localStorage.getItem(KEY);}catch(e){}
+  if(!t) t=(window.matchMedia&&matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';
+  document.documentElement.setAttribute('data-theme',t);
+  document.addEventListener('DOMContentLoaded',function(){
+    var b=document.getElementById('btnTheme'); if(!b) return;
+    function icon(){b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'\u{1F319}';}
+    icon();
+    b.addEventListener('click',function(){
+      var cur=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';
+      document.documentElement.setAttribute('data-theme',cur);
+      try{localStorage.setItem(KEY,cur);}catch(e){}
+      icon();
+    });
+  });
+})();
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -24,6 +44,9 @@
   header .logo { background: var(--accent); color: #fff; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 1px; }
   header h1 { font-size: 1.25rem; margin: 0; font-weight: 600; }
   header .sub { font-size: .8rem; color: #bbb; margin-left: auto; }
+  header #btnTheme { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35);
+    border-radius: 7px; padding: 6px 10px; font-size: 1rem; line-height: 1; cursor: pointer; }
+  header #btnTheme:hover { background: rgba(255,255,255,.12); }
   main { max-width: 1280px; margin: 0 auto; padding: 22px; }
 
   .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -112,6 +135,70 @@
     section.block.collapsed .body { display: block; }
     .scrollwrap { max-height: none; overflow: visible; }
   }
+
+  /* ============================================================ DARK MODE */
+  html[data-theme="dark"] {
+    --accent: #9b4dc0;
+    --danger: #e07567;
+    --dark: #211b29;
+    --gray: #9089a0;
+    --light: #15121b;   /* body / app background */
+    --green: #46b985;
+    --amber: #d2a23f;
+    --blue: #5a9bff;
+  }
+  html[data-theme="dark"] body { color: #e9e6ef; }
+  html[data-theme="dark"] header { border-bottom: 1px solid #332b3d; }
+
+  /* surfaces: cards, stats, blocks, recon equation */
+  html[data-theme="dark"] .card,
+  html[data-theme="dark"] .stat,
+  html[data-theme="dark"] section.block,
+  html[data-theme="dark"] .recon-eq { background: #211b29; border-color: #332b3d; }
+  html[data-theme="dark"] .card h2,
+  html[data-theme="dark"] .card p.hint { color: #c2bcd0; }
+
+  /* dropzones */
+  html[data-theme="dark"] .dropzone { border-color: #473d50; color: #c2bcd0; }
+  html[data-theme="dark"] .dropzone:hover,
+  html[data-theme="dark"] .dropzone.drag { border-color: var(--accent); background: #2a2333; }
+  html[data-theme="dark"] .dropzone.loaded { border-color: var(--green); background: #16271f; color: var(--green); }
+  html[data-theme="dark"] .dropzone.error { border-color: var(--danger); background: #2c1b19; color: var(--danger); }
+
+  /* buttons */
+  html[data-theme="dark"] .btn-secondary { background: #2a2333; color: #e9e6ef; border-color: #473d50; }
+  html[data-theme="dark"] .btn-primary { color: #fff; }
+
+  /* section header bars */
+  html[data-theme="dark"] section.block > h3 { background: #1c1726; border-bottom-color: #332b3d; }
+  html[data-theme="dark"] section.block > h3 .count { background: #2a2333; }
+  html[data-theme="dark"] section.block > h3 .count.red { background: #3a1f22; color: var(--danger); }
+  html[data-theme="dark"] section.block > h3 .count.green { background: #16271f; color: var(--green); }
+  html[data-theme="dark"] section.block > h3 .count.amber { background: #2f2614; color: var(--amber); }
+  html[data-theme="dark"] section.block > h3 .chev { color: #79727f; }
+
+  /* tables */
+  html[data-theme="dark"] th { background: #1c1726; color: var(--gray); }
+  html[data-theme="dark"] th, html[data-theme="dark"] td { border-bottom-color: #2a2333; }
+  html[data-theme="dark"] tr.review { background: #2f2614; }
+  html[data-theme="dark"] tr.confirmed { background: #16271f; }
+  html[data-theme="dark"] tr.rejected td { color: #6f6878; }
+
+  /* pills */
+  html[data-theme="dark"] .pill.exact { background: #16271f; color: var(--green); }
+  html[data-theme="dark"] .pill.fuzzy { background: #2f2614; color: var(--amber); }
+  html[data-theme="dark"] .pill.missing { background: #3a1f22; color: var(--danger); }
+  html[data-theme="dark"] .pill.confirmed { background: #1c2c44; color: #9bc2ff; }
+
+  /* hints / misc surfaces */
+  html[data-theme="dark"] .manualhint { background: #1c1726; border-bottom-color: #332b3d; color: var(--gray); }
+  html[data-theme="dark"] #reconHint { border-color: #332b3d; }
+  html[data-theme="dark"] .empty,
+  html[data-theme="dark"] .reason,
+  html[data-theme="dark"] .filemeta,
+  html[data-theme="dark"] #status { color: var(--gray); }
+  html[data-theme="dark"] td.tick input,
+  html[data-theme="dark"] .dropzone input { accent-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -119,6 +206,7 @@
   <span class="logo">MASTER</span>
   <h1>Statement-to-GL Reconciliation</h1>
   <span class="sub">Shared template &middot; Accounting Office Tool</span>
+  <button id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
 </header>
 <main>
   <div class="cards">
