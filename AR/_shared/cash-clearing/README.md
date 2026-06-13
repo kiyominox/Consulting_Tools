@@ -1,5 +1,17 @@
 # Cash Clearing Reconciliation (master / `_shared`)
 
+This folder holds **two** offline masters that share the same v1.7 engine, store
+config, and AGJE/JE output — pick whichever UI you prefer:
+
+- **`Cash_Clearing_Reconciliation.html`** — the workbook-style layout (described
+  below).
+- **`Deposit_Reconciliation_Standalone.html`** — the redesigned "Daily Deposit
+  Reconciliation" UI (left rail, store selector, five numbered steps). Same
+  engine/output; de-branded, purple-themed, dark-mode toggle, the same five
+  fictional demo stores and sample data, and keyboard navigation. Per-store data
+  is edited the same way (Setup + Download shareable copy). Because this layout is
+  heavily inline-styled, give dark mode a quick browser check.
+
 Daily cash-deposit posting / reconciliation, ported from the CMA workbook into a
 single offline HTML file. This is the **store-agnostic master**: themed in the
 master purple (`#6B298C`) and pre-loaded with **fictional** demo stores so it's
