@@ -29,7 +29,11 @@
 <style>
   :root {
     /* MASTER (_shared) theme — purple #6B298C marks this as the source copy */
+    --font: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     --accent: #6B298C;
+    --accent-soft: #f3eaf8;
+    --accent-line: #dcc4e8;
     --danger: #c0392b;
     --dark: #45195a;
     --gray: #58595b;
@@ -37,16 +41,30 @@
     --green: #1e7e34;
     --amber: #b8860b;
     --blue: #0d6efd;
+    --ink: #16191d;
+    --paper: #ffffff;
+    --line: #e3e7ec;
+    --line-2: #d3d9e0;
+    --shadow: 0 1px 2px rgba(22,25,29,.05),0 1px 1px rgba(22,25,29,.04);
+    --r: 12px; --r-sm: 8px;
   }
   * { box-sizing: border-box; }
-  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: var(--light); color: #222; }
-  header { background: var(--dark); color: #fff; padding: 16px 28px; display: flex; align-items: center; gap: 14px; }
-  header .logo { background: var(--accent); color: #fff; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 1px; }
-  header h1 { font-size: 1.25rem; margin: 0; font-weight: 600; }
-  header .sub { font-size: .8rem; color: #bbb; margin-left: auto; }
-  header #btnTheme { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.35);
-    border-radius: 7px; padding: 6px 10px; font-size: 1rem; line-height: 1; cursor: pointer; }
-  header #btnTheme:hover { background: rgba(255,255,255,.12); }
+  body { font-family: var(--font); margin: 0; background: var(--light); color: #222; -webkit-font-smoothing: antialiased; }
+  header { background: var(--paper); color: var(--ink); padding: 13px 24px; display: flex; align-items: center; gap: 13px;
+    position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--line); box-shadow: var(--shadow); }
+  header .mark { width: 34px; height: 34px; border-radius: 9px; background: var(--accent); position: relative; flex: none; }
+  header .mark::before, header .mark::after { content: ""; position: absolute; background: #fff; border-radius: 1px; }
+  header .mark::before { left: 8px; right: 8px; top: 11px; height: 3px; }
+  header .mark::after { left: 8px; right: 15px; bottom: 11px; height: 3px; opacity: .7; }
+  header .titles { display: flex; flex-direction: column; min-width: 0; }
+  header h1 { font-size: 1.06rem; margin: 0; font-weight: 750; letter-spacing: -.2px; }
+  header .sub { font-size: .76rem; color: var(--gray); margin-top: 1px; }
+  header .grow { flex: 1; }
+  header #btnTheme { background: transparent; color: var(--ink); border: 1px solid var(--line-2);
+    border-radius: var(--r-sm, 8px); padding: 6px 10px; font-size: 1rem; line-height: 1; cursor: pointer; margin-left: auto;
+    font-family: inherit; }
+  header #btnTheme:hover { background: var(--accent-soft); border-color: var(--accent-line); }
+  header #btnTheme:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   main { max-width: 1280px; margin: 0 auto; padding: 22px; }
 
   .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -62,17 +80,22 @@
   .filemeta { font-size: .75rem; margin-top: 8px; color: var(--gray); white-space: pre-line; }
 
   .actions { margin: 20px 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
-  button { font: inherit; border: none; border-radius: 7px; padding: 10px 20px; cursor: pointer; font-weight: 600; }
+  button { font: inherit; font-family: var(--font); border: none; border-radius: var(--r-sm, 8px); padding: 8px 14px; cursor: pointer; font-weight: 600; }
   button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .btn-primary { background: var(--accent); color: #fff; }
-  .btn-secondary { background: #fff; color: #333; border: 1px solid #bbb; }
+  .btn-primary:hover:not(:disabled) { background: var(--dark); }
+  .btn-secondary { background: var(--paper); color: var(--ink); border: 1px solid var(--line-2); }
+  .btn-secondary:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent-line); }
   .btn-green { background: var(--green); color: #fff; }
   .btn-sm { padding: 4px 10px; font-size: .75rem; border-radius: 5px; }
+  .dropzone:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  td.tick input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
   .stat { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 12px 14px; }
   .stat .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--gray); }
-  .stat .value { font-size: 1.25rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat .value { font-size: 1.25rem; font-weight: 700; margin-top: 2px; font-family: var(--mono); font-variant-numeric: tabular-nums; }
   .stat.ok .value { color: var(--green); }
   .stat.bad .value { color: var(--danger); }
   .stat.warn .value { color: var(--amber); }
@@ -92,6 +115,7 @@
   th, td { padding: 7px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
   th { background: #fafafa; font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--gray); position: sticky; top: 0; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.num { font-family: var(--mono); }
   tr.review { background: #fffbeb; }
   tr.confirmed { background: #f2fbf4; }
   tr.rejected td { color: #aaa; text-decoration: line-through; }
@@ -109,7 +133,7 @@
 
   .recon-eq { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px;
     font-size: .9rem; display: flex; gap: 26px; flex-wrap: wrap; align-items: center; font-variant-numeric: tabular-nums; }
-  .recon-eq b { font-size: 1.05rem; }
+  .recon-eq b { font-size: 1.05rem; font-family: var(--mono); }
   .recon-eq .op { color: var(--gray); font-size: 1.1rem; }
   .recon-eq .net.ok { color: var(--green); }
   .recon-eq .net.bad { color: var(--danger); }
@@ -139,6 +163,8 @@
   /* ============================================================ DARK MODE */
   html[data-theme="dark"] {
     --accent: #9b4dc0;
+    --accent-soft: #2a1f33;
+    --accent-line: #4a3357;
     --danger: #e07567;
     --dark: #211b29;
     --gray: #9089a0;
@@ -146,9 +172,13 @@
     --green: #46b985;
     --amber: #d2a23f;
     --blue: #5a9bff;
+    --ink: #e9e6ef;
+    --paper: #211b29;
+    --line: #332b3d;
+    --line-2: #473d50;
+    --shadow: 0 1px 2px rgba(0,0,0,.4);
   }
   html[data-theme="dark"] body { color: #e9e6ef; }
-  html[data-theme="dark"] header { border-bottom: 1px solid #332b3d; }
 
   /* surfaces: cards, stats, blocks, recon equation */
   html[data-theme="dark"] .card,
@@ -203,9 +233,12 @@
 </head>
 <body>
 <header>
-  <span class="logo">MASTER</span>
-  <h1>Statement-to-GL Reconciliation</h1>
-  <span class="sub">Shared template &middot; Accounting Office Tool</span>
+  <div class="mark"></div>
+  <div class="titles">
+    <h1>Factory Statement Reconciliation</h1>
+    <span class="sub">Master template &middot; Statement &minus; Incentives = GL</span>
+  </div>
+  <div class="grow"></div>
   <button id="btnTheme" title="Toggle dark mode" aria-label="Toggle dark mode">&#x1F319;</button>
 </header>
 <main>
@@ -240,6 +273,7 @@
   </div>
 
   <div class="actions">
+    <button class="btn-secondary" id="btnSample">Generate sample data</button>
     <button class="btn-primary" id="btnRecon" disabled>Reconcile</button>
     <button class="btn-green" id="btnExport" disabled>Save Report (Excel)</button>
     <button class="btn-secondary" id="btnPrint" disabled>Print / PDF</button>
@@ -890,6 +924,11 @@ async function handleFile(zone, file) {
 
 document.querySelectorAll(".dropzone").forEach(zone => {
   const input = zone.querySelector("input");
+  zone.setAttribute("tabindex", "0");
+  zone.setAttribute("role", "button");
+  zone.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); }
+  });
   input.addEventListener("change", () => input.files[0] && handleFile(zone, input.files[0]));
   zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag"); });
   zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
@@ -899,10 +938,67 @@ document.getElementById("btnRecon").addEventListener("click", () => {
   try { reconcile(); document.getElementById("status").textContent = ""; }
   catch (e) { const s = document.getElementById("status"); s.classList.add("err"); s.textContent = e.message; }
 });
+// ---------- sample data ----------
+// Injects already-parsed in-memory structures (no real PDF/xlsx) and runs the
+// normal reconcile -> render path. Fictional cast: Rivendell Toyota.
+function loadSample() {
+  // Statement: invoice posts to GL as the OPPOSITE sign (credit to AP).
+  // s0,s1 = matched exact; s2 = amount variance (ref matches, GL differs -> review);
+  // s3 = statement-only (no GL line at all -> Not Found in GL).
+  state.statement = {
+    meta: { dealer: "RIVENDELL TOYOTA", accountNumber: "42007", statementDate: "05/31/2026", amountDue: 51230.40 },
+    lines: [
+      { invoice: "8810042", date: "05/04/26", refType: "INV", dueDate: "05/15/26", amount: 24500.00 },
+      { invoice: "8810067", date: "05/11/26", refType: "INV", dueDate: "05/15/26", amount: 18230.40 },
+      { invoice: "8810099", date: "05/19/26", refType: "INV", dueDate: "05/15/26", amount:  6500.00 },
+      { invoice: "8810123", date: "05/27/26", refType: "PARTS", dueDate: "05/15/26", amount: 2000.00 }
+    ]
+  };
+  // Incentives: money Toyota pays us, posted as positive (debit) on the control.
+  // i0 = matched exact; i1 = incentive-only (no GL -> Incentives Not Found in GL).
+  state.incentive = {
+    meta: { dealer: "Rivendell Toyota", dealerCode: "42007", netDue: 4050.00, asOf: "May 31, 2026" },
+    lines: [
+      { product: "VPP New", date: "05/12/2026", ref: "TFS5500201", description: "Volume Bonus", amount: 3200.00 },
+      { product: "CSI Bonus", date: "05/24/2026", ref: "TFS5500288", description: "Service Survey", amount:  850.00 }
+    ]
+  };
+  // GL Control Detail lines (statement credits are negative; incentives positive).
+  // g0,g1 match s0,s1; g2 matches s2's REF but a different amount (-> variance review);
+  // g3 matches incentive i0; g4 = GL-only entry not on the statement.
+  state.gl = {
+    meta: { company: "Rivendell Toyota", control: "240-07-TOY", controlTotal: -39230.40 },
+    lines: [
+      { account: "240-07", journal: "FAC", reference: "8810042",  date: "05/05/2026", amount: -24500.00, control2: "ACH" },
+      { account: "240-07", journal: "FAC", reference: "8810067",  date: "05/12/2026", amount: -18230.40, control2: "ACH" },
+      { account: "240-07", journal: "FAC", reference: "8810099",  date: "05/20/2026", amount:  -6450.00, control2: "ACH" },
+      { account: "240-07", journal: "INC", reference: "TFS5500201",date: "05/13/2026", amount:   3200.00, control2: "VPP" },
+      { account: "240-07", journal: "ADJ", reference: "9900777",  date: "05/29/2026", amount:   -125.00, control2: "MISC" }
+    ]
+  };
+  // reflect "loaded" state on the dropzones
+  setZone(document.getElementById("dzStmt"), "loaded", "sample-statement.pdf\n4 invoices · Amount Due " + fmt(state.statement.meta.amountDue));
+  setZone(document.getElementById("dzInc"),  "loaded", "sample-incentives.pdf\n2 payouts · Net from TFS " + fmt(state.incentive.meta.netDue));
+  setZone(document.getElementById("dzGl"),   "loaded", "sample-control-detail.xlsx\n5 GL lines · Control " + state.gl.meta.control + " · Balance " + fmt(state.gl.meta.controlTotal));
+  document.getElementById("btnRecon").disabled = false;
+  const status = document.getElementById("status");
+  status.classList.remove("err");
+  status.textContent = "Sample data loaded — Rivendell Toyota.";
+  reconcile();   // runs the normal reconcile -> render() path
+}
+document.getElementById("btnSample").addEventListener("click", loadSample);
+
 document.getElementById("btnExport").addEventListener("click", exportReport);
 document.getElementById("btnPrint").addEventListener("click", () => window.print());
-document.querySelectorAll("section.block > h3").forEach(h =>
-  h.addEventListener("click", () => h.parentElement.classList.toggle("collapsed")));
+document.querySelectorAll("section.block > h3").forEach(h => {
+  h.setAttribute("tabindex", "0");
+  h.setAttribute("role", "button");
+  const toggle = () => h.parentElement.classList.toggle("collapsed");
+  h.addEventListener("click", toggle);
+  h.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+  });
+});
 // delegated tick-box handling for manual (bank-rec style) clearing
 document.getElementById("results").addEventListener("change", e => {
   const cb = e.target.closest('input[data-sel]');

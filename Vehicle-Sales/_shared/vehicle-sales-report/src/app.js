@@ -17,7 +17,7 @@ const CATEGORIES = [
   { key:"salesComm", name:"Sales Commission",sign:+1, desc:"Salesperson commission accounts → Sales Commission column." },
   { key:"fiComm",    name:"F&I Commission",  sign:+1, desc:"Business-manager commission → F&I Commission column (tiered % of F&I gross, or from GL accounts)." },
 ];
-const DEALERSHIPS = ["Hill Valley Motors","Bedrock Auto"];
+const DEALERSHIPS = ["Rivendell Toyota","Mordor Chevrolet"];
 const LS_KEY = "vsr_config_v5";
 const DEFAULT_TIERS = { t1:2000, r1:16, t2:2250, r2:18, r3:20 };
 
@@ -40,7 +40,7 @@ function macDealerCfg(){
 }
 function defaultConfig(){
   // Both demo dealers start with the same generic chart of accounts (independent copies).
-  return { "Hill Valley Motors": macDealerCfg(), "Bedrock Auto": macDealerCfg() };
+  return { "Rivendell Toyota": macDealerCfg(), "Mordor Chevrolet": macDealerCfg() };
 }
 function coerceAccounts(arr){
   return (arr||[]).map(a => (typeof a==="object" && a!==null) ? {n:String(a.n||""),d:String(a.d||"")} : {n:String(a),d:""});
@@ -185,9 +185,9 @@ function buildCatPanels(){
       dcfg.accounts.forEach((acct,i)=>{
         const row=document.createElement("div"); row.className="acct-row";
         const inp=document.createElement("input"); inp.className="num"; inp.value=acct.n; inp.placeholder="Account #";
-        inp.oninput=()=>{ acct.n=inp.value; };
+        inp.oninput=()=>{ acct.n=inp.value; }; inp.onfocus=()=>{ try{inp.select();}catch(_){} };
         const dsc=document.createElement("input"); dsc.className="dsc"; dsc.value=acct.d; dsc.placeholder="Description (optional)";
-        dsc.oninput=()=>{ acct.d=dsc.value; };
+        dsc.oninput=()=>{ acct.d=dsc.value; }; dsc.onfocus=()=>{ try{dsc.select();}catch(_){} };
         const del=document.createElement("button"); del.className="tiny danger"; del.textContent="✕"; del.title="Remove";
         del.onclick=()=>{ dcfg.accounts.splice(i,1); renderList(); buildCatTabs(); };
         row.appendChild(inp); row.appendChild(dsc); row.appendChild(del);
@@ -227,6 +227,9 @@ function refreshSettingsUI(){
   document.getElementById("settingsDealerName").textContent = CURRENT_DEALER;
   buildCatTabs(); buildCatPanels();
 }
+/* Settings drawer: Enter advances through the account-number / description / tier
+   inputs (delegated once on the panel container, which is re-rendered per tab). */
+wireEnterNav(catPanelsEl,{});
 
 document.getElementById("saveCfgBtn").onclick = ()=>{
   DEALERSHIPS.forEach(d=>CATEGORIES.forEach(cat=>{
@@ -240,7 +243,7 @@ document.getElementById("saveCfgBtn").onclick = ()=>{
   refreshSettingsUI();
 };
 document.getElementById("resetCfgBtn").onclick = ()=>{
-  if(!confirm("Reset ALL account settings for BOTH dealerships back to the built-in defaults? (Both Hill Valley Motors and Bedrock Auto will be restored to the default account lists.)")) return;
+  if(!confirm("Reset ALL account settings for BOTH dealerships back to the built-in defaults? (Both Rivendell Toyota and Mordor Chevrolet will be restored to the default account lists.)")) return;
   CONFIG = defaultConfig(); saveConfig(); refreshSettingsUI();
 };
 document.getElementById("exportCfgBtn").onclick = ()=>{
@@ -897,6 +900,33 @@ function renderDashboard(rows){
 }
 function escapeHtml(s){ return String(s==null?"":s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m])); }
 
+/* Tab+Enter keyboard navigation for forms / editable tables (design-system helper).
+   Enter advances to the next editable field; in a columnar table it moves to the
+   same column in the next row. Shift+Enter goes back. Never hijacks textareas. */
+function wireEnterNav(root,opts){
+  opts=opts||{};
+  root.addEventListener("keydown",function(e){
+    if(e.key!=="Enter"||e.isComposing) return;
+    var el=e.target;
+    if(!el.matches||!el.matches("input:not([type=checkbox]):not([type=radio]):not([type=file]),select")) return;
+    e.preventDefault();
+    var next, cell=el.closest("td");
+    if(opts.columnar && cell){
+      var tr=el.closest("tr"), idx=Array.prototype.indexOf.call(tr.children,cell);
+      var rows=Array.prototype.slice.call(tr.parentNode.children);
+      var ri=rows.indexOf(tr)+(e.shiftKey?-1:1);
+      while(rows[ri]){ var c=rows[ri].children[idx], f=c&&c.querySelector("input,select,textarea");
+        if(f){ next=f; break; } ri+=(e.shiftKey?-1:1); }
+    }
+    if(!next){
+      var all=Array.prototype.slice.call(root.querySelectorAll("input:not([type=hidden]):not([disabled]),select,textarea"))
+        .filter(function(x){return x.offsetParent!==null;});
+      var i=all.indexOf(el); next=all[i+(e.shiftKey?-1:1)];
+    }
+    if(next){ next.focus(); if(next.select) try{next.select();}catch(_){} }
+  });
+}
+
 function setFiDirty(v){
   FI_DIRTY=v;
   const n=document.getElementById("fiDirtyNote"); if(n) n.textContent = v ? "Rates changed — click Recalculate to apply." : "";
@@ -941,8 +971,11 @@ function renderFiBasis(){
     `<tbody>${body}</tbody><tfoot><tr><th>Total</th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num"></th><th class="num">${fmtMoney(totComm)}</th></tr></tfoot></table></details>`;
   el.querySelectorAll("input.firate").forEach(inp=>{
     inp.addEventListener("input",()=>{ setFiOverride(inp.dataset.mgr, inp.value); setFiDirty(true); });
-    inp.addEventListener("keydown",(e)=>{ if(e.key==="Enter"){ e.preventDefault(); document.getElementById("fiRecalcBtn").click(); } });
+    inp.addEventListener("focus",()=>{ try{inp.select();}catch(_){} });
   });
+  // Enter advances down the rate column (Shift+Enter goes up); Tab uses native order.
+  const basisTable=el.querySelector("table.basis");
+  if(basisTable) wireEnterNav(basisTable,{columnar:true});
   document.getElementById("fiRecalcBtn").onclick=()=>{
     readFiRateInputs(el); applyFiCommissions(REPORT_DATA); setFiDirty(false); renderReport();
   };
@@ -1229,11 +1262,11 @@ $("demoBtn").onclick=loadDemoData;
 
 /* ============================================================ SAMPLE DATA (preview) */
 function loadDemoData(){
-  const SP=["Ferris Bueller","Han Solo","Dwight Schrute","Phoebe Buffay","Tony Stark","Leslie Knope"];
-  const BM=["Saul Goodman","Gordon Gekko","Mr. Krabs"];
+  const SP=["Han Solo","Lando Calrissian","Nathan Drake","Jill Valentine","Marcus Fenix","Chun-Li"];
+  const BM=["Tony Stark","Bruce Wayne","Lex Luthor","Gollum"];
   const MODELS=[["2024","Silverado 1500"],["2023","Equinox"],["2024","Tahoe"],["2022","Malibu"],
     ["2024","Trailblazer"],["2023","Corvette"],["2021","Traverse"],["2024","Blazer EV"],["2020","Camaro"],["2023","Colorado"]];
-  const CUST=["Homer Simpson","Marty McFly","Bruce Wayne","Fred Flintstone","Ron Swanson","Hermione Granger","Walter White","Lara Croft","Scrooge McDuck","Mary Poppins"];
+  const CUST=["Frodo Baggins","Lara Croft","Master Chief","Geralt of Rivia","Commander Shepard","Samus Aran","Ellen Ripley","Cloud Strife","Princess Zelda","Boba Fett"];
   const VT=["NEW","NEW","NEW","USED","USED","CPO"], DT=["Finance","Finance","Lease","Cash","Finance","Lease"];
   const rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
   const rows=[]; const N=42;

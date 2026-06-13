@@ -55,7 +55,8 @@
 
     /* density (Tweakable) */
     --cell-py:9px; --cell-px:11px; --tbl-fs:13px;
-    --font:"Helvetica Neue",Helvetica,Arial,"Liberation Sans",sans-serif;
+    --font:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
   body[data-density="compact"]{--cell-py:5px; --cell-px:9px; --tbl-fs:12px;}
 
@@ -67,6 +68,8 @@
   .muted{color:var(--muted)}
   .num-font{font-variant-numeric:tabular-nums}
   select,input,button,textarea{font-family:inherit;font-size:14px;color:var(--ink)}
+  input:not([type=checkbox]):not([type=radio]):focus-visible,select:focus-visible,textarea:focus-visible{
+       outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
 
   /* ============================================================ BUTTONS */
   button{cursor:pointer;border-radius:var(--r-sm);border:1px solid var(--line-2);background:#fff;
@@ -149,8 +152,8 @@
        box-shadow:var(--shadow);position:relative;overflow:hidden}
   .scard .lab{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;
        display:flex;align-items:center;gap:5px}
-  .scard .val{font-size:23px;font-weight:750;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
-  .scard .sub{font-size:11.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
+  .scard .val{font-size:23px;font-weight:750;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+  .scard .sub{font-size:11.5px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums;font-family:var(--mono)}
   .scard.accent{background:var(--accent-soft);border-color:var(--accent-line)}
   .scard.accent::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
   .scard.accent .val{color:var(--accent-ink)}
@@ -195,7 +198,7 @@
        user-select:none;white-space:nowrap}
   table.report thead tr.cols th:hover{background:#eef2f7;color:var(--ink)}
   table.report thead tr.cols th .arrow{color:var(--accent);font-size:9px;margin-left:4px}
-  table.report td.num,table.report th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.report td.num,table.report th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:calc(var(--tbl-fs) - .5px)}
   /* vertical group separators */
   table.report .gstart{border-left:1px solid var(--line-2)}
   table.report thead tr.gband th{border-left:1px solid var(--line-2)}
@@ -271,8 +274,8 @@
   .fibasis-bar{display:flex;align-items:center;gap:10px;margin:6px 0 2px;flex-wrap:wrap}
   .fibasis-bar .grow{flex:1}
   input.firate{width:60px;padding:4px 6px;border:1px solid var(--line-2);border-radius:var(--r-sm);
-       text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-  input.firate:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+       text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-weight:700}
+  input.firate:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
   .rate-cell{display:inline-flex;align-items:center;gap:3px;justify-content:flex-end}
   .auto-hint{display:block;font-size:10.5px;color:var(--muted);margin-top:2px}
   table.basis tr.ov td{background:var(--warn-soft)}
@@ -310,7 +313,7 @@
   .acct-list{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
   .acct-row{display:flex;gap:8px;align-items:center}
   .acct-row input{padding:7px 10px;border:1px solid var(--line-2);border-radius:var(--r-sm)}
-  .acct-row input.num{width:130px;font-variant-numeric:tabular-nums;font-weight:600}
+  .acct-row input.num{width:130px;font-variant-numeric:tabular-nums;font-family:var(--mono);font-weight:600}
   .acct-row input.dsc{flex:1}
   .acct-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
   details.bulk{margin-top:10px}
@@ -457,8 +460,8 @@
   <div class="dealer-switch">
     <span class="dl">Store</span>
     <select id="dealerSel" class="dealer" title="Switch dealership. Each store keeps its own GL account setup.">
-      <option value="Hill Valley Motors">Hill Valley Motors</option>
-      <option value="Bedrock Auto">Bedrock Auto</option>
+      <option value="Rivendell Toyota">Rivendell Toyota</option>
+      <option value="Mordor Chevrolet">Mordor Chevrolet</option>
     </select>
   </div>
   <div class="topbar-actions">
@@ -599,7 +602,7 @@
 <div class="overlay hide" id="settingsOverlay"></div>
 <aside class="drawer hide" id="settingsDrawer" aria-label="GL account setup">
   <div class="drawer-head">
-    <h2>GL Account Setup &mdash; <span id="settingsDealerName">Hill Valley Motors</span></h2>
+    <h2>GL Account Setup &mdash; <span id="settingsDealerName">Rivendell Toyota</span></h2>
     <button class="ghost x" id="closeSettingsBtn">&#10005; Close</button>
   </div>
   <div class="drawer-body">
