@@ -49,6 +49,12 @@ and swaps in real accounts. For tools built from `src/`, edit `src/` and rebuild
 - **Single-file, offline, no-install.** Deliverables are one `.html` file the
   user double-clicks. **No network calls — ever.** The data (financials, PDFs)
   must never leave the machine. This is a hard requirement, not a preference.
+- **Embed a one-line description.** Every tool's `<head>` must carry a
+  `<meta name="description" content="…">` saying in one sentence what the tool
+  does. The release workflow reads it for the per-tool blurb on the Releases
+  page, and **enforces it**: `build.py` aborts and the release job fails if a
+  shipped HTML has no non-empty description. Put it in the `src/` template for
+  built tools so rebuilds keep it.
 - **Libraries are inlined, not loaded from a CDN.** SheetJS (`xlsx.full.min.js`)
   for reading `.xlsx/.xlsm`; ExcelJS (`exceljs.min.js`) for writing styled
   `.xlsx`. They live in `vendor/` in the source and get inlined at build time.
@@ -72,6 +78,8 @@ writes the standalone file. Reference implementation:
 - The template must contain **exactly one** of each marker.
 - The build **aborts if any injected source contains a literal `</script>`** (it
   would break the inlined `<script>` block). Never introduce one.
+- The build **aborts if the assembled file has no `<meta name="description">`**
+  (see house conventions). Keep the description in the `src/` template.
 - **Never hand-edit a built artifact** (e.g. `Vehicle Sales Report.html`); edit
   `src/` and rebuild with `python3 build.py`. See `/build-tool`.
 

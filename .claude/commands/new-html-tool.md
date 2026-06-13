@@ -34,6 +34,10 @@ Non-negotiable house rules to bake in:
 6. If per-store, support the **"Download shareable copy"** pattern (regenerate the
    HTML with current settings baked in as defaults).
 7. AGJE strings must match `Co.Account.(Amount×100).Control.Control2.Desc.Count`.
+8. **Embed a one-line description**: put `<meta name="description" content="…">`
+   in the `<head>` (in the `src/` template for built tools) describing what the
+   tool does. The release workflow requires it — `build.py` and the release job
+   both fail without it.
 
 Placement: all-stores → `<ToolType>/_shared/<name>/`; store-specific →
 `<ToolType>/<store>/<name>/`. Add a README modeled on the existing tool READMEs.

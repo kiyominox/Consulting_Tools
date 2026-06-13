@@ -8,11 +8,14 @@ that runs fully offline with no server or network access. The financial data
 
 Usage:  python3 build.py
 """
-import pathlib, sys
+import pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).parent
 SRC = ROOT / "src"
 OUTPUT_NAME = "Floorplan Reconciliation.html"
+
+DESCRIPTION_RE = re.compile(
+    r'<meta\s+name=["\']description["\']\s+content=["\'][^"\']+["\']', re.I)
 
 
 def read(p):
@@ -43,6 +46,10 @@ def main():
            .replace("/*__PDFJS_LIB__*/", pdfjs)
            .replace("/*__PDFWORKER_LIB__*/", pdfworker)
            .replace("/*__APP_JS__*/", appjs))
+
+    if not DESCRIPTION_RE.search(out):
+        sys.exit('ERROR: built file is missing a non-empty <meta name="description"> '
+                 "tag — every tool must embed a one-line description.")
 
     (ROOT / OUTPUT_NAME).write_text(out, encoding="utf-8")
     print(f"Built {OUTPUT_NAME!r} ({len(out):,} bytes)")
