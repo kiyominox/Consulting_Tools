@@ -17,7 +17,7 @@ const CATEGORIES = [
   { key:"salesComm", name:"Sales Commission",sign:+1, desc:"Salesperson commission accounts → Sales Commission column." },
   { key:"fiComm",    name:"F&I Commission",  sign:+1, desc:"Business-manager commission → F&I Commission column (tiered % of F&I gross, or from GL accounts)." },
 ];
-const DEALERSHIPS = ["MacDonald","Hillside"];
+const DEALERSHIPS = ["Hill Valley Motors","Bedrock Auto"];
 const LS_KEY = "vsr_config_v5";
 const DEFAULT_TIERS = { t1:2000, r1:16, t2:2250, r2:18, r3:20 };
 
@@ -39,8 +39,8 @@ function macDealerCfg(){
   return c;
 }
 function defaultConfig(){
-  // Hillside starts with the same accounts/signs/F&I tiers as MacDonald (independent copy).
-  return { MacDonald: macDealerCfg(), Hillside: macDealerCfg() };
+  // Both demo dealers start with the same generic chart of accounts (independent copies).
+  return { "Hill Valley Motors": macDealerCfg(), "Bedrock Auto": macDealerCfg() };
 }
 function coerceAccounts(arr){
   return (arr||[]).map(a => (typeof a==="object" && a!==null) ? {n:String(a.n||""),d:String(a.d||"")} : {n:String(a),d:""});
@@ -240,7 +240,7 @@ document.getElementById("saveCfgBtn").onclick = ()=>{
   refreshSettingsUI();
 };
 document.getElementById("resetCfgBtn").onclick = ()=>{
-  if(!confirm("Reset ALL account settings for BOTH dealerships back to the built-in defaults? (Both MacDonald and Hillside will be restored to the default account lists.)")) return;
+  if(!confirm("Reset ALL account settings for BOTH dealerships back to the built-in defaults? (Both Hill Valley Motors and Bedrock Auto will be restored to the default account lists.)")) return;
   CONFIG = defaultConfig(); saveConfig(); refreshSettingsUI();
 };
 document.getElementById("exportCfgBtn").onclick = ()=>{
@@ -1229,11 +1229,11 @@ $("demoBtn").onclick=loadDemoData;
 
 /* ============================================================ SAMPLE DATA (preview) */
 function loadDemoData(){
-  const SP=["Alex Rivera","Jordan Kim","Sam Patel","Casey Brooks","Morgan Lee","Drew Santos"];
-  const BM=["Pat Nguyen","Robin Carter","Taylor Quinn"];
+  const SP=["Ferris Bueller","Han Solo","Dwight Schrute","Phoebe Buffay","Tony Stark","Leslie Knope"];
+  const BM=["Saul Goodman","Gordon Gekko","Mr. Krabs"];
   const MODELS=[["2024","Silverado 1500"],["2023","Equinox"],["2024","Tahoe"],["2022","Malibu"],
     ["2024","Trailblazer"],["2023","Corvette"],["2021","Traverse"],["2024","Blazer EV"],["2020","Camaro"],["2023","Colorado"]];
-  const CUST=["John Carter","Maria Lopez","Wei Chen","Aisha Khan","Tom Becker","Nadia Ali","Greg Foster","Lena Park","Omar Diaz","Beth Ryan"];
+  const CUST=["Homer Simpson","Marty McFly","Bruce Wayne","Fred Flintstone","Ron Swanson","Hermione Granger","Walter White","Lara Croft","Scrooge McDuck","Mary Poppins"];
   const VT=["NEW","NEW","NEW","USED","USED","CPO"], DT=["Finance","Finance","Lease","Cash","Finance","Lease"];
   const rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
   const rows=[]; const N=42;

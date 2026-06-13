@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Factory Statement Reconciliation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    /* MASTER (_shared) theme — purple #6B298C marks this as the source copy */
+    --accent: #6B298C;
+    --danger: #c0392b;
+    --dark: #45195a;
+    --gray: #58595b;
+    --light: #f4f5f7;
+    --green: #1e7e34;
+    --amber: #b8860b;
+    --blue: #0d6efd;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: var(--light); color: #222; }
+  header { background: var(--dark); color: #fff; padding: 16px 28px; display: flex; align-items: center; gap: 14px; }
+  header .logo { background: var(--accent); color: #fff; font-weight: 700; padding: 6px 12px; border-radius: 6px; letter-spacing: 1px; }
+  header h1 { font-size: 1.25rem; margin: 0; font-weight: 600; }
+  header .sub { font-size: .8rem; color: #bbb; margin-left: auto; }
+  main { max-width: 1280px; margin: 0 auto; padding: 22px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .card { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 16px; }
+  .card h2 { font-size: .95rem; margin: 0 0 4px; }
+  .card p.hint { font-size: .78rem; color: var(--gray); margin: 0 0 10px; min-height: 32px; }
+  .dropzone { border: 2px dashed #bbb; border-radius: 8px; padding: 18px 10px; text-align: center; font-size: .85rem;
+    color: var(--gray); cursor: pointer; transition: .15s; }
+  .dropzone:hover, .dropzone.drag { border-color: var(--accent); background: #f7f1fb; }
+  .dropzone.loaded { border-color: var(--green); background: #f2fbf4; color: var(--green); }
+  .dropzone.error { border-color: var(--danger); background: #fff0f0; color: var(--danger); }
+  .dropzone input { display: none; }
+  .filemeta { font-size: .75rem; margin-top: 8px; color: var(--gray); white-space: pre-line; }
+
+  .actions { margin: 20px 0; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  button { font: inherit; border: none; border-radius: 7px; padding: 10px 20px; cursor: pointer; font-weight: 600; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-secondary { background: #fff; color: #333; border: 1px solid #bbb; }
+  .btn-green { background: var(--green); color: #fff; }
+  .btn-sm { padding: 4px 10px; font-size: .75rem; border-radius: 5px; }
+
+  .summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 12px 14px; }
+  .stat .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .5px; color: var(--gray); }
+  .stat .value { font-size: 1.25rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat.ok .value { color: var(--green); }
+  .stat.bad .value { color: var(--danger); }
+  .stat.warn .value { color: var(--amber); }
+
+  section.block { background: #fff; border: 1px solid #ddd; border-radius: 10px; margin-bottom: 18px; overflow: hidden; }
+  section.block > h3 { margin: 0; padding: 12px 16px; font-size: .95rem; background: #fafafa; border-bottom: 1px solid #eee;
+    cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+  section.block > h3 .count { background: #eee; border-radius: 12px; padding: 1px 10px; font-size: .75rem; }
+  section.block > h3 .count.red { background: #fde3e5; color: var(--danger); }
+  section.block > h3 .count.green { background: #def4e3; color: var(--green); }
+  section.block > h3 .count.amber { background: #fdf2d4; color: var(--amber); }
+  section.block > h3 .chev { margin-left: auto; font-size: .8rem; color: #999; }
+  section.block .body { padding: 0; }
+  section.block.collapsed .body { display: none; }
+
+  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  th, td { padding: 7px 12px; text-align: left; border-bottom: 1px solid #f0f0f0; }
+  th { background: #fafafa; font-size: .72rem; text-transform: uppercase; letter-spacing: .4px; color: var(--gray); position: sticky; top: 0; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.review { background: #fffbeb; }
+  tr.confirmed { background: #f2fbf4; }
+  tr.rejected td { color: #aaa; text-decoration: line-through; }
+  tr.rejected td:last-child { text-decoration: none; }
+  .pill { display: inline-block; padding: 2px 9px; border-radius: 10px; font-size: .7rem; font-weight: 600; }
+  .pill.exact { background: #def4e3; color: var(--green); }
+  .pill.fuzzy { background: #fdf2d4; color: var(--amber); }
+  .pill.missing { background: #fde3e5; color: var(--danger); }
+  .pill.confirmed { background: #d6e8ff; color: #0a4fa8; }
+  .reason { font-size: .73rem; color: var(--gray); }
+  .scrollwrap { max-height: 420px; overflow: auto; }
+  .empty { padding: 18px; color: var(--gray); font-size: .85rem; text-align: center; }
+  #status { font-size: .85rem; color: var(--gray); }
+  #status.err { color: var(--danger); font-weight: 600; }
+
+  .recon-eq { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 14px 18px; margin-bottom: 18px;
+    font-size: .9rem; display: flex; gap: 26px; flex-wrap: wrap; align-items: center; font-variant-numeric: tabular-nums; }
+  .recon-eq b { font-size: 1.05rem; }
+  .recon-eq .op { color: var(--gray); font-size: 1.1rem; }
+  .recon-eq .net.ok { color: var(--green); }
+  .recon-eq .net.bad { color: var(--danger); }
+
+  th.tick, td.tick { width: 34px; text-align: center; padding-left: 8px; padding-right: 4px; }
+  td.tick input { width: 16px; height: 16px; cursor: pointer; }
+  .manualhint { font-size: .78rem; color: var(--gray); margin: 0; padding: 10px 16px; background: #fbfbfd; border-bottom: 1px solid #eee; }
+  #reconHint { border: 1px solid #ddd; border-radius: 10px 10px 0 0; border-bottom: none; margin-bottom: 0; }
+  .recon-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-items: start; margin-bottom: 18px; }
+  .recon-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+  .recon-col section.block { margin-bottom: 0; }
+  @media (max-width: 860px) { .recon-cols { grid-template-columns: 1fr; } }
+
+  #selBar { position: fixed; left: 50%; bottom: 0; transform: translate(-50%, 120%); transition: transform .2s;
+    background: var(--dark); color: #fff; padding: 12px 20px; border-radius: 12px 12px 0 0; box-shadow: 0 -4px 18px rgba(0,0,0,.25);
+    display: flex; gap: 20px; align-items: center; font-size: .85rem; z-index: 50; font-variant-numeric: tabular-nums; max-width: 96vw; flex-wrap: wrap; }
+  #selBar.show { transform: translate(-50%, 0); }
+  #selBar button { margin: 0; }
+
+  @media print {
+    header .sub, .cards, .actions, button, .dropzone, .chev, .tick, #selBar, .manualhint { display: none !important; }
+    body { background: #fff; }
+    section.block.collapsed .body { display: block; }
+    .scrollwrap { max-height: none; overflow: visible; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">MASTER</span>
+  <h1>Statement-to-GL Reconciliation</h1>
+  <span class="sub">Shared template &middot; Accounting Office Tool</span>
+</header>
+<main>
+  <div class="cards">
+    <div class="card">
+      <h2>1. Toyota Statement (PDF)</h2>
+      <p class="hint">Monthly Toyota Motor Sales statement showing the Amount Due (auto-ACH on the 15th).</p>
+      <label class="dropzone" id="dzStmt">
+        <input type="file" accept=".pdf" data-kind="statement">
+        Drop PDF here or click to browse
+        <div class="filemeta"></div>
+      </label>
+    </div>
+    <div class="card">
+      <h2>2. Incentive Payout (PDF)</h2>
+      <p class="hint">TFS Account Holder Statement showing the Net due FROM Toyota (VPP / incentives). Optional.</p>
+      <label class="dropzone" id="dzInc">
+        <input type="file" accept=".pdf" data-kind="incentive">
+        Drop PDF here or click to browse
+        <div class="filemeta"></div>
+      </label>
+    </div>
+    <div class="card">
+      <h2>3. CDK Control Detail (Excel)</h2>
+      <p class="hint">GL Inquiry &rarr; Control Detail Report for the Toyota payable control (history OFF), exported to Excel.</p>
+      <label class="dropzone" id="dzGl">
+        <input type="file" accept=".xlsx,.xls" data-kind="gl">
+        Drop XLSX here or click to browse
+        <div class="filemeta"></div>
+      </label>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btnRecon" disabled>Reconcile</button>
+    <button class="btn-green" id="btnExport" disabled>Save Report (Excel)</button>
+    <button class="btn-secondary" id="btnPrint" disabled>Print / PDF</button>
+    <span id="status"></span>
+  </div>
+
+  <div id="results" style="display:none">
+    <div class="recon-eq" id="reconEq"></div>
+    <div class="summary" id="summary"></div>
+
+    <section class="block" id="secReview">
+      <h3>Needs Your Review <span class="count amber" id="cntReview">0</span><span class="chev">&#9662;</span></h3>
+      <div class="body"><div class="scrollwrap" id="tblReview"></div></div>
+    </section>
+
+    <p class="manualhint" id="reconHint">Reconcile open items like a bank rec: tick a statement or incentive item on the <b>left</b> and the GL entry (or entries) on the <b>right</b> that actually covers it, then click <b>Mark these reconciled</b> in the bar at the bottom.</p>
+    <div class="recon-cols">
+      <div class="recon-col">
+        <section class="block" id="secMissing">
+          <h3>On Statement, NOT Found in GL <span class="count red" id="cntMissing">0</span><span class="chev">&#9662;</span></h3>
+          <div class="body"><div class="scrollwrap" id="tblMissing"></div></div>
+        </section>
+
+        <section class="block" id="secIncMissing">
+          <h3>Incentives NOT Found in GL <span class="count red" id="cntIncMissing">0</span><span class="chev">&#9662;</span></h3>
+          <div class="body"><div class="scrollwrap" id="tblIncMissing"></div></div>
+        </section>
+      </div>
+
+      <div class="recon-col">
+        <section class="block" id="secGlOther">
+          <h3>GL Entries Not on Statement <span class="count" id="cntGlOther">0</span><span class="chev">&#9662;</span></h3>
+          <div class="body"><div class="scrollwrap" id="tblGlOther"></div></div>
+        </section>
+      </div>
+    </div>
+
+    <section class="block" id="secManual">
+      <h3>Manually Reconciled <span class="count green" id="cntManual">0</span><span class="chev">&#9662;</span></h3>
+      <div class="body"><div class="scrollwrap" id="tblManual"></div></div>
+    </section>
+
+    <section class="block collapsed" id="secMatched">
+      <h3>Matched Items (auto) <span class="count green" id="cntMatched">0</span><span class="chev">&#9662;</span></h3>
+      <div class="body"><div class="scrollwrap" id="tblMatched"></div></div>
+    </section>
+  </div>
+</main>
+
+<div id="selBar"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ---------- state ----------
+const state = {
+  statement: null,   // { meta, lines:[{invoice, date, refType, amount}] }
+  incentive: null,   // { meta, lines:[{product, date, ref, amount}] }
+  gl: null,          // { meta, lines:[{account, journal, reference, date, amount, control2}] }
+  recon: null,
+  manual: [],        // [{ id, sIds:[], iIds:[], gIds:[] }] user-cleared bundles (bank-rec style)
+  sel: { s: new Set(), i: new Set(), g: new Set() } // currently ticked items awaiting a manual match
+};
+let manualSeq = 1;
+
+// ---------- helpers ----------
+const fmt = n => (n < 0 ? "(" : "") + Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2, maximumFractionDigits:2}) + (n < 0 ? ")" : "");
+const r2 = n => Math.round(n * 100) / 100;
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function parseMoney(s) {
+  if (typeof s === "number") return s;
+  s = String(s).replace(/[$,\s]/g, "");
+  let neg = false;
+  if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+  if (s.startsWith("-")) { neg = true; s = s.slice(1); }
+  const v = parseFloat(s);
+  return isNaN(v) ? null : (neg ? -v : v);
+}
+// normalize a reference/invoice number for comparison
+function normRef(s) {
+  return String(s ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^0+/, "");
+}
+// is one ref a truncated version of the other (CDK ref field is 10 chars)
+function refsRelated(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length >= 5 && (longer.startsWith(shorter) || longer.endsWith(shorter))) return true;
+  return false;
+}
+// edit distance for typo detection (capped, refs only)
+function editDist(a, b) {
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  const m = a.length, n = b.length;
+  const d = Array.from({length: m + 1}, (_, i) => [i, ...Array(n).fill(0)]);
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+  return d[m][n];
+}
+
+// ---------- PDF text extraction (line-reconstructed) ----------
+async function pdfToLines(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const lines = [];
+  for (let p = 1; p <= pdf.numPages; p++) {
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    // group items by rounded Y, then sort by X
+    const rows = new Map();
+    for (const it of tc.items) {
+      if (!it.str.trim()) continue;
+      const y = Math.round(it.transform[5] / 2) * 2;
+      if (!rows.has(y)) rows.set(y, []);
+      rows.get(y).push({ x: it.transform[4], str: it.str });
+    }
+    [...rows.entries()].sort((a, b) => b[0] - a[0]).forEach(([, items]) => {
+      items.sort((a, b) => a.x - b.x);
+      lines.push(items.map(i => i.str).join(" ").replace(/\s+/g, " ").trim());
+    });
+  }
+  return lines;
+}
+
+// ---------- Toyota statement parser ----------
+function parseStatement(lines) {
+  const out = { meta: {}, lines: [] };
+  const all = lines.join("\n");
+  let m;
+  if ((m = all.match(/Statement\s*Date[\s\S]{0,80}?(\d{2}\/\d{2}\/\d{4})/i))) out.meta.statementDate = m[1];
+  if ((m = all.match(/Account\s*Number[\s\S]{0,80}?\d{2}\/\d{2}\/\d{4}\s+(\d{4,6})\b/i))) out.meta.accountNumber = m[1];
+  else if ((m = all.match(/CUST\.?\s*#\s*(\d{4,6})\b/i))) out.meta.accountNumber = m[1];
+  if ((m = all.match(/Amount\s*Due[:\s]*\(?\$?([\d,]+\.\d{2})\)?/i))) out.meta.amountDue = parseMoney(m[1]);
+  if ((m = all.match(/Statement\s*Amount[:\s]*\(?\$?([\d,]+\.\d{2})\)?/i))) out.meta.statementAmount = parseMoney(m[1]);
+  if ((m = all.match(/CUST\.?\s*#\s*\d+\s*-\s*([A-Z'’\.\s]+)/))) out.meta.dealer = m[1].trim();
+
+  // detail line: INVOICE  MM/DD/YY  REF-TYPE  MM/DD/YY  amount  balance
+  // invoice may be jammed against the date; amounts may be in (parens) for credits
+  const lineRe = /^(.*?)\s*(\d{2}\/\d{2}\/\d{2})\s*([A-Z][A-Z0-9\-\.&]*?)\s*(\d{2}\/\d{2}\/\d{2})\s*(\(?\$?[\d,]+\.\d{2}\)?)\s*(\(?\$?[\d,]+\.\d{2}\)?)$/;
+  for (const ln of lines) {
+    if (/CustomerTotal|Customer Total|Statement\s*Amount|FutureAmount|Days/i.test(ln)) continue;
+    const mm = ln.match(lineRe);
+    if (!mm) continue;
+    const invoice = mm[1].replace(/^.*?(CUST.*?#\s*\d+\s*-\s*.+?)\s*/i, "").trim();
+    if (!invoice || invoice.length < 3 || /InvoiceNumber|Invoice Number/i.test(invoice)) continue;
+    const amount = parseMoney(mm[5]);
+    if (amount === null) continue;
+    out.lines.push({ invoice, date: mm[2], refType: mm[3], dueDate: mm[4], amount });
+  }
+  return out;
+}
+
+// ---------- Incentive (TFS Account Holder) parser ----------
+function parseIncentive(lines) {
+  const out = { meta: {}, lines: [] };
+  const all = lines.join("\n");
+  let m;
+  if ((m = all.match(/Net\s*due\s*from\s*TFS\s*\$?\(?([\d,]+\.\d{2})\)?/i))) out.meta.netDue = parseMoney(m[1]);
+  if ((m = all.match(/As\s*of\s*([A-Za-z]+\s*\d{1,2},?\s*\d{4})/i))) out.meta.asOf = m[1];
+  if ((m = all.match(/Dealer\s*:?\s*(.+?)\s*\(\s*(\d{4,6})\s*\)/i))) { out.meta.dealer = m[1].trim(); out.meta.dealerCode = m[2]; }
+
+  // detail rows: PRODUCT  MM/DD/YYYY  [Trans Ref Number]  [Description]  $amount
+  const rowRe = /^(.+?)\s+(\d{2}\/\d{2}\/\d{4})\s*(.*?)\s*\$?\(?([\d,]+\.\d{2})\)?\s*$/;
+  let inDetail = false;
+  for (const ln of lines) {
+    if (/^\s*DETAIL\s*:?/i.test(ln) || /PRODUCT\s+DATE\s+Trans/i.test(ln)) { inDetail = true; continue; }
+    if (/Total\s+VPP/i.test(ln)) { inDetail = false; continue; }
+    if (!inDetail) continue;
+    const mm = ln.match(rowRe);
+    if (!mm) continue;
+    const amount = parseMoney(mm[4]);
+    if (amount === null) continue;
+    // trans ref is the first token of the middle chunk, if numeric-ish
+    let ref = "", desc = mm[3].trim();
+    const t = desc.split(/\s+/)[0];
+    if (t && /^[A-Z0-9\-]{3,}$/i.test(t) && /\d/.test(t)) { ref = t; desc = desc.slice(t.length).trim(); }
+    out.lines.push({ product: mm[1].trim(), date: mm[2], ref, description: desc, amount });
+  }
+  return out;
+}
+
+// ---------- CDK Control Detail (xlsx) parser ----------
+function parseGl(wb) {
+  const out = { meta: {}, lines: [] };
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+  let hdr = -1, cols = {};
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i].map(c => String(c ?? "").trim());
+    const iAcct = r.findIndex(c => /^Account$/i.test(c));
+    const iJrn  = r.findIndex(c => /^Journal$/i.test(c));
+    const iRef  = r.findIndex(c => /^Reference$/i.test(c));
+    if (iAcct >= 0 && iJrn >= 0 && iRef >= 0) {
+      hdr = i;
+      cols = {
+        account: iAcct, journal: iJrn, reference: iRef,
+        date: r.findIndex(c => /Date/i.test(c)),
+        amount: r.findIndex(c => /^Amount/i.test(c)),
+        control2: r.findIndex(c => /Control2/i.test(c))
+      };
+      break;
+    }
+    // grab company / control header info on the way down
+    const joined = r.join(" ");
+    let m;
+    if ((m = joined.match(/Company:\s*(.+)/i))) out.meta.company = m[1].trim();
+  }
+  if (hdr < 0) throw new Error("Could not find the Account / Journal / Reference header row. Is this a Control Detail Report export?");
+
+  // control number + total from the summary block above the header
+  for (let i = 0; i < hdr; i++) {
+    const r = rows[i];
+    for (let j = 0; j < r.length - 1; j++) {
+      if (String(r[j] ?? "").trim() === "Control" && typeof rows[i+1]?.[j] !== "undefined") {
+        out.meta.control = String(rows[i+1][j] ?? "").trim();
+        const tot = rows[i+1][j+1];
+        if (typeof tot === "number") out.meta.controlTotal = tot;
+      }
+    }
+  }
+
+  for (let i = hdr + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const ref = r[cols.reference];
+    const amt = r[cols.amount];
+    if (ref == null || amt == null || typeof amt !== "number") continue;
+    let d = r[cols.date];
+    if (d instanceof Date) d = (d.getMonth()+1).toString().padStart(2,"0") + "/" + d.getDate().toString().padStart(2,"0") + "/" + d.getFullYear();
+    else if (typeof d === "number") { const dd = XLSX.SSF.parse_date_code(d); if (dd) d = String(dd.m).padStart(2,"0") + "/" + String(dd.d).padStart(2,"0") + "/" + dd.y; }
+    out.lines.push({
+      account: String(r[cols.account] ?? "").trim(),
+      journal: String(r[cols.journal] ?? "").trim(),
+      reference: String(ref).trim(),
+      date: d ? String(d) : "",
+      amount: amt,
+      control2: String(r[cols.control2] ?? "").trim()
+    });
+  }
+  if (!out.lines.length) throw new Error("No GL detail lines found below the header row.");
+  return out;
+}
+
+// ---------- reconciliation engine ----------
+function reconcile() {
+  const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  // reset any prior manual clearings / selection on a fresh reconcile
+  state.manual = [];
+  state.sel = { s: new Set(), i: new Set(), g: new Set() };
+  // tag source items with stable ids for manual matching
+  stmt.lines.forEach((l, i) => l._id = "s" + i);
+  if (inc) inc.lines.forEach((l, i) => l._id = "i" + i);
+  gl.lines.forEach((l, i) => l._id = "g" + i);
+  // group GL lines by normalized reference (CDK may post several lines under one ref)
+  const glGroups = new Map();
+  gl.lines.forEach((l, idx) => {
+    const k = normRef(l.reference);
+    if (!glGroups.has(k)) glGroups.set(k, { key: k, lines: [], total: 0 });
+    const g = glGroups.get(k);
+    g.lines.push({ ...l, idx, _id: l._id });
+    g.total = r2(g.total + l.amount);
+  });
+  const groups = [...glGroups.values()];
+  groups.forEach(g => g.used = false);
+
+  const matches = [];   // { source:'statement'|'incentive', item, group, kind:'exact'|'fuzzy', reason, status:'auto'|'pending'|'confirmed'|'rejected' }
+  const missing = [];   // statement items with no candidate at all
+  const incMissing = [];
+
+  function findMatch(item, wantAmount, refRaw) {
+    const refN = normRef(refRaw);
+    // Tier 1: exact / truncated ref AND amount agrees
+    let g = groups.find(g => !g.used && refsRelated(g.key, refN) && Math.abs(g.total - wantAmount) < 0.005);
+    if (g) return { group: g, kind: "exact", reason: "Reference and amount match" };
+    // Tier 2: ref matches but amount differs -> review
+    g = groups.find(g => !g.used && refN && refsRelated(g.key, refN));
+    if (g) return { group: g, kind: "fuzzy", reason: `Reference matches but GL total is ${fmt(g.total)} vs expected ${fmt(wantAmount)}` };
+    // Tier 3: amount matches and ref is a near-typo (edit distance <= 2) -> review
+    const amtCands = groups.filter(g => !g.used && Math.abs(g.total - wantAmount) < 0.005);
+    if (refN) {
+      g = amtCands.find(g => editDist(g.key, refN) <= 2);
+      if (g) return { group: g, kind: "fuzzy", reason: "Amount matches; reference looks like a typo (" + g.lines[0].reference + " vs " + refRaw + ")" };
+    }
+    // Tier 4: unique amount-only candidate -> review
+    if (amtCands.length === 1) return { group: amtCands[0], kind: "fuzzy", reason: "Amount matches but reference differs (" + amtCands[0].lines[0].reference + ")" };
+    return null;
+  }
+
+  // statement invoices post to GL as the OPPOSITE sign (credit to AP): expected GL = -statement amount
+  for (const it of stmt.lines) {
+    const f = findMatch(it, r2(-it.amount), it.invoice);
+    if (f) { f.group.used = true; matches.push({ source: "statement", item: it, ...f, status: f.kind === "exact" ? "auto" : "pending" }); }
+    else missing.push(it);
+  }
+  // incentives are money Toyota pays us: posted as positive (debit) on the AP control
+  if (inc) for (const it of inc.lines) {
+    const f = findMatch(it, r2(it.amount), it.ref);
+    if (f) { f.group.used = true; matches.push({ source: "incentive", item: it, ...f, status: f.kind === "exact" ? "auto" : "pending" }); }
+    else incMissing.push(it);
+  }
+
+  const glOther = groups.filter(g => !g.used);
+  state.recon = { matches, missing, incMissing, glOther };
+  render();
+}
+
+// ---------- rendering ----------
+// id -> item lookups (statement / incentive / GL line)
+function lookups() {
+  const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  const sById = new Map(stmt.lines.map(l => [l._id, l]));
+  const iById = new Map((inc?.lines || []).map(l => [l._id, l]));
+  const gById = new Map(gl.lines.map(l => [l._id, l]));
+  return { sById, iById, gById };
+}
+// sets of ids cleared via a manual (bank-rec style) bundle
+function manualSets() {
+  const s = new Set(), i = new Set(), g = new Set();
+  for (const b of state.manual) {
+    b.sIds.forEach(x => s.add(x)); b.iIds.forEach(x => i.add(x)); b.gIds.forEach(x => g.add(x));
+  }
+  return { s, i, g };
+}
+
+function recompute() {
+  const { matches, missing, incMissing, glOther } = state.recon;
+  const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  const { sById, iById } = lookups();
+  const man = manualSets();
+  const stmtTotal = r2(stmt.lines.reduce((s, l) => s + l.amount, 0));
+  const incTotal = inc ? r2(inc.lines.reduce((s, l) => s + l.amount, 0)) : 0;
+  const ok = m => m.status === "auto" || m.status === "confirmed";
+
+  const matchedStmt = matches.filter(m => m.source === "statement" && ok(m));
+  const matchedInc = matches.filter(m => m.source === "incentive" && ok(m));
+  const pending = matches.filter(m => m.status === "pending");
+  const rejectedStmt = matches.filter(m => m.source === "statement" && m.status === "rejected");
+  const rejectedInc = matches.filter(m => m.source === "incentive" && m.status === "rejected");
+
+  // manually cleared source items (exclude any already auto/confirmed-matched, just in case)
+  const manStmtItems = [...man.s].map(id => sById.get(id)).filter(Boolean);
+  const manIncItems = [...man.i].map(id => iById.get(id)).filter(Boolean);
+
+  const matchedStmtAmt = r2(matchedStmt.reduce((s, m) => s + m.item.amount, 0) + manStmtItems.reduce((s, it) => s + it.amount, 0));
+  const matchedIncAmt = r2(matchedInc.reduce((s, m) => s + m.item.amount, 0) + manIncItems.reduce((s, it) => s + it.amount, 0));
+  const unpostedStmt = r2(stmtTotal - matchedStmtAmt);
+  const unpostedInc = r2(incTotal - matchedIncAmt);
+
+  // exceptions, minus anything the user has manually cleared
+  const missingAll = [...missing, ...rejectedStmt.map(m => m.item)].filter(it => !man.s.has(it._id));
+  const incMissingAll = [...incMissing, ...rejectedInc.map(m => m.item)].filter(it => !man.i.has(it._id));
+  // GL lines still unaccounted: not in an auto/confirmed group and not manually cleared
+  const glLinesOpen = glOther.flatMap(g => g.lines).filter(l => !man.g.has(l._id));
+
+  return { stmtTotal, incTotal, matchedStmt, matchedInc, pending, rejectedStmt, rejectedInc,
+           matchedStmtAmt, matchedIncAmt, unpostedStmt, unpostedInc,
+           manStmtItems, manIncItems, glLinesOpen,
+           matchedCount: matchedStmt.length + matchedInc.length + manStmtItems.length + manIncItems.length,
+           missingAll, incMissingAll };
+}
+
+function render() {
+  const R = recompute();
+  const { matches, glOther } = state.recon;
+  const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  document.getElementById("results").style.display = "";
+
+  const expectedNet = r2(R.stmtTotal - R.incTotal);
+  const fullyPosted = R.pending.length === 0 && R.missingAll.length === 0 && R.incMissingAll.length === 0;
+  document.getElementById("reconEq").innerHTML =
+    `<span>Statement <b>${fmt(R.stmtTotal)}</b></span><span class="op">&minus;</span>` +
+    `<span>Incentives <b>${fmt(R.incTotal)}</b></span><span class="op">=</span>` +
+    `<span>Expected net to Toyota <b>${fmt(expectedNet)}</b></span>` +
+    `<span class="net ${fullyPosted ? "ok" : "bad"}" style="margin-left:auto;font-weight:700">` +
+    (fullyPosted ? "&#10004; Everything posted &mdash; GL = Statement &minus; Incentives" :
+      `Not yet posted to GL: ${fmt(r2(R.unpostedStmt - R.unpostedInc))}`) + `</span>`;
+
+  document.getElementById("summary").innerHTML = [
+    ["Statement Amount Due", fmt(stmt.meta.amountDue ?? R.stmtTotal), ""],
+    ["Incentive (Net from TFS)", fmt(inc?.meta.netDue ?? R.incTotal), ""],
+    ["GL Control Balance", fmt(gl.meta.controlTotal ?? r2(gl.lines.reduce((s,l)=>s+l.amount,0))), ""],
+    ["Matched to GL", `${R.matchedCount} items`, "ok"],
+    ["Needs Review", `${R.pending.length} items`, R.pending.length ? "warn" : "ok"],
+    ["Not Posted", `${R.missingAll.length + R.incMissingAll.length} items / ${fmt(r2(R.unpostedStmt - R.unpostedInc))}`,
+      (R.missingAll.length + R.incMissingAll.length) ? "bad" : "ok"]
+  ].map(([l, v, c]) => `<div class="stat ${c}"><div class="label">${l}</div><div class="value">${v}</div></div>`).join("");
+
+  // review table
+  const revRows = matches.map((m, i) => ({ m, i })).filter(x => x.m.status !== "auto");
+  document.getElementById("cntReview").textContent = R.pending.length;
+  document.getElementById("tblReview").innerHTML = revRows.length ? `<table><thead><tr>
+      <th>Source</th><th>Ref / Invoice #</th><th>Date</th><th class="num">Expected $</th>
+      <th>GL Reference</th><th>GL Date</th><th class="num">GL Total $</th><th>Why flagged</th><th>Decision</th></tr></thead><tbody>` +
+    revRows.map(({ m, i }) => {
+      const it = m.item, g = m.group;
+      const exp = m.source === "statement" ? it.amount : it.amount;
+      const cls = m.status === "confirmed" ? "confirmed" : m.status === "rejected" ? "rejected" : "review";
+      const btns = m.status === "pending"
+        ? `<button class="btn-green btn-sm" onclick="decide(${i},'confirmed')">&#10004; Match</button>
+           <button class="btn-secondary btn-sm" onclick="decide(${i},'rejected')">&#10008; Not a match</button>`
+        : `<span class="pill ${m.status === "confirmed" ? "confirmed" : "missing"}">${m.status}</span>
+           <button class="btn-secondary btn-sm" onclick="decide(${i},'pending')">undo</button>`;
+      return `<tr class="${cls}"><td>${m.source === "statement" ? "Statement" : "Incentive"}</td>
+        <td>${esc(m.source === "statement" ? it.invoice : (it.ref || it.product))}</td><td>${esc(it.date)}</td>
+        <td class="num">${fmt(exp)}</td><td>${esc(g.lines.map(l=>l.reference).join(", "))}</td>
+        <td>${esc(g.lines[0].date)}</td><td class="num">${fmt(g.total)}</td>
+        <td class="reason">${esc(m.reason)}</td><td>${btns}</td></tr>`;
+    }).join("") + "</tbody></table>"
+    : `<div class="empty">Nothing needs review.</div>`;
+
+  // missing tables (with tick boxes for manual clearing)
+  document.getElementById("cntMissing").textContent = R.missingAll.length;
+  document.getElementById("tblMissing").innerHTML = R.missingAll.length ? `<table><thead><tr>
+      <th class="tick"></th><th>Invoice #</th><th>Invoice Date</th><th>Type</th><th class="num">Amount $</th><th>Expected GL Posting</th></tr></thead><tbody>` +
+    R.missingAll.map(it => `<tr><td class="tick"><input type="checkbox" data-sel="s" value="${it._id}" ${state.sel.s.has(it._id)?"checked":""}></td>
+      <td>${esc(it.invoice)}</td><td>${esc(it.date)}</td><td>${esc(it.refType)}</td>
+      <td class="num">${fmt(it.amount)}</td><td class="reason">Post ${fmt(r2(-it.amount))} to the Toyota control with ref ${esc(it.invoice)}</td></tr>`).join("")
+    + "</tbody></table>" : `<div class="empty">Every statement line was found in the GL. &#127881;</div>`;
+
+  document.getElementById("cntIncMissing").textContent = R.incMissingAll.length;
+  document.getElementById("secIncMissing").style.display = inc ? "" : "none";
+  document.getElementById("tblIncMissing").innerHTML = R.incMissingAll.length ? `<table><thead><tr>
+      <th class="tick"></th><th>Product</th><th>Date</th><th>Trans Ref #</th><th class="num">Amount $</th></tr></thead><tbody>` +
+    R.incMissingAll.map(it => `<tr><td class="tick"><input type="checkbox" data-sel="i" value="${it._id}" ${state.sel.i.has(it._id)?"checked":""}></td>
+      <td>${esc(it.product)}</td><td>${esc(it.date)}</td><td>${esc(it.ref || "—")}</td>
+      <td class="num">${fmt(it.amount)}</td></tr>`).join("") + "</tbody></table>"
+    : `<div class="empty">Every incentive line was found in the GL. &#127881;</div>`;
+
+  // matched
+  const okMatches = matches.filter(m => m.status === "auto" || m.status === "confirmed");
+  document.getElementById("cntMatched").textContent = okMatches.length;
+  document.getElementById("tblMatched").innerHTML = okMatches.length ? `<table><thead><tr>
+      <th>Source</th><th>Ref / Invoice #</th><th>Date</th><th class="num">Amount $</th>
+      <th>GL Reference</th><th>GL Jrnl</th><th>GL Date</th><th class="num">GL Total $</th><th>Match</th></tr></thead><tbody>` +
+    okMatches.map(m => {
+      const it = m.item, g = m.group;
+      return `<tr><td>${m.source === "statement" ? "Statement" : "Incentive"}</td>
+        <td>${esc(m.source === "statement" ? it.invoice : (it.ref || it.product))}</td><td>${esc(it.date)}</td>
+        <td class="num">${fmt(it.amount)}</td><td>${esc(g.lines.map(l=>l.reference).join(", "))}</td>
+        <td>${esc([...new Set(g.lines.map(l=>l.journal))].join(","))}</td><td>${esc(g.lines[0].date)}</td>
+        <td class="num">${fmt(g.total)}</td>
+        <td><span class="pill ${m.status === "auto" ? "exact" : "confirmed"}">${m.status === "auto" ? "auto" : "confirmed"}</span></td></tr>`;
+    }).join("") + "</tbody></table>" : `<div class="empty">No matches yet.</div>`;
+
+  // GL not on statement (open lines only) — tickable to manually clear against statement/incentive items
+  document.getElementById("cntGlOther").textContent = R.glLinesOpen.length;
+  document.getElementById("tblGlOther").innerHTML = R.glLinesOpen.length ? `<table><thead><tr>
+      <th class="tick"></th><th>Reference</th><th>Journal</th><th>Date</th><th class="num">Amount $</th><th>Control2</th></tr></thead><tbody>` +
+    R.glLinesOpen.slice().sort((a, b) => a.date.localeCompare(b.date))
+      .map(l => `<tr><td class="tick"><input type="checkbox" data-sel="g" value="${l._id}" ${state.sel.g.has(l._id)?"checked":""}></td>
+        <td>${esc(l.reference)}</td><td>${esc(l.journal)}</td><td>${esc(l.date)}</td>
+        <td class="num">${fmt(l.amount)}</td><td>${esc(l.control2)}</td></tr>`).join("") + "</tbody></table>"
+    : `<div class="empty">None.</div>`;
+
+  // manually reconciled bundles
+  renderManual(R);
+  renderSelBar(R);
+
+  document.getElementById("btnExport").disabled = false;
+  document.getElementById("btnPrint").disabled = false;
+}
+
+function renderManual(R) {
+  const { sById, iById, gById } = lookups();
+  const sec = document.getElementById("secManual");
+  sec.style.display = state.manual.length ? "" : "none";
+  document.getElementById("cntManual").textContent = state.manual.length;
+  document.getElementById("tblManual").innerHTML = !state.manual.length ? "" : `<table><thead><tr>
+      <th>Cleared items (Statement / Incentive)</th><th>Matched GL entries</th>
+      <th class="num">Net diff $</th><th></th></tr></thead><tbody>` +
+    state.manual.map(b => {
+      const sItems = b.sIds.map(id => sById.get(id)).filter(Boolean);
+      const iItems = b.iIds.map(id => iById.get(id)).filter(Boolean);
+      const gItems = b.gIds.map(id => gById.get(id)).filter(Boolean);
+      const sSum = r2(sItems.reduce((s, x) => s + x.amount, 0));
+      const iSum = r2(iItems.reduce((s, x) => s + x.amount, 0));
+      const gSum = r2(gItems.reduce((s, x) => s + x.amount, 0));
+      // statement posts as a credit (-), incentive as a debit (+): expected GL = -stmt + inc
+      const diff = r2(gSum - (-sSum + iSum));
+      const left = [...sItems.map(x => `Stmt ${esc(x.invoice)} ${fmt(x.amount)}`),
+                    ...iItems.map(x => `Inc ${esc(x.ref || x.product)} ${fmt(x.amount)}`)].join("<br>") || "—";
+      const right = gItems.map(x => `${esc(x.reference)} (j${esc(x.journal)}) ${fmt(x.amount)}`).join("<br>") || "—";
+      return `<tr class="confirmed"><td>${left}</td><td>${right}</td>
+        <td class="num" style="color:${Math.abs(diff) < 0.005 ? "var(--green)" : "var(--amber)"}">${fmt(diff)}${Math.abs(diff) < 0.005 ? " &#10004;" : ""}</td>
+        <td><button class="btn-secondary btn-sm" onclick="unManual('${b.id}')">unmatch</button></td></tr>`;
+    }).join("") + "</tbody></table>";
+}
+
+function renderSelBar(R) {
+  const { sById, iById, gById } = lookups();
+  const bar = document.getElementById("selBar");
+  const n = state.sel.s.size + state.sel.i.size + state.sel.g.size;
+  if (!n) { bar.classList.remove("show"); return; }
+  const sSum = r2([...state.sel.s].reduce((s, id) => s + (sById.get(id)?.amount || 0), 0));
+  const iSum = r2([...state.sel.i].reduce((s, id) => s + (iById.get(id)?.amount || 0), 0));
+  const gSum = r2([...state.sel.g].reduce((s, id) => s + (gById.get(id)?.amount || 0), 0));
+  const diff = r2(gSum - (-sSum + iSum));
+  const balanced = Math.abs(diff) < 0.005;
+  bar.classList.add("show");
+  bar.innerHTML = `<span><b>${n}</b> selected</span>
+    <span>Stmt ${fmt(sSum)} · Inc ${fmt(iSum)} · GL ${fmt(gSum)}</span>
+    <span style="color:${balanced ? "#7CFFB0" : "#FFD27C"}">net diff ${fmt(diff)}${balanced ? " &#10004; balances" : ""}</span>
+    <button class="btn-green btn-sm" onclick="doManualMatch()">Mark these reconciled</button>
+    <button class="btn-secondary btn-sm" onclick="clearSel()">Clear</button>`;
+}
+
+function toggleSel(kind, id, on) {
+  if (on) state.sel[kind].add(id); else state.sel[kind].delete(id);
+  renderSelBar(recompute());
+}
+function clearSel() { state.sel = { s: new Set(), i: new Set(), g: new Set() }; render(); }
+function doManualMatch() {
+  if (!(state.sel.s.size + state.sel.i.size + state.sel.g.size)) return;
+  state.manual.push({ id: "m" + (manualSeq++), sIds: [...state.sel.s], iIds: [...state.sel.i], gIds: [...state.sel.g] });
+  state.sel = { s: new Set(), i: new Set(), g: new Set() };
+  render();
+}
+function unManual(id) {
+  state.manual = state.manual.filter(b => b.id !== id);
+  render();
+}
+
+function decide(i, status) {
+  state.recon.matches[i].status = status;
+  render();
+}
+
+// ---------- export ----------
+function exportReport() {
+  const R = recompute();
+  const { matches, glOther } = state.recon;
+  const stmt = state.statement, inc = state.incentive, gl = state.gl;
+  const wb = XLSX.utils.book_new();
+  const today = new Date().toLocaleDateString("en-US");
+
+  const summary = [
+    ["Toyota Statement Reconciliation"],
+    ["Prepared", today],
+    ["Dealer", stmt.meta.dealer || inc?.meta.dealer || ""],
+    ["Statement Date", stmt.meta.statementDate || ""],
+    ["GL Control", gl.meta.control || ""],
+    [],
+    ["Statement Amount Due", stmt.meta.amountDue ?? R.stmtTotal],
+    ["Incentives (Net from TFS)", inc?.meta.netDue ?? R.incTotal],
+    ["Expected Net to Toyota (Statement - Incentives)", r2(R.stmtTotal - R.incTotal)],
+    ["GL Control Balance", gl.meta.controlTotal ?? r2(gl.lines.reduce((s, l) => s + l.amount, 0))],
+    [],
+    ["Statement items reconciled (auto + confirmed + manual)", R.matchedStmt.length + R.manStmtItems.length, R.matchedStmtAmt],
+    ["Incentive items reconciled (auto + confirmed + manual)", R.matchedInc.length + R.manIncItems.length, R.matchedIncAmt],
+    ["Manually reconciled bundles", state.manual.length],
+    ["Statement items NOT posted", R.missingAll.length, R.unpostedStmt],
+    ["Incentive items NOT posted", R.incMissingAll.length, R.unpostedInc],
+    ["Items still pending review", R.pending.length],
+    [],
+    [R.pending.length === 0 && R.missingAll.length === 0 && R.incMissingAll.length === 0
+      ? "RESULT: Fully reconciled - GL = Statement - Incentives"
+      : "RESULT: NOT fully reconciled - see exception tabs"]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(summary), "Summary");
+
+  const okMatches = matches.filter(m => m.status === "auto" || m.status === "confirmed");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Source", "Ref / Invoice #", "Date", "Amount", "GL Reference(s)", "GL Journal(s)", "GL Date", "GL Total", "Match Type"],
+    ...okMatches.map(m => [
+      m.source, m.source === "statement" ? m.item.invoice : (m.item.ref || m.item.product), m.item.date, m.item.amount,
+      m.group.lines.map(l => l.reference).join(", "), [...new Set(m.group.lines.map(l => l.journal))].join(","),
+      m.group.lines[0].date, m.group.total, m.status === "auto" ? "Auto" : "User confirmed"
+    ])
+  ]), "Matched");
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Invoice #", "Invoice Date", "Type", "Amount", "Action"],
+    ...R.missingAll.map(it => [it.invoice, it.date, it.refType, it.amount, "Not found in GL - needs posting"])
+  ]), "Stmt Not Posted");
+
+  if (inc) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Product", "Date", "Trans Ref #", "Amount", "Action"],
+    ...R.incMissingAll.map(it => [it.product, it.date, it.ref, it.amount, "Not found in GL - needs posting"])
+  ]), "Incentives Not Posted");
+
+  // manually reconciled bundles
+  const { sById, iById, gById } = lookups();
+  if (state.manual.length) {
+    const rows = [["Bundle", "Type", "Ref / Invoice #", "Date", "Amount", "Bundle net diff"]];
+    for (const b of state.manual) {
+      const sItems = b.sIds.map(id => sById.get(id)).filter(Boolean);
+      const iItems = b.iIds.map(id => iById.get(id)).filter(Boolean);
+      const gItems = b.gIds.map(id => gById.get(id)).filter(Boolean);
+      const diff = r2(gItems.reduce((s, x) => s + x.amount, 0) - (-r2(sItems.reduce((s, x) => s + x.amount, 0)) + r2(iItems.reduce((s, x) => s + x.amount, 0))));
+      sItems.forEach(x => rows.push([b.id, "Statement", x.invoice, x.date, x.amount, ""]));
+      iItems.forEach(x => rows.push([b.id, "Incentive", x.ref || x.product, x.date, x.amount, ""]));
+      gItems.forEach(x => rows.push([b.id, "GL", x.reference, x.date, x.amount, ""]));
+      rows[rows.length - 1][5] = diff;
+    }
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), "Manually Reconciled");
+  }
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+    ["Reference", "Journal", "Date", "Amount", "Control2"],
+    ...R.glLinesOpen.map(l => [l.reference, l.journal, l.date, l.amount, l.control2])
+  ]), "GL Not On Statement");
+
+  const tag = (stmt.meta.statementDate || today).replace(/\//g, "-");
+  XLSX.writeFile(wb, `Toyota_Reconciliation_${tag}.xlsx`);
+}
+
+// ---------- file handling / UI wiring ----------
+function setZone(zone, cls, msg) {
+  zone.classList.remove("loaded", "error", "drag");
+  if (cls) zone.classList.add(cls);
+  zone.querySelector(".filemeta").textContent = msg || "";
+}
+async function handleFile(zone, file) {
+  const kind = zone.querySelector("input").dataset.kind;
+  const status = document.getElementById("status");
+  status.classList.remove("err");
+  status.textContent = "Reading " + file.name + "…";
+  try {
+    if (kind === "gl") {
+      const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+      state.gl = parseGl(wb);
+      setZone(zone, "loaded", `${file.name}\n${state.gl.lines.length} GL lines · Control ${state.gl.meta.control || "?"} · Balance ${state.gl.meta.controlTotal != null ? fmt(state.gl.meta.controlTotal) : "n/a"}`);
+    } else {
+      const lines = await pdfToLines(file);
+      if (kind === "statement") {
+        state.statement = parseStatement(lines);
+        if (!state.statement.lines.length) throw new Error("No invoice lines recognized — is this the Toyota Motor Sales statement PDF?");
+        setZone(zone, "loaded", `${file.name}\n${state.statement.lines.length} invoices · Amount Due ${state.statement.meta.amountDue != null ? fmt(state.statement.meta.amountDue) : "n/a"}`);
+      } else {
+        state.incentive = parseIncentive(lines);
+        if (!state.incentive.lines.length) throw new Error("No incentive detail lines recognized — is this the TFS Account Holder Statement PDF?");
+        setZone(zone, "loaded", `${file.name}\n${state.incentive.lines.length} payouts · Net from TFS ${state.incentive.meta.netDue != null ? fmt(state.incentive.meta.netDue) : "n/a"}`);
+      }
+    }
+    status.textContent = "";
+  } catch (e) {
+    if (kind === "gl") state.gl = null;
+    else if (kind === "statement") state.statement = null;
+    else state.incentive = null;
+    setZone(zone, "error", e.message);
+    status.classList.add("err");
+    status.textContent = e.message;
+  }
+  document.getElementById("btnRecon").disabled = !(state.statement && state.gl);
+}
+
+document.querySelectorAll(".dropzone").forEach(zone => {
+  const input = zone.querySelector("input");
+  input.addEventListener("change", () => input.files[0] && handleFile(zone, input.files[0]));
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("drag"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("drag"));
+  zone.addEventListener("drop", e => { e.preventDefault(); zone.classList.remove("drag"); e.dataTransfer.files[0] && handleFile(zone, e.dataTransfer.files[0]); });
+});
+document.getElementById("btnRecon").addEventListener("click", () => {
+  try { reconcile(); document.getElementById("status").textContent = ""; }
+  catch (e) { const s = document.getElementById("status"); s.classList.add("err"); s.textContent = e.message; }
+});
+document.getElementById("btnExport").addEventListener("click", exportReport);
+document.getElementById("btnPrint").addEventListener("click", () => window.print());
+document.querySelectorAll("section.block > h3").forEach(h =>
+  h.addEventListener("click", () => h.parentElement.classList.toggle("collapsed")));
+// delegated tick-box handling for manual (bank-rec style) clearing
+document.getElementById("results").addEventListener("change", e => {
+  const cb = e.target.closest('input[data-sel]');
+  if (cb) toggleSel(cb.dataset.sel, cb.value, cb.checked);
+});
+</script>
+</body>
+</html>
