@@ -2,6 +2,8 @@ name: Publish Tool Releases
 
 # Discovers every company folder (any second-level dir that isn't `_shared`)
 # plus the shared masters, and publishes one rolling "latest" release per group.
+# A group is only (re)published when one of ITS OWN files has changed since that
+# group's previous release — an unrelated change elsewhere won't churn it.
 # Add a new company by simply committing its folder — no edits here needed.
 
 on:
@@ -68,7 +70,7 @@ jobs:
           echo "Discovered release groups:"
           printf '%s\n' "${entries[@]}" | jq -r '"  - \(.name)  [\(.tag)]  <- */\(.path)/**"'
 
-  # ── Publish one release per group ────────────────────────────────────────────
+  # ── Publish one release per group (only if that group changed) ───────────────
   release:
     name: Publish ${{ matrix.name }}
     needs: discover
@@ -78,32 +80,38 @@ jobs:
       matrix: ${{ fromJson(needs.discover.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # full history + tags so we can diff against the last release
 
-      - name: Generate release notes
+      - name: Detect whether this group changed
+        id: gate
         env:
           MATRIX_PATH: ${{ matrix.path }}
-          MATRIX_NAME: ${{ matrix.name }}
+          MATRIX_TAG: ${{ matrix.tag }}
         run: |
           set -euo pipefail
-          {
-            echo "Latest ${MATRIX_NAME%% – Latest}. Download the files you need and double-click to open — no install required."
-            echo
-            echo "| File | Location |"
-            echo "|---|---|"
-            find . -type f \( -name '*.html' -o -name '*.xlsm' \) \
-              -path "*/${MATRIX_PATH}/*" \
-              -not -path '*/src/*' \
-              -not -path '*/templates/*' \
-              -not -path '*/web/*' \
-              -not -path './.*' \
-              | sed -E 's#^\./##' | sort \
-              | while IFS= read -r f; do
-                  printf '| `%s` | `%s` |\n' "$(basename "$f")" "$f"
-                done
-          } > RELEASE_BODY.md
-          cat RELEASE_BODY.md
+          prev=$(git rev-parse -q --verify "refs/tags/${MATRIX_TAG}^{commit}" 2>/dev/null || true)
+          if [ -z "$prev" ]; then
+            echo "No previous '${MATRIX_TAG}' release — publishing initial release."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif git diff --name-only "$prev" HEAD | grep -qE "^[^/]+/${MATRIX_PATH}/"; then
+            echo "Changes detected under */${MATRIX_PATH}/ since ${MATRIX_TAG} — republishing."
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No changes under */${MATRIX_PATH}/ since ${MATRIX_TAG} — skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate release notes + verify embedded descriptions
+        if: steps.gate.outputs.changed == 'true'
+        env:
+          MATRIX_PATH: ${{ matrix.path }}
+          MATRIX_TAG: ${{ matrix.tag }}
+          MATRIX_NAME: ${{ matrix.name }}
+        run: bash .github/scripts/gen-release-notes.sh > RELEASE_BODY.md
 
       - name: Delete existing release + tag
+        if: steps.gate.outputs.changed == 'true'
         uses: actions/github-script@v7
         env:
           TAG: ${{ matrix.tag }}
@@ -127,6 +135,7 @@ jobs:
             } catch (e) { if (e.status !== 422 && e.status !== 404) throw e; }
 
       - name: Publish release
+        if: steps.gate.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ matrix.tag }}

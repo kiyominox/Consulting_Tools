@@ -14,11 +14,14 @@ If a branding anchor below stops matching (because the shared template changed),
 the script aborts loudly rather than shipping an unbranded file — re-sync the
 anchor with the shared template and rebuild.
 """
-import pathlib, sys
+import pathlib, re, sys
 
 CMA = pathlib.Path(__file__).parent
 SHARED = CMA / ".." / ".." / "_shared" / "floorplan-rec"
 OUTPUT_NAME = "Floorplan Reconciliation - CMA.html"
+
+DESCRIPTION_RE = re.compile(
+    r'<meta\s+name=["\']description["\']\s+content=["\'][^"\']+["\']', re.I)
 
 
 def read(p):
@@ -112,6 +115,10 @@ def main():
            .replace("/*__PDFJS_LIB__*/", pdfjs)
            .replace("/*__PDFWORKER_LIB__*/", pdfworker)
            .replace("/*__APP_JS__*/", appjs))
+
+    if not DESCRIPTION_RE.search(out):
+        sys.exit('ERROR: built file is missing a non-empty <meta name="description"> '
+                 "tag — every tool must embed a one-line description.")
 
     (CMA / OUTPUT_NAME).write_text(out, encoding="utf-8")
     print(f"Built {OUTPUT_NAME!r} ({len(out):,} bytes)")

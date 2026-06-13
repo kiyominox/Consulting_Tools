@@ -7,11 +7,14 @@ that runs offline with no server or network access.
 
 Usage:  python3 build.py
 """
-import pathlib, sys
+import pathlib, re, sys
 
 ROOT = pathlib.Path(__file__).parent
 SRC = ROOT / "src"
 OUTPUT_NAME = "Vehicle Sales Report.html"
+
+DESCRIPTION_RE = re.compile(
+    r'<meta\s+name=["\']description["\']\s+content=["\'][^"\']+["\']', re.I)
 
 def read(p):
     return p.read_text(encoding="utf-8")
@@ -36,6 +39,10 @@ def main():
            .replace("/*__EXCELJS_LIB__*/", exceljs)
            .replace("/*__MAC_DEFAULTS__*/", macdef)
            .replace("/*__APP_JS__*/", appjs))
+
+    if not DESCRIPTION_RE.search(out):
+        sys.exit('ERROR: built file is missing a non-empty <meta name="description"> '
+                 "tag — every tool must embed a one-line description.")
 
     (ROOT / OUTPUT_NAME).write_text(out, encoding="utf-8")
     print(f"Built {OUTPUT_NAME!r} ({len(out):,} bytes)")
