@@ -28,16 +28,22 @@
        --toyota stays a brand color so the per-brand badges still read */
     --bg:#45195a; --panel:#ffffff; --ink:#1e293b; --muted:#64748b;
     --line:#e2e8f0; --accent:#6B298C; --accent-d:#561f70;
-    --toyota:#eb0a1e; --ok:#16a34a; --okbg:#f0fdf4; --warn:#b45309; --warnbg:#fffbeb;
+    --toyota:#eb0a1e; --gm:#1a5dad; --ok:#16a34a; --okbg:#f0fdf4; --warn:#b45309; --warnbg:#fffbeb;
     --sel:#6B298C; --selbg:#f3eaf8;
+    --font:"Segoe UI",system-ui,-apple-system,BlinkMacSystemFont,Roboto,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  body{margin:0;font-family:var(--font);
        background:#f1f5f9;color:var(--ink);font-size:14px;}
   header{background:var(--bg);color:#fff;padding:18px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header .brandmark{width:34px;height:34px;border-radius:9px;background:var(--accent);position:relative;flex:none}
+  header .brandmark::before,header .brandmark::after{content:"";position:absolute;background:#fff;border-radius:1px}
+  header .brandmark::before{left:8px;right:8px;top:11px;height:3px}
+  header .brandmark::after{left:8px;right:15px;bottom:11px;height:3px;opacity:.7}
   header .htitle{flex:1;min-width:240px}
-  header h1{margin:0;font-size:19px;font-weight:650;letter-spacing:.2px}
-  header p{margin:4px 0 0;color:#94a3b8;font-size:13px}
+  header h1{margin:0;font-size:19px;font-weight:750;letter-spacing:-.2px}
+  header p{margin:4px 0 0;color:#cbb9d6;font-size:13px}
   .navbtn{border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:8px;padding:9px 16px;
         font-size:13.5px;font-weight:650;cursor:pointer}
   .navbtn:hover{background:#334155}
@@ -67,7 +73,8 @@
          letter-spacing:.3px;text-transform:uppercase;background:#64748b}
   .badge.toyota{background:var(--toyota)}
   .badge.gm{background:#1a5dad}
-  .frow select{font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:#fff}
+  .frow select{font-size:12.5px;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;font-family:inherit}
+  .frow select:focus{outline:2px solid var(--accent);border-color:var(--accent)}
   .frow .cnt{color:var(--muted);font-size:12.5px}
   .frow .x{cursor:pointer;color:var(--muted);font-weight:700;border:none;background:none;font-size:16px;line-height:1}
   .frow .x:hover{color:#dc2626}
@@ -103,7 +110,7 @@
   td{padding:0;border-bottom:1px solid #f1f5f9;white-space:nowrap}
   td.idx{padding:6px 10px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
   td.src{padding:6px 10px}
-  td.vin{padding:6px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#475569}
+  td.vin{padding:6px 10px;font-family:var(--mono);font-size:12px;color:#475569;font-variant-numeric:tabular-nums}
   .pill{display:inline-block;padding:1px 8px;border-radius:6px;font-size:11px;font-weight:700;background:#e2e8f0;color:#334155}
   .pill.pds{background:#dbeafe;color:#1e40af}
   .pill.nonpds{background:#dcfce7;color:#166534}
@@ -115,8 +122,9 @@
   td input{width:100%;border:1px solid transparent;background:transparent;padding:6px 10px;font:inherit;
            color:var(--ink);outline:none;font-variant-numeric:tabular-nums}
   td input:hover{background:#f8fafc}
-  td input:focus{border-color:var(--sel);background:var(--selbg);box-shadow:inset 0 0 0 1px var(--sel)}
-  td.expert{padding:6px 10px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:#0f766e;
+  td input:focus{border-color:var(--sel);background:var(--selbg);box-shadow:inset 0 0 0 1px var(--sel);outline:2px solid var(--accent);outline-offset:-2px}
+  td.amt input,td.vin input{font-family:var(--mono)}
+  td.expert{padding:6px 10px;font-family:var(--mono);font-size:12px;color:#0f766e;
             background:#f8fafc;border-left:1px solid var(--line)}
   td.amt input{text-align:right}
   .delcell{padding:0 6px;text-align:center}
@@ -201,6 +209,7 @@
 </head>
 <body>
 <header>
+  <div class="brandmark"></div>
   <div class="htitle">
     <h1>Warranty Claims → CDK PowerPosting</h1>
     <p>Drop a Toyota Settled Claims Report or a GM Transaction Summary Report PDF. The tool reads it instantly, builds the posting, and copies it straight into AGJE Expert Mode.</p>
@@ -270,6 +279,9 @@
       <div class="sub">Toyota Settled Claims and GM Transaction Summary reports are detected automatically. Dropping a new report replaces the one already loaded.</div>
     </div>
     <input type="file" id="file" accept="application/pdf,.pdf">
+    <div class="toolbar" style="margin-top:14px;margin-bottom:0">
+      <button class="btn" id="sampleBtn" title="Load a couple of fictional Toyota &amp; GM claim lines">✨ Generate sample data</button>
+    </div>
     <div class="files" id="files"></div>
   </div>
 
@@ -809,6 +821,53 @@
     renderTable(); renderSummary(); updateBalance(); copyBtn.disabled=false;
     focusCell(bi>=0?bi:model.length-1,0);
   });
+
+  // ---------- sample data (fictional cast; realistic VINs) ----------
+  function loadSample(){
+    // Rivendell Toyota settled-claims + Mordor Chevrolet (GM) transaction-summary demo lines.
+    var tVin1='4T1B11HK7KU712233', tVin2='5TDZARFH9LS018844';   // Toyota PDS / Non-PDS VINs
+    var gVin1='1GCUYDED6LZ229071', gVin2='3GTU2NEC1JG553120';   // GM (Mordor Chevrolet) VINs
+    model=[
+      mk('PDS',        ACCT.PDS,    -318.40, tVin1.slice(-8), tVin1),   // PDS labor, control = last 8 VIN
+      mk('NONPDS',     ACCT.NONPDS, -142.75, '480215',        tVin2),   // Non-PDS, control = RO
+      mk('SUBLET',     ACCT.SUBLET, -64.00,  '',              ''),      // PDS sublet sub-total
+      mk('GMWTY',      ACCT.GMWTY,  -205.60, '771902',        gVin1),   // GM all-digit job card -> RO control
+      mk('GMPDI',      ACCT.GMPDI,  -88.25,  gVin2.slice(-8), gVin2)    // GM lettered job card -> last 8 VIN
+    ];
+    var credits=0; model.forEach(function(r){ credits+=parseFloat(r.amount)||0; });
+    model.push(mk('BALANCE', ACCT.BALANCE, Math.round(-credits*100)/100, BAL_CTRL.toyota, ''));
+    loadedFile={name:'Rivendell_Toyota_+_Mordor_Chevrolet_demo.pdf', lines:[], brandOverride:'auto', detectedBrand:'toyota'};
+    parsedChecks=[]; allWarnings=[];
+    renderAll();
+    toast('Loaded sample Toyota & GM warranty claim lines');
+  }
+  document.getElementById('sampleBtn').addEventListener('click', loadSample);
+
+  // ---------- keyboard nav (Enter advances; see tool-design-system.md) ----------
+  wireEnterNav(document.getElementById('body'), {columnar:true});
+  function wireEnterNav(root, opts){
+    opts=opts||{};
+    root.addEventListener('keydown',function(e){
+      if(e.key!=='Enter'||e.isComposing) return;
+      var el=e.target;
+      if(!el.matches('input:not([type=checkbox]):not([type=radio]):not([type=file]),select')) return;
+      e.preventDefault();
+      var next, cell=el.closest('td');
+      if(opts.columnar && cell){
+        var tr=el.closest('tr'), idx=Array.prototype.indexOf.call(tr.children,cell);
+        var rows=Array.prototype.slice.call(tr.parentNode.children);
+        var ri=rows.indexOf(tr)+(e.shiftKey?-1:1);
+        while(rows[ri]){ var c=rows[ri].children[idx], f=c&&c.querySelector('input,select,textarea');
+          if(f){ next=f; break; } ri+=(e.shiftKey?-1:1); }
+      }
+      if(!next){
+        var all=Array.prototype.slice.call(root.querySelectorAll('input:not([type=hidden]):not([disabled]),select,textarea'))
+          .filter(function(x){return x.offsetParent!==null;});
+        var i=all.indexOf(el); next=all[i+(e.shiftKey?-1:1)];
+      }
+      if(next){ next.focus(); if(next.select) try{next.select();}catch(_){} }
+    });
+  }
 
   // ---------- guide page navigation ----------
   var toolPage=document.getElementById('toolPage'), guidePage=document.getElementById('guidePage'),
